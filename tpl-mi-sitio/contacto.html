@@ -1,0 +1,86 @@
+<!doctype html>
+
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>TP1-MI-SITIO-WEB</title>
+  
+  
+  <link rel="stylesheet" href="estilo.css">
+  <style>
+        /* Un estilo básico para que se vea ordenado */ cambio commit1
+        body { font-family: sans-serif; max-width: 500px; margin: 20px auto; padding: 20px; }
+        div { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 8px; box-sizing: border-box; }
+        input[type="checkbox"] { width: auto; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+
+  <body>
+    <header>
+      <h1>PABLO ROMANO</h1>
+
+      <p>BIENVENIDOS A MI SITIO  WEB </p>
+    </header>
+<nav>
+        <ul>
+            <li><a href="#inicio">Inicio</a></li>
+            <li><a href="#sobre-mi">Sobre mí</a></li>
+            <li><a href="#contacto">Contacto</a></li>
+        </ul>
+    </nav>
+<main>
+        
+        <section id="contacto" class="section-container"> 
+            
+            <h1 class="title">Contactame</h1>
+                <p>¡Contáctame para más información!</p>
+                <form action="" class="form-container">
+                    <form action="/registro" method="POST">
+
+<label for="nombre">Nombre completo:</label>
+
+<input type="text" id="nombre" name="nombre"
+
+placeholder="Ej: Juan Pérez" required minlength="3">
+
+<label for="email">Correo electrónico:</label>
+
+<input type="email" id="email" name="email"
+
+placeholder="juan@mail.com" required>
+
+<label for="edad">Edad:</label>
+
+<input type="number" id="edad" name="edad"
+placeholder="18"required>
+<div>
+            <label for="telefono">Teléfono:</label>
+            <input type="tel" id="telefono" name="telefono" pattern="[0-9]{10}" placeholder="Ej: 1122334455">
+            <small>Formato: 10 números sin espacios</small>
+        </div>
+        <div>
+            <input type="checkbox" id="terminos" name="terminos" required>
+            <label for="terminos" style="display: inline;">Acepto los términos y condiciones</label>
+        </div>
+
+
+ <label for="mensaje">Mensaje:</label>
+                    <textarea id="mensaje" name="mensaje" required></textarea>
+                    
+                    <button type="submit">Enviar</button>
+                </form>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 PABLO ROMANO. Todos los derechos reservados.</p>
+    </footer>
+</body>
+</html>

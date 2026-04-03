@@ -1,0 +1,150 @@
+
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*{
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+body{
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+
+}
+header{
+    background-color: #333333;
+    color: white;
+    padding: 20px;
+}
+nav{
+    background-color: #444444;
+    padding: 10px;
+}
+nav a {
+    color: white;
+    text-decoration: none;
+    margin-right: 15px;
+
+}
+nav a:hover{
+    color: yellow;
+}
+footer{
+    background-color: #444444;
+    color: white;
+    padding: 20px;
+    text-align: center;
+}
+main{
+    padding: 20px;
+}
+section{
+    margin-bottom: 30px;
+}
+h2{
+    color:#333333
+}
+p{
+    margin-bottom: 20px;
+}
+img{
+    width: 200px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 50%;
+}
+.contenedor{
+    display: flex;
+    justify-content: center;
+}
+h2{
+    text-align: center;
+}
+/* Borde verde cuando el campo es válido */
+
+input:valid {
+
+border: 2px solid #16A34A;
+
+background-color: #F0FFF4;
+
+}
+
+/* Borde rojo cuando el campo es inválido */
+
+input:invalid {
+
+border: 2px solid #DC2626;
+
+background-color: #FEF2F2;
+
+}
+/* (d) Estilos generales del formulario */
+form {
+    max-width: 450px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #444;
+}
+
+input, textarea, select {
+    width: 100%; /* (d) Ancho al 100% */
+    padding: 12px; /* (d) Padding interno */
+    margin-bottom: 15px;
+    border: 2px solid #ddd;
+    border-radius: 8px; /* (d) Border-radius */
+    font-size: 16px;
+    box-sizing: border-box; /* Para que el padding no desborde el ancho */
+    transition: all 0.3s ease; /* Transición suave para todos los cambios */
+}
+
+/* (c) Estilos para input:focus */
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: #3498db; /* Borde azul */
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.3); /* Box-shadow sutil */
+}
+
+/* (a) Estilos para input:valid */
+/* El campo se pone verde solo cuando la validación de HTML5 es exitosa */
+input:valid, textarea:valid {
+    border-color: #2ecc71; /* Borde verde */
+    background-color: #f0fff4; /* Fondo verde claro */
+}
+
+/* (b) Estilos para input:invalid */
+/* :not(:placeholder-shown) evita que el campo esté rojo antes de que el usuario escriba */
+input:invalid:not(:placeholder-shown), 
+textarea:invalid:not(:placeholder-shown) {
+    border-color: #e74c3c; /* Borde rojo */
+    background-color: #fff5f5; /* Fondo rojo claro */
+}
+
+/* Estilo para el botón de envío */
+button {
+    width: 100%;
+    padding: 14px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background-color: #2980b9;
+}

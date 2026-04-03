@@ -1,0 +1,7 @@
+[user]
+	name = romano pablo
+	email = pabloromano.upateco23@gmail.com
+[core]
+	editor = code --wait
+[init]
+	defaultbranch = main
