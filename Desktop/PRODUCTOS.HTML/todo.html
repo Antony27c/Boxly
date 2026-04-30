@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Tareas</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/estilo.css">
+</head>
+<body>
+
+    <div class="app">
+
+    <div class="header">
+        <h1>Lista de<br><span>Tareas</span></h1>
+        <div class="contador">
+            <span class="dot"></span>
+            <span class="num" id="num-pendientes">0</span>
+            <span>pendientes</span>
+        </div>
+    </div>
+
+    <div class="form-card">
+        <input
+            type="text"
+            id="input-tarea"
+            placeholder="Escribí una nueva tarea..."
+            autocomplete="off"
+            maxlength="100"
+        >
+        <button class="btn-agregar" id="btn-agregar">
+            + Agregar
+        </button>
+    </div>
+
+    <p class="error" id="error-msg">⚠ No podés agregar una tarea vacía.</p>
+
+    <p class="lista-header">Tus tareas</p>
+
+    <ul id="lista-tareas"></ul>
+
+    <div class="vacio visible" id="estado-vacio">
+        <span class="icono">📋</span>
+        No tenés tareas todavía.<br>¡Agregá una para empezar!
+    </div>
+
+    <div class="footer">click en la tarea para marcarla · × para eliminar</div>
+
+</div>
+
+<script src="js/todo.js"></script>
+
+</body>
+</html>

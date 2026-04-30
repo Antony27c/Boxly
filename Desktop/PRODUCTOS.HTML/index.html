@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mi Aplicación</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#6C63FF',
+              secondary: '#4F46E5',
+              accent: '#10B981',
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <main class="container mx-auto px-4 py-8">
+      <section class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-gray-800 mb-4">Mi Aplicación</h1>
+        <p class="text-lg text-gray-600">Accede a las diferentes funcionalidades</p>
+      </section>
+
+      <div class="tp-links-grid grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+        <a href="producto.html" class="tp-link-card group relative bg-white rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+          <div class="p-8 flex flex-col items-center">
+            <span class="tp-link-emoji text-5xl mb-4">🛒</span>
+            <h3 class="text-xl font-semibold text-gray-800 group-hover:text-primary">Productos</h3>
+            <p class="mt-2 text-gray-500">Gestión de inventario</p>
+          </div>
+          <div class="absolute inset-0 border-2 border-transparent group-hover:border-primary rounded-xl pointer-events-none transition-all duration-300"></div>
+        </a>
+
+        <a href="todo.html" class="tp-link-card group relative bg-white rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+          <div class="p-8 flex flex-col items-center">
+            <span class="tp-link-emoji text-5xl mb-4">📋</span>
+            <h3 class="text-xl font-semibold text-gray-800 group-hover:text-primary">Lista de Tareas</h3>
+            <p class="mt-2 text-gray-500">Organiza tus actividades</p>
+          </div>
+          <div class="absolute inset-0 border-2 border-transparent group-hover:border-primary rounded-xl pointer-events-none transition-all duration-300"></div>
+        </a>
+
+        <a href="api-demo.html" class="tp-link-card group relative bg-white rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+          <div class="p-8 flex flex-col items-center">
+            <span class="tp-link-emoji text-5xl mb-4">🔍</span>
+            <h3 class="text-xl font-semibold text-gray-800 group-hover:text-primary">API Demo</h3>
+            <p class="mt-2 text-gray-500">Ejemplos de consumo de API</p>
+          </div>
+          <div class="absolute inset-0 border-2 border-transparent group-hover:border-primary rounded-xl pointer-events-none transition-all duration-300"></div>
+        </a>
+      </div>
+    </main>
+    
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
