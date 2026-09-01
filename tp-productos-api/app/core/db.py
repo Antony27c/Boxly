@@ -58,7 +58,7 @@ productos: list[Producto]= [
         categoria_id=3,
         stock=10),
 ]
-id_proximo=7;
+id_proximo=9;
 
 def bump_producto_id() -> int:
     global id_proximo

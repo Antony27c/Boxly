@@ -40,11 +40,10 @@ def search_by_nombre(query:str) -> list[dict]:
             if query_lower in p.nombre.lower()]
 def ensure_categoria(categoria_id:int) -> tuple[bool, Optional[str]]:
             if _find_categoria(categoria_id) is None:
-                return False, f"Categoria con id {categoria_id} no existe"
+                return False, f"La Categoria {categoria_id} no existe"
             return True, None
 
 def create(data: ProductoCreate) -> dict:
-    new_id = max([p.id for p in db.productos], default=0) + 1
     producto = Producto(
         id=db.bump_producto_id(),
         nombre=data.nombre,
@@ -55,6 +54,15 @@ def create(data: ProductoCreate) -> dict:
     )
     db.productos.append(producto)
     return _to_dict(producto)
+
+def update(producto_id: int, data: ProductoUpdate) -> dict | None:
+    for p in db.productos:
+        if p.id == producto_id:
+            cambios = data.model_dump(exclude_unset=True)
+            for campo, valor in cambios.items():
+                setattr(p, campo, valor)
+            return _to_dict(p)
+    return None
 
 def delete(producto_id: int) -> bool:
     for i, p in enumerate(db.productos):
