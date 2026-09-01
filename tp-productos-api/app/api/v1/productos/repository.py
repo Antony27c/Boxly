@@ -12,7 +12,7 @@ def _find_categoria(categoria_id: int) -> Optional[Categoria]:
     return None
 
 
-def _to_dict(p: Producto) -> dict:
+def _to_dict(p: Producto) -> dict: 
     categoria = _find_categoria(p.categoria_id)
     return {
         "id": p.id,
