@@ -1,8 +1,17 @@
 # Backend (Python)
 backend/venv/
-backend/__pycache__/
-backend/*.pyc
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+backend/.pytest_cache/
+backend/*.db
 
 # Frontend (Node)
 frontend/node_modules/
 frontend/dist/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -39,11 +39,30 @@ El proyecto está en desarrollo. Hoy el repo incluye:
 
 ```
 Boxly/
-├── backend/           # API del proyecto final (en construcción)
+├── backend/           # API FastAPI (auth JWT + usuarios — Sprint 1)
 ├── frontend/          # Interfaz React + Vite (en construcción)
-├── tp-productos-api/  # Trabajo práctico de arquitectura de capas (FastAPI)
+├── docs/DER.md        # Modelo entidad-relación completo
+├── tp-productos-api/  # TP de arquitectura de capas (práctica)
 └── README.md
 ```
+
+### Backend — autenticación (Sprint 1)
+
+Desde `backend/` (venv activo):
+
+```bash
+pip install -r requirements.txt
+python -m scripts.create_admin
+uvicorn app.main:app --reload
+```
+
+Swagger: http://127.0.0.1:8000/docs
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/v1/auth/login` | Login (JSON: email, password) → JWT |
+| GET | `/api/v1/auth/me` | Usuario actual (Bearer token) |
+| CRUD | `/api/v1/users` | Gestión de usuarios (solo administrador) |
 
 `tp-productos-api/` es un trabajo práctico de la materia (CRUD de productos en memoria). No es el sistema del taller: sirve de práctica de FastAPI, Pydantic y capas (router / schemas / repository / models) antes de pasar a PostgreSQL.
 
