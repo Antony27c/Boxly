@@ -64,7 +64,7 @@ class OrdenService:
 
        
         if datos_update.descripcion_ingreso is not None:
-            orden.descripcion = datos_update.descripcion_ingreso
+            orden.descripcion_ingreso = datos_update.descripcion_ingreso
 
         if datos_update.diagnostico is not None:
             orden.diagnostico = datos_update.diagnostico

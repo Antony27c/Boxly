@@ -52,8 +52,16 @@ Desde `backend/` (venv activo):
 
 ```bash
 pip install -r requirements.txt
-python -m scripts.create_admin
+python -m scripts.create_admin   # crea el admin inicial
+python -m scripts.seed           # datos de prueba (clientes, vehículos, órdenes, etc.)
 uvicorn app.main:app --reload
+```
+
+Las migraciones formales corren con Alembic (`backend/alembic/`):
+
+```bash
+alembic revision --autogenerate -m "descripcion del cambio"
+alembic upgrade head
 ```
 
 Swagger: http://127.0.0.1:8000/docs
