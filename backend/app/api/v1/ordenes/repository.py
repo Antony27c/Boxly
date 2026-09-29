@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from typing import Optional, List
 
-from app.models.orden import Orden, HistorialEstado
+from app.models.orden import Orden, Historial_estado
 
 class OrdenRepository:
     
@@ -17,7 +17,7 @@ class OrdenRepository:
         return db.get(Orden, orden_id)
 
     def guardar_historial(self, db: Session, orden_id: int, usuario_id:int, estado_anterior: str, estado_nuevo: str, comentario:Optional[str]=None):
-        historial = HistorialEstado(
+        historial = Historial_estado(
             orden_id=orden_id,
             usuario_id=usuario_id,
             estado_anterior=estado_anterior,
