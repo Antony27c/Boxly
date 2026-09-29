@@ -13,7 +13,7 @@ export default {
           500: '#333944',
         },
         amber: {
-          DEFAULT: '#F5A524',
+          DEFAULT: '#ff1493',
           soft: '#FFD08A',
           deep: '#B87407',
         },

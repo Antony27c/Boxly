@@ -28,14 +28,12 @@ export default function Inicio() {
     <div className="animate-bay-in">
       <h1 className="text-2xl font-semibold tracking-tight">Hola, {nombre}</h1>
       <p className="mt-2 text-muted">
-        Desde acá entrás a los módulos de Clientes, Vehículos y Turnos. Las órdenes de trabajo
-        y el inventario se incorporan en los próximos sprints.
+      
       </p>
 
       {USAR_MOCK && (
         <p className="mt-4 text-sm text-muted">
-          Clientes, Vehículos y Turnos trabajan con datos de prueba guardados en el navegador
-          hasta que estén publicados sus endpoints.
+         
         </p>
       )}
 
