@@ -8,6 +8,7 @@ from app.models.orden import Orden
 from .repository import orden_repository 
 
 TRANSICIONES_VALIDAS = {
+    "pendiente":["ingresado","cancelado"],
     "ingresado": ["en_diagnostico", "cancelado"],
     "en_diagnostico": ["esperando_repuestos", "listo", "cancelado"],
     "esperando_repuestos": ["listo", "cancelado"],
