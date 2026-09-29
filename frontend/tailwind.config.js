@@ -4,23 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta Boxly: taller mecánico (grafito + ámbar de señalización)
         graphite: {
-          900: '#101216',
-          800: '#16191F',
-          700: '#1D2127',
-          600: '#262B33',
-          500: '#333944',
+          900: '#F1F2F4',
+          800: '#FFFFFF',
+          700: '#E7E9ED',
+          600: '#DCDFE4',
+          500: '#C5C9D0',
         },
         amber: {
-          DEFAULT: '#ff1493',
-          soft: '#FFD08A',
-          deep: '#B87407',
+          DEFAULT: '#C9A227',
+          soft: '#E2BE4B',
+          deep: '#8F7016',
         },
-        ink: '#E9EBEF',
-        muted: '#8C94A1',
-        ok: '#3FB27F',
-        danger: '#E5484D',
+        ink: '#1E2126',
+        muted: '#5F6672',
+        ok: '#1E8E5A',
+        danger: '#C6373C',
       },
       fontFamily: {
         sans: ['Archivo', 'system-ui', 'sans-serif'],
@@ -29,7 +28,7 @@ export default {
         box: '4px',
       },
       boxShadow: {
-        lift: '0 18px 40px -24px rgba(0,0,0,0.75)',
+        lift: '0 12px 30px -20px rgba(16,18,22,0.35)',
       },
       keyframes: {
         'bay-in': {

@@ -20,8 +20,8 @@
   .hazard-bar {
     background-image: repeating-linear-gradient(
       -45deg,
-      #f5a524 0 10px,
-      #101216 10px 20px
+      #C9A227 0 10px,
+      #2B2E34 10px 20px
     );
   }
 }
