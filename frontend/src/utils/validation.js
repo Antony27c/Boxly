@@ -1,5 +1,3 @@
-// Validación de los formularios de la aplicación.
-// Cada función devuelve un objeto con los errores encontrados; vacío = válido.
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -22,7 +20,6 @@ export function validarLogin({ email, password }) {
   return errores
 }
 
-// Patentes argentinas: viejo formato AAA123 y Mercosur AA123AA.
 const PATENTE = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/
 
 export function validarCliente({ nombre, apellido, dni, telefono, email }) {
@@ -71,6 +68,24 @@ export function validarVehiculo({ cliente_id, patente, marca, modelo, anio, kilo
   return errores
 }
 
+export function validarOrden({ vehiculo_id, fecha, estado, descripcion, total }) {
+  const errores = {}
+
+  if (!vehiculo_id) errores.vehiculo_id = 'Elegí el vehículo.'
+  if (!fecha) errores.fecha = 'Elegí la fecha de ingreso.'
+  if (!estado) errores.estado = 'Elegí el estado de la orden.'
+
+  const detalle = descripcion.trim()
+  if (!detalle) errores.descripcion = 'Describí el trabajo a realizar.'
+  else if (detalle.length < 5) errores.descripcion = 'La descripción es demasiado corta.'
+
+  if (String(total).trim() === '') errores.total = 'Ingresá el total (0 si todavía no se presupuestó).'
+  else if (Number.isNaN(Number(total)) || Number(total) < 0)
+    errores.total = 'El total debe ser un número mayor o igual a 0.'
+
+  return errores
+}
+
 export function validarTurno({ cliente_id, vehiculo_id, fecha, hora, servicio }) {
   const errores = {}
 
@@ -88,6 +103,21 @@ export function validarTurno({ cliente_id, vehiculo_id, fecha, hora, servicio })
 
   if (!hora) errores.hora = 'Elegí el horario.'
   if (!servicio.trim()) errores.servicio = 'Describí el servicio a realizar.'
+
+  return errores
+}
+
+export function validarUsuario({ nombre, apellido, email, rol }) {
+  const errores = {}
+
+  if (!nombre.trim()) errores.nombre = 'Ingresá el nombre.'
+  if (!apellido.trim()) errores.apellido = 'Ingresá el apellido.'
+
+  const correo = email.trim()
+  if (!correo) errores.email = 'Ingresá el correo.'
+  else if (!EMAIL.test(correo)) errores.email = 'El correo no tiene un formato válido.'
+
+  if (!rol) errores.rol = 'Elegí el rol del usuario.'
 
   return errores
 }

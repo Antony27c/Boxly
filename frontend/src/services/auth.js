@@ -1,8 +1,6 @@
 import { authApi, ApiError } from '@/lib/api'
 import { USAR_MOCK } from '@/services/config'
 
-// Usuario de demostración para poder recorrer la app mientras la API de
-// autenticación no está levantada.
 const USUARIO_DEMO = {
   id: 1,
   nombre: 'Julieta',

@@ -17,7 +17,6 @@
 }
 
 @layer components {
-  /* Franja de señalización: identidad visual del taller */
   .hazard-bar {
     background-image: repeating-linear-gradient(
       -45deg,

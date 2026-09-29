@@ -1,4 +1,3 @@
-// Cliente HTTP único del frontend. Todas las llamadas a la API pasan por acá.
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 export class ApiError extends Error {
@@ -42,7 +41,6 @@ async function request(path, { method = 'GET', body, token, form = false } = {})
   const datos = texto ? JSON.parse(texto) : null
 
   if (!response.ok) {
-    // FastAPI devuelve el error en "detail" (string o lista de errores de Pydantic)
     const detail = datos?.detail
     const detalle = Array.isArray(detail) ? detail[0]?.msg : detail
     throw new ApiError(mensajeSegunEstado(response.status, detalle), response.status)
@@ -58,9 +56,6 @@ export const api = {
   del: (path, token) => request(path, { method: 'DELETE', token }),
 }
 
-// --- Endpoints de autenticación (Sprint 1) ---
-// El backend expone /api/v1/auth/login con JSON { email, password } y devuelve
-// { access_token, token_type, usuario }.
 export const authApi = {
   login: ({ email, password }) => api.post('/api/v1/auth/login', { email, password }),
   perfil: (token) => api.get('/api/v1/auth/me', token),

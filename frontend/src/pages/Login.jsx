@@ -46,7 +46,6 @@ export default function Login() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_minmax(420px,44%)]">
-      {/* Panel de marca: sólo en pantallas grandes */}
       <section className="relative hidden flex-col justify-between bg-graphite-800 p-12 lg:flex">
         <Logo tamano="lg" />
         <div className="max-w-md">
@@ -74,7 +73,6 @@ export default function Login() {
         <div className="hazard-bar absolute inset-y-0 right-0 w-1.5" aria-hidden="true" />
       </section>
 
-      {/* Formulario */}
       <section className="flex items-center justify-center bg-graphite-900 px-5 py-12">
         <div className="w-full max-w-sm animate-bay-in">
           <div className="lg:hidden">
@@ -89,7 +87,7 @@ export default function Login() {
           {USAR_MOCK && (
             <p className="mt-4 rounded-box border border-graphite-700 bg-graphite-800 px-4 py-3 text-sm text-muted">
               Modo demostración: entrá con cualquier correo y una contraseña de al menos 6
-              
+              caracteres mientras la API no esté publicada.
             </p>
           )}
 
@@ -101,7 +99,7 @@ export default function Login() {
               name="email"
               type="email"
               autoComplete="username"
-              placeholder="GMAIL"
+              placeholder="jcardozo@boxly.com"
               value={datos.email}
               onChange={(e) => cambiar('email', e.target.value)}
               error={errores.email}
