@@ -16,11 +16,13 @@ class OrdenRepository:
     def obtener_por_id(self, db: Session, orden_id: int) -> Optional[Orden]:
         return db.get(Orden, orden_id)
 
-    def guardar_historial(self, db: Session, orden_id: int, estado_anterior: str, estado_nuevo: str):
+    def guardar_historial(self, db: Session, orden_id: int, usuario_id:int, estado_anterior: str, estado_nuevo: str, comentario:Optional[str]=None):
         historial = HistorialEstado(
             orden_id=orden_id,
+            usuario_id=usuario_id,
             estado_anterior=estado_anterior,
-            estado_nuevo=estado_nuevo
+            estado_nuevo=estado_nuevo,
+            comentario=comentario
         )
         db.add(historial)
         
