@@ -1,27 +1,31 @@
 """
-Script de carga de datos de prueba (seed) para las 8 entidades del taller.
+Script de carga de datos de prueba (seed) para las entidades del taller.
 
-Ejecutar con:
-    python seed.py
+Uso (desde la carpeta backend/, con venv activo y la base disponible):
 
-Requiere que las migraciones ya se hayan aplicado (alembic upgrade head)
-y que la base de datos exista y esté accesible.
+    python -m scripts.seed
+
+Requiere que las tablas existan (alembic upgrade head o el create_all del
+lifespan). Las contraseñas se guardan con bcrypt (mismo hash que el login)
+y los roles/estados usan los valores del DER, así los datos sirven para
+probar el login y el flujo de órdenes de verdad.
 """
 
-import hashlib
 import random
+import sys
 from datetime import datetime, timedelta, timezone
+
 from faker import Faker
 
-from app.database import SessionLocal
-from app.models.usuario import Usuario
+from app.core.security import hash_password
+from app.db.session import SessionLocal
 from app.models.cliente import Cliente
-from app.models.vehiculo import Vehiculo
-from app.models.orden_trabajo import OrdenTrabajo
 from app.models.detalle_orden import DetalleOrden
+from app.models.orden import Historial_estado, Orden
 from app.models.repuesto import Repuesto
 from app.models.turno import Turno
-from app.models.historial_estado import HistorialEstado
+from app.models.usuario import RolUsuario, Usuario
+from app.models.vehiculo import Vehiculo
 
 fake = Faker("es_AR")
 
@@ -50,11 +54,15 @@ REPUESTOS_NOMBRES = [
     "Liquido refrigerante", "Aceite 10W40 (litro)", "Rotula de suspension",
 ]
 
-ESTADOS_ORDEN = ["pendiente", "en_proceso", "terminado", "entregado"]
+# Flujo del DER (§3.4) más "pendiente" como estado inicial, igual que el
+# mapa TRANSICIONES_VALIDAS del service de órdenes.
+ESTADOS_ORDEN = [
+    "pendiente", "ingresado", "en_diagnostico",
+    "esperando_repuestos", "listo", "entregado",
+]
 
-
-def _hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+# DER §3.7
+ESTADOS_TURNO = ["pendiente", "confirmado", "cancelado", "asistio"]
 
 
 def crear_usuarios(db, cantidad=4):
@@ -64,13 +72,13 @@ def crear_usuarios(db, cantidad=4):
             nombre=fake.first_name(),
             apellido=fake.last_name(),
             email=fake.unique.email(),
-            password_hash=_hash_password("clave123"),
-            rol="admin" if i == 0 else "mecanico",
+            password_hash=hash_password("clave123"),
+            rol=RolUsuario.administrador if i == 0 else RolUsuario.mecanico,
         )
         db.add(usuario)
         usuarios.append(usuario)
     db.commit()
-    print(f"Usuarios creados: {cantidad}")
+    print(f"Usuarios creados: {cantidad} (password de todos: clave123)")
     return usuarios
 
 
@@ -81,9 +89,9 @@ def crear_clientes(db, cantidad=10):
             nombre=fake.first_name(),
             apellido=fake.last_name(),
             dni=fake.unique.numerify("########"),
-            telefono=fake.phone_number(),
+            telefono=fake.phone_number()[:30],
             email=fake.unique.email(),
-            direccion=fake.address(),
+            direccion=fake.address()[:200],
         )
         db.add(cliente)
         clientes.append(cliente)
@@ -96,14 +104,13 @@ def crear_vehiculos(db, clientes, cantidad=15):
     vehiculos = []
     for _ in range(cantidad):
         marca = random.choice(list(MARCAS_MODELOS.keys()))
-        modelo = random.choice(MARCAS_MODELOS[marca])
         vehiculo = Vehiculo(
             cliente_id=random.choice(clientes).id,
             patente=fake.unique.bothify(text="??###??").upper(),
             marca=marca,
-            modelo=modelo,
+            modelo=random.choice(MARCAS_MODELOS[marca]),
             anio=random.randint(2015, 2026),
-            color=fake.color_name(),
+            color=fake.color_name()[:40],
             vin=fake.unique.bothify(text="#################").upper(),
             observaciones=None,
         )
@@ -133,14 +140,14 @@ def crear_repuestos(db):
     return repuestos
 
 
-def crear_ordenes_con_detalle_e_historial(db, clientes, vehiculos, usuarios, repuestos, cantidad=12):
-    mecanicos = [u for u in usuarios if u.rol == "mecanico"]
+def crear_ordenes_con_detalle_e_historial(db, vehiculos, usuarios, repuestos, cantidad=12):
+    mecanicos = [u for u in usuarios if u.rol == RolUsuario.mecanico]
     for i in range(cantidad):
         vehiculo = random.choice(vehiculos)
         estado_final = random.choice(ESTADOS_ORDEN)
         fecha_ingreso = datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
 
-        orden = OrdenTrabajo(
+        orden = Orden(
             cliente_id=vehiculo.cliente_id,
             vehiculo_id=vehiculo.id,
             creado_por_id=random.choice(usuarios).id,
@@ -150,7 +157,7 @@ def crear_ordenes_con_detalle_e_historial(db, clientes, vehiculos, usuarios, rep
             descripcion_ingreso=random.choice(PROBLEMAS_COMUNES),
             diagnostico=None if estado_final == "pendiente" else fake.sentence(),
             costo_estimado=random.randint(15_000, 150_000),
-            costo_final=random.randint(15_000, 300_000) if estado_final in ("terminado", "entregado") else None,
+            costo_final=random.randint(15_000, 300_000) if estado_final == "entregado" else None,
             fecha_ingreso=fecha_ingreso,
             fecha_estimada_entrega=fecha_ingreso + timedelta(days=random.randint(1, 5)),
             fecha_entrega=fecha_ingreso + timedelta(days=random.randint(1, 5)) if estado_final == "entregado" else None,
@@ -164,39 +171,36 @@ def crear_ordenes_con_detalle_e_historial(db, clientes, vehiculos, usuarios, rep
             detalle = DetalleOrden(
                 orden_id=orden.id,
                 repuesto_id=repuesto.id,
-                descripcion=None,
+                descripcion=repuesto.nombre,
                 cantidad=random.randint(1, 3),
                 precio_unitario=repuesto.precio,
             )
             db.add(detalle)
 
-        # Historial: al menos un cambio de estado registrado
-        historial = HistorialEstado(
+        # Historial: registro de creacion + cambio al estado final
+        db.add(Historial_estado(
             orden_id=orden.id,
             usuario_id=orden.creado_por_id,
             estado_anterior=None,
             estado_nuevo="pendiente",
             comentario="Orden creada",
             fecha=fecha_ingreso,
-        )
-        db.add(historial)
-
+        ))
         if estado_final != "pendiente":
-            cambio = HistorialEstado(
+            db.add(Historial_estado(
                 orden_id=orden.id,
                 usuario_id=orden.mecanico_id or orden.creado_por_id,
                 estado_anterior="pendiente",
                 estado_nuevo=estado_final,
                 comentario=f"Cambio de estado a {estado_final}",
                 fecha=fecha_ingreso + timedelta(hours=random.randint(1, 48)),
-            )
-            db.add(cambio)
+            ))
 
     db.commit()
-    print(f"Ordenes de trabajo creadas (con detalle e historial): {cantidad}")
+    print(f"Ordenes creadas (con detalle e historial): {cantidad}")
 
 
-def crear_turnos(db, clientes, vehiculos, usuarios, cantidad=8):
+def crear_turnos(db, vehiculos, usuarios, cantidad=8):
     for _ in range(cantidad):
         vehiculo = random.choice(vehiculos)
         turno = Turno(
@@ -204,7 +208,7 @@ def crear_turnos(db, clientes, vehiculos, usuarios, cantidad=8):
             vehiculo_id=vehiculo.id,
             registrado_por_id=random.choice(usuarios).id,
             fecha_hora=datetime.now(timezone.utc) + timedelta(days=random.randint(1, 15)),
-            estado=random.choice(["pendiente", "confirmado", "cancelado", "completado"]),
+            estado=random.choice(ESTADOS_TURNO),
             motivo=random.choice(PROBLEMAS_COMUNES),
             notas=None,
         )
@@ -220,12 +224,12 @@ def main():
         clientes = crear_clientes(db)
         vehiculos = crear_vehiculos(db, clientes)
         repuestos = crear_repuestos(db)
-        crear_ordenes_con_detalle_e_historial(db, clientes, vehiculos, usuarios, repuestos)
-        crear_turnos(db, clientes, vehiculos, usuarios)
-        print("Seed completado con exito (8 entidades cargadas).")
+        crear_ordenes_con_detalle_e_historial(db, vehiculos, usuarios, repuestos)
+        crear_turnos(db, vehiculos, usuarios)
+        print("Seed completado con exito.")
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

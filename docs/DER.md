@@ -181,7 +181,7 @@ Dueño de uno o más vehículos.
 
 ### 3.4 Orden de trabajo
 
-Flujo de estados: `ingresado` → `en_diagnostico` → `esperando_repuestos` → `listo` → `entregado` (más `cancelado` si aplica).
+Flujo de estados: `pendiente` → `ingresado` → `en_diagnostico` → `esperando_repuestos` → `listo` → `entregado` (más `cancelado` si aplica). `pendiente` es el estado inicial al registrar la orden, antes del ingreso físico del vehículo.
 
 | Atributo | Tipo | Restricciones |
 |----------|------|---------------|

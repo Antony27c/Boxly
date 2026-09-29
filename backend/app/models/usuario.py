@@ -1,10 +1,15 @@
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy import Boolean, DateTime, Enum, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.orden import Orden
+    from app.models.turno import Turno
 
 
 class RolUsuario(str, enum.Enum):
@@ -38,4 +43,17 @@ class Usuario(Base):
         DateTime(timezone=True),
         onupdate=func.now(),
         nullable=True,
+    )
+
+    # Un Usuario puede haber CREADO muchas órdenes y también estar ASIGNADO
+    # como mecánico en otras. foreign_keys explícito porque ambas FK de
+    # Orden apuntan a esta misma tabla.
+    ordenes_creadas: Mapped[List["Orden"]] = relationship(
+        "Orden", foreign_keys="Orden.creado_por_id", back_populates="creado_por"
+    )
+    ordenes_asignadas: Mapped[List["Orden"]] = relationship(
+        "Orden", foreign_keys="Orden.mecanico_id", back_populates="mecanico"
+    )
+    turnos_registrados: Mapped[List["Turno"]] = relationship(
+        "Turno", back_populates="registrado_por"
     )

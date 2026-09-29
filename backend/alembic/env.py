@@ -10,18 +10,19 @@ from alembic import context
 # Permite importar "app.*" aunque Alembic se ejecute desde la raíz del proyecto
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Importamos nuestra Base y TODOS los modelos (Usuario, Cliente, Vehiculo)
-# para que Alembic los detecte automáticamente al generar migraciones
-from app.database import Base, SQLALCHEMY_DATABASE_URL
+# Importamos nuestra Base y TODOS los modelos para que Alembic los detecte
+# automáticamente al generar migraciones
+from app.core.config import get_settings
+from app.db.base import Base
 from app import models  # noqa: F401 - se importa para que Base.metadata los conozca
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Sobreescribimos la URL del alembic.ini con la que arma database.py
-# (que lee las variables del .env), para no tener que repetirla en 2 lugares
-config.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)
+# La URL sale de la configuración central del backend (.env / DATABASE_URL),
+# para no tener que repetirla en 2 lugares
+config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
