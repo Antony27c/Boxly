@@ -62,8 +62,8 @@ class OrdenService:
             orden.mecanico_id = datos_update.mecanico_id
 
        
-        if datos_update.descripcion is not None:
-            orden.descripcion = datos_update.descripcion
+        if datos_update.descripcion_ingreso is not None:
+            orden.descripcion = datos_update.descripcion_ingreso
 
         if datos_update.diagnostico is not None:
             orden.diagnostico = datos_update.diagnostico
