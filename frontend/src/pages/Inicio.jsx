@@ -1,44 +1,52 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { USAR_MOCK } from '@/services/config'
+import { ROLES_ADMIN, ROLES_MOSTRADOR, ROLES_TALLER, tieneAcceso } from '@/routes/navegacion'
 
 const accesos = [
   {
     a: '/clientes',
     titulo: 'Clientes',
     texto: 'Alta, edición y búsqueda de los clientes del taller.',
+    roles: ROLES_MOSTRADOR,
   },
   {
     a: '/vehiculos',
     titulo: 'Vehículos',
     texto: 'Ficha técnica, titular e historial de reparaciones.',
+    roles: ROLES_TALLER,
   },
   {
     a: '/turnos',
     titulo: 'Agenda y turnos',
     texto: 'Disponibilidad semanal y estado de cada turno.',
+    roles: ROLES_MOSTRADOR,
+  },
+  {
+    a: '/ordenes',
+    titulo: 'Órdenes de trabajo',
+    texto: 'Trabajos del taller, estado de cada orden y presupuesto.',
+    roles: ROLES_TALLER,
+  },
+  {
+    a: '/admin',
+    titulo: 'Administración',
+    texto: 'Usuarios del sistema, roles y permisos de acceso.',
+    roles: ROLES_ADMIN,
   },
 ]
 
 export default function Inicio() {
   const { usuario } = useAuth()
   const nombre = usuario?.nombre ?? 'usuario'
+  const visibles = accesos.filter((acceso) => tieneAcceso(acceso.roles, usuario?.rol))
 
   return (
     <div className="animate-bay-in">
       <h1 className="text-2xl font-semibold tracking-tight">Hola, {nombre}</h1>
-      <p className="mt-2 text-muted">
-      
-      </p>
+      <p className="mt-2 text-muted">Elegí un módulo para empezar.</p>
 
-      {USAR_MOCK && (
-        <p className="mt-4 text-sm text-muted">
-         
-        </p>
-      )}
-
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        {accesos.map((acceso) => (
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {visibles.map((acceso) => (
           <Link
             key={acceso.a}
             to={acceso.a}

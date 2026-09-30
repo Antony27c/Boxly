@@ -36,8 +36,8 @@ export default function VehiculoDetalle() {
   const cargarHistorial = useCallback((t) => vehiculosService.historial(id, t), [id])
   const cargarClientes = useCallback((t) => clientesService.listar(t), [])
 
-  const { datos: vehiculo, cargando, error, recargar } = useRecurso(cargarVehiculo, [id])
-  const { datos: historial, cargando: cargandoHistorial } = useRecurso(cargarHistorial, [id])
+  const { datos: vehiculo, cargando, error, recargar } = useRecurso(cargarVehiculo)
+  const { datos: historial, cargando: cargandoHistorial } = useRecurso(cargarHistorial)
   const { datos: clientes } = useRecurso(cargarClientes)
 
   if (cargando) return <Loader texto="Cargando ficha del vehículo…" />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 
-export default function useRecurso(cargador, dependencias = []) {
+export default function useRecurso(cargador) {
   const { token } = useAuth()
   const [datos, setDatos] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -17,8 +17,7 @@ export default function useRecurso(cargador, dependencias = []) {
     } finally {
       setCargando(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, ...dependencias])
+  }, [cargador, token])
 
   useEffect(() => {
     recargar()
