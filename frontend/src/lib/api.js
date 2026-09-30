@@ -9,9 +9,14 @@ export class ApiError extends Error {
   }
 }
 
+let onNoAutorizado = null
+export function setUnaunthorizedHandler(fn) {
+  onNoAutorizado = fn
+}
+
 function mensajeSegunEstado(status, detalle) {
   if (detalle) return detalle
-  if (status === 401) return 'Usuario o contraseña incorrectos.'
+  if (status === 401) return 'Tu sesion vencio. Inicia sesion de nuevo.'
   if (status === 403) return 'Tu usuario no tiene permiso para esta acción.'
   if (status === 404) return 'No encontramos el recurso solicitado.'
   if (status >= 500) return 'El servidor no responde. Intentá de nuevo en unos minutos.'
@@ -45,6 +50,7 @@ async function request(path, { method = 'GET', body, token, form = false } = {})
     // FastAPI devuelve el error en "detail" (string o lista de errores de Pydantic)
     const detail = datos?.detail
     const detalle = Array.isArray(detail) ? detail[0]?.msg : detail
+    if (response.status === 401 && onNoAutorizado) onNoAutorizado()
     throw new ApiError(mensajeSegunEstado(response.status, detalle), response.status)
   }
 

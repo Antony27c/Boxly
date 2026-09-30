@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, use, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { authService } from '@/services/auth'
+import { setUnaunthorizedHandler } from '../lib/api'
 
 const CLAVE_TOKEN = 'boxly_token'
 const CLAVE_USUARIO = 'boxly_usuario'
@@ -60,6 +61,10 @@ export function AuthProvider({ children }) {
     setToken(null)
     setUsuario(null)
   }, [])
+
+  useEffect(() => {
+    setUnaunthorizedHandler(logout)
+  }, [logout])
 
   const valor = useMemo(
     () => ({ token, usuario, autenticado: Boolean(token), cargandoSesion, login, logout }),
