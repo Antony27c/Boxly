@@ -72,7 +72,6 @@ export const vehiculosService = {
         })
       : api.del(`${RECURSO}/${id}`, token),
 
-  // Historial de reparaciones de la ficha técnica (órdenes de trabajo del vehículo).
   historial: (id, token) =>
     USAR_MOCK
       ? operar((datos) =>

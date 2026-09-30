@@ -1,7 +1,3 @@
-// Base de datos simulada para trabajar el frontend mientras el backend de
-// Clientes, Vehículos y Turnos está en desarrollo. Los datos se guardan en
-// localStorage para que las altas y ediciones sobrevivan a un refresco.
-// Cuando la API esté publicada alcanza con poner VITE_USAR_MOCK=false.
 
 const CLAVE = 'boxly_mock_db'
 const DEMORA_MS = 320
@@ -100,6 +96,7 @@ const SEMILLA = {
       fecha: '2026-06-18',
       estado: 'Entregado',
       descripcion: 'Service completo: aceite, filtros y revisión de frenos.',
+      mecanico: 'Luis Chávez',
       total: 185000,
     },
     {
@@ -108,6 +105,7 @@ const SEMILLA = {
       fecha: '2026-09-02',
       estado: 'En diagnóstico',
       descripcion: 'Revisión de tren delantero por ruido.',
+      mecanico: 'Luis Chávez',
       total: 0,
     },
     {
@@ -116,6 +114,7 @@ const SEMILLA = {
       fecha: '2026-07-30',
       estado: 'Entregado',
       descripcion: 'Cambio de pastillas y discos delanteros.',
+      mecanico: 'Diego Ibarra',
       total: 310000,
     },
     {
@@ -124,7 +123,46 @@ const SEMILLA = {
       fecha: '2026-09-10',
       estado: 'Esperando repuestos',
       descripcion: 'Reemplazo de bomba de agua.',
+      mecanico: 'Diego Ibarra',
       total: 240000,
+    },
+  ],
+  usuarios: [
+    {
+      id: 1,
+      nombre: 'Julieta',
+      apellido: 'Cardozo',
+      email: 'julieta@boxly.com',
+      rol: 'admin',
+      activo: true,
+      creado_en: '2026-08-01T09:00:00',
+    },
+    {
+      id: 2,
+      nombre: 'Sofía',
+      apellido: 'Rueda',
+      email: 'recepcion@boxly.com',
+      rol: 'recepcionista',
+      activo: true,
+      creado_en: '2026-08-05T09:00:00',
+    },
+    {
+      id: 3,
+      nombre: 'Luis',
+      apellido: 'Chávez',
+      email: 'luis.chavez@boxly.com',
+      rol: 'mecanico',
+      activo: true,
+      creado_en: '2026-08-05T09:10:00',
+    },
+    {
+      id: 4,
+      nombre: 'Diego',
+      apellido: 'Ibarra',
+      email: 'diego.ibarra@boxly.com',
+      rol: 'mecanico',
+      activo: false,
+      creado_en: '2026-08-18T11:30:00',
     },
   ],
   turnos: [
@@ -171,9 +209,8 @@ function leer() {
   const guardado = localStorage.getItem(CLAVE)
   if (guardado) {
     try {
-      return JSON.parse(guardado)
+      return { ...structuredClone(SEMILLA), ...JSON.parse(guardado) }
     } catch {
-      // Datos corruptos: se regenera la semilla.
     }
   }
   const inicial = structuredClone(SEMILLA)
@@ -201,7 +238,6 @@ export class MockError extends Error {
   }
 }
 
-// Ejecuta una operación sobre la base simulada respetando la demora de red.
 export async function operar(callback) {
   await esperar()
   const datos = leer()

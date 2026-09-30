@@ -1,19 +1,18 @@
+import { useMemo } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import Logo from '@/components/ui/Logo'
 import Button from '@/components/ui/Button'
-
-const navegacion = [
-  { a: '/inicio', texto: 'Inicio' },
-  { a: '/clientes', texto: 'Clientes' },
-  { a: '/vehiculos', texto: 'Vehículos' },
-  { a: '/turnos', texto: 'Turnos' },
-  { a: '/ordenes', texto: 'Órdenes' },
-]
+import { navegacion, tieneAcceso } from '@/routes/navegacion'
 
 export default function AppLayout() {
   const { usuario, logout } = useAuth()
   const navigate = useNavigate()
+
+  const secciones = useMemo(
+    () => navegacion.filter((item) => tieneAcceso(item.roles, usuario?.rol)),
+    [usuario?.rol],
+  )
 
   function cerrarSesion() {
     logout()
@@ -26,7 +25,7 @@ export default function AppLayout() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-5 py-3.5">
           <Logo tamano="sm" />
           <nav className="order-3 flex w-full gap-1 overflow-x-auto sm:order-2 sm:w-auto">
-            {navegacion.map((item) => (
+            {secciones.map((item) => (
               <NavLink
                 key={item.a}
                 to={item.a}

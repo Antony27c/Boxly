@@ -15,7 +15,6 @@ export function AuthProvider({ children }) {
   })
   const [cargandoSesion, setCargandoSesion] = useState(Boolean(localStorage.getItem(CLAVE_TOKEN)))
 
-  // Al recargar la página revalidamos el token contra la API.
   useEffect(() => {
     if (!token) {
       setCargandoSesion(false)
@@ -31,7 +30,6 @@ export function AuthProvider({ children }) {
       })
       .catch(() => {
         if (!vigente) return
-        // Token vencido o inválido: se cierra la sesión.
         setToken(null)
         setUsuario(null)
         localStorage.removeItem(CLAVE_TOKEN)
@@ -46,8 +44,6 @@ export function AuthProvider({ children }) {
   }, [token])
 
   const login = useCallback(async ({ email, password }) => {
-    // El login devuelve el token y el usuario completo, así que no hace falta
-    // volver a pedir el perfil.
     const datos = await authService.login({ email, password })
     localStorage.setItem(CLAVE_TOKEN, datos.access_token)
     localStorage.setItem(CLAVE_USUARIO, JSON.stringify(datos.usuario))

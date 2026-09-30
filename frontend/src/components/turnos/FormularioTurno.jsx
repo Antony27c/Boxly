@@ -44,7 +44,6 @@ export default function FormularioTurno({
     [vehiculos, datos.cliente_id],
   )
 
-  // Horarios ya tomados ese día por otro turno activo.
   const ocupados = useMemo(
     () =>
       new Set(
@@ -60,7 +59,6 @@ export default function FormularioTurno({
   function cambiar(campo, valor) {
     setDatos((previo) => {
       const proximo = { ...previo, [campo]: valor }
-      // Al cambiar de cliente el vehículo elegido deja de ser válido.
       if (campo === 'cliente_id') proximo.vehiculo_id = ''
       return proximo
     })
