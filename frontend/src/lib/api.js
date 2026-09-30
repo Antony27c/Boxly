@@ -34,7 +34,7 @@ async function request(path, { method = 'GET', body, token, form = false } = {})
   try {
     response = await fetch(`${BASE_URL}${path}`, { method, headers, body: payload })
   } catch {
-    throw new ApiError('No hay conexión con el servidor. Verificá que la API esté levantada.', 0)
+    throw new ApiError('No hay conexión con el servidor. Intentá de nuevo en unos minutos.', 0)
   }
 
   const texto = await response.text()

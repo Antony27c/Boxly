@@ -6,7 +6,6 @@ import Field from '@/components/ui/Field'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
 import Logo from '@/components/ui/Logo'
-import { USAR_MOCK } from '@/services/config'
 
 export default function Login() {
   const [datos, setDatos] = useState({ email: '', password: '' })
@@ -83,13 +82,6 @@ export default function Login() {
           <p className="mt-2 text-sm text-muted">
             Ingresá con el correo que te asignó el administrador del taller.
           </p>
-
-          {USAR_MOCK && (
-            <p className="mt-4 rounded-box border border-graphite-700 bg-graphite-800 px-4 py-3 text-sm text-muted">
-              Modo demostración: entrá con cualquier correo y una contraseña de al menos 6
-              caracteres mientras la API no esté publicada.
-            </p>
-          )}
 
           <form onSubmit={enviar} noValidate className="mt-8 space-y-5">
             {errorApi && <Alert>{errorApi}</Alert>}
