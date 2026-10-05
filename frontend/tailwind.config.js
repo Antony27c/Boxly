@@ -4,19 +4,19 @@ export default {
     extend: {
       colors: {
         graphite: {
-          900: 'rgb(var(--color-fondo, 241 242 244) / <alpha-value>)',
-          800: '#FFFFFF',
-          700: '#E7E9ED',
-          600: '#DCDFE4',
-          500: '#C5C9D0',
+          900: 'rgb(var(--color-fondo) / <alpha-value>)',
+          800: 'rgb(var(--color-superficie) / <alpha-value>)',
+          700: 'rgb(var(--color-borde) / <alpha-value>)',
+          600: 'rgb(var(--color-borde-fuerte) / <alpha-value>)',
+          500: 'rgb(var(--color-linea) / <alpha-value>)',
         },
         amber: {
           DEFAULT: '#C9A227',
           soft: '#E2BE4B',
           deep: '#8F7016',
         },
-        ink: '#1E2126',
-        muted: '#5F6672',
+        ink: 'rgb(var(--color-texto) / <alpha-value>)',
+        muted: 'rgb(var(--color-texto-suave) / <alpha-value>)',
         ok: '#1E8E5A',
         danger: '#C6373C',
       },
