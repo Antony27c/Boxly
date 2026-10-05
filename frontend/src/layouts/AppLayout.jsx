@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import Logo from '@/components/ui/Logo'
 import Button from '@/components/ui/Button'
+import SelectorFondo from '@/components/ui/SelectorFondo'
 import { navegacion, tieneAcceso } from '@/routes/navegacion'
 
 export default function AppLayout() {
@@ -46,6 +47,7 @@ export default function AppLayout() {
               {usuario?.nombre ?? usuario?.email}
               {usuario?.rol ? ` · ${usuario.rol}` : ''}
             </span>
+            <SelectorFondo />
             <Button variante="fantasma" onClick={cerrarSesion}>
               Cerrar sesión
             </Button>
