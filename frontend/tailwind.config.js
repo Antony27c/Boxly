@@ -4,7 +4,7 @@ export default {
     extend: {
       colors: {
         graphite: {
-          900: '#F1F2F4',
+          900: 'rgb(var(--color-fondo, 241 242 244) / <alpha-value>)',
           800: '#FFFFFF',
           700: '#E7E9ED',
           600: '#DCDFE4',
