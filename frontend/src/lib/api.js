@@ -43,12 +43,19 @@ async function request(path, { method = 'GET', body, token, form = false } = {})
   }
 
   const texto = await response.text()
-  const datos = texto ? JSON.parse(texto) : null
+  let datos = null
+  try {
+    datos = texto ? JSON.parse(texto) : null
+  } catch {
+    datos = null
+  }
 
   if (!response.ok) {
     const detail = datos?.detail
-    const detalle = Array.isArray(detail) ? detail[0]?.msg : detail
-    if (response.status === 401 && onNoAutorizado) onNoAutorizado()
+    let detalle = Array.isArray(detail) ? detail[0]?.msg : detail
+    const campo = datos?.errores?.[0]?.campo?.split(' -> ').pop()
+    if (campo) detalle = `${detalle}: revisá el campo ${campo}.`
+    if (response.status === 401 && token && onNoAutorizado) onNoAutorizado()
     throw new ApiError(mensajeSegunEstado(response.status, detalle), response.status)
   }
 
