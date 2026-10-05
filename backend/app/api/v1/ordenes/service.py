@@ -14,7 +14,7 @@ TRANSICIONES_VALIDAS = {
     "pendiente":["ingresado","cancelado"],
     "ingresado": ["en_diagnostico", "cancelado"],
     "en_diagnostico": ["esperando_repuestos", "listo", "cancelado"],
-    "esperando_repuestos": ["listo", "cancelado"],
+    "esperando_repuesto": ["listo", "cancelado"],
     "listo": ["entregado"],
     "entregado": [],
     "cancelado": []
