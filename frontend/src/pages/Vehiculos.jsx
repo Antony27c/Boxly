@@ -9,6 +9,7 @@ import Loader from '@/components/ui/Loader'
 import Modal from '@/components/ui/Modal'
 import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
+import IconoAuto from '@/components/ui/IconoAuto'
 import FormularioVehiculo from '@/components/vehiculos/FormularioVehiculo'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
@@ -97,6 +98,7 @@ export default function Vehiculos() {
     <div className="animate-bay-in">
       <EncabezadoPagina
         titulo="Vehículos"
+        icono={IconoAuto}
         descripcion="Ficha técnica de cada unidad, asociada a su cliente."
         acciones={
           <Button onClick={abrirNuevo} disabled={sinClientes}>

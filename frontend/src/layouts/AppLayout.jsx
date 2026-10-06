@@ -31,13 +31,14 @@ export default function AppLayout() {
                 key={item.a}
                 to={item.a}
                 className={({ isActive }) =>
-                  `whitespace-nowrap rounded-box px-3 py-1.5 text-sm transition-colors ${
+                  `inline-flex items-center gap-1.5 whitespace-nowrap rounded-box px-3 py-1.5 text-sm transition-colors ${
                     isActive
                       ? 'bg-graphite-600 text-ink'
                       : 'text-muted hover:bg-graphite-700 hover:text-ink'
                   }`
                 }
               >
+                {item.icono && <item.icono />}
                 {item.texto}
               </NavLink>
             ))}
