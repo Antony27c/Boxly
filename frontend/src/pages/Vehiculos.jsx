@@ -11,6 +11,7 @@ import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
 import IconoAuto from '@/components/ui/IconoAuto'
 import FormularioVehiculo from '@/components/vehiculos/FormularioVehiculo'
+import LogoMarca from '@/components/vehiculos/LogoMarca'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
@@ -175,7 +176,7 @@ export default function Vehiculos() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="flex items-center gap-2 font-mono text-lg font-semibold tracking-wider text-amber">
-                      <IconoAuto className="h-5 w-5" />
+                      <LogoMarca marca={vehiculo.marca} />
                       {vehiculo.patente}
                     </p>
                     <p className="mt-1 font-medium">
