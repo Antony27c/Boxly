@@ -174,7 +174,8 @@ export default function Vehiculos() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-mono text-lg font-semibold tracking-wider text-amber">
+                    <p className="flex items-center gap-2 font-mono text-lg font-semibold tracking-wider text-amber">
+                      <IconoAuto className="h-5 w-5" />
                       {vehiculo.patente}
                     </p>
                     <p className="mt-1 font-medium">
