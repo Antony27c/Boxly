@@ -8,7 +8,7 @@ ESTADOS_ORDEN =(
     "pendiente",
     "ingresado",
     "en_diagnostico",
-    "esperando_repuesto",
+    "esperando_repuestos",
     "listo",
     "entregado",
     "cancelado",
