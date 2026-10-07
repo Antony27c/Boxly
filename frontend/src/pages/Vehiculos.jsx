@@ -9,9 +9,7 @@ import Loader from '@/components/ui/Loader'
 import Modal from '@/components/ui/Modal'
 import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
-import IconoAuto from '@/components/ui/IconoAuto'
 import FormularioVehiculo from '@/components/vehiculos/FormularioVehiculo'
-import LogoMarca from '@/components/vehiculos/LogoMarca'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
@@ -99,7 +97,6 @@ export default function Vehiculos() {
     <div className="animate-bay-in">
       <EncabezadoPagina
         titulo="Vehículos"
-        icono={IconoAuto}
         descripcion="Ficha técnica de cada unidad, asociada a su cliente."
         acciones={
           <Button onClick={abrirNuevo} disabled={sinClientes}>
@@ -175,8 +172,7 @@ export default function Vehiculos() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="flex items-center gap-2 font-mono text-lg font-semibold tracking-wider text-amber">
-                      <LogoMarca marca={vehiculo.marca} />
+                    <p className="font-mono text-lg font-semibold tracking-wider text-amber">
                       {vehiculo.patente}
                     </p>
                     <p className="mt-1 font-medium">

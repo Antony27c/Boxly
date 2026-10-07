@@ -3,7 +3,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import Logo from '@/components/ui/Logo'
 import Button from '@/components/ui/Button'
-import SelectorFondo from '@/components/ui/SelectorFondo'
 import { navegacion, tieneAcceso } from '@/routes/navegacion'
 
 export default function AppLayout() {
@@ -31,14 +30,13 @@ export default function AppLayout() {
                 key={item.a}
                 to={item.a}
                 className={({ isActive }) =>
-                  `inline-flex items-center gap-1.5 whitespace-nowrap rounded-box px-3 py-1.5 text-sm transition-colors ${
+                  `whitespace-nowrap rounded-box px-3 py-1.5 text-sm transition-colors ${
                     isActive
                       ? 'bg-graphite-600 text-ink'
                       : 'text-muted hover:bg-graphite-700 hover:text-ink'
                   }`
                 }
               >
-                {item.icono && <item.icono />}
                 {item.texto}
               </NavLink>
             ))}
@@ -48,7 +46,6 @@ export default function AppLayout() {
               {usuario?.nombre ?? usuario?.email}
               {usuario?.rol ? ` · ${usuario.rol}` : ''}
             </span>
-            <SelectorFondo />
             <Button variante="fantasma" onClick={cerrarSesion}>
               Cerrar sesión
             </Button>

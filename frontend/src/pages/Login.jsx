@@ -6,7 +6,6 @@ import Field from '@/components/ui/Field'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
 import Logo from '@/components/ui/Logo'
-import SelectorFondo from '@/components/ui/SelectorFondo'
 
 export default function Login() {
   const [datos, setDatos] = useState({ email: '', password: '' })
@@ -73,10 +72,7 @@ export default function Login() {
         <div className="hazard-bar absolute inset-y-0 right-0 w-1.5" aria-hidden="true" />
       </section>
 
-      <section className="relative flex items-center justify-center bg-graphite-900 px-5 py-12">
-        <div className="absolute right-5 top-5">
-          <SelectorFondo />
-        </div>
+      <section className="flex items-center justify-center bg-graphite-900 px-5 py-12">
         <div className="w-full max-w-sm animate-bay-in">
           <div className="lg:hidden">
             <Logo tamano="md" />

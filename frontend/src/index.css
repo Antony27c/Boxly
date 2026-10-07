@@ -3,16 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --color-fondo: 255 255 255;
-    --color-superficie: 255 255 255;
-    --color-borde: 231 233 237;
-    --color-borde-fuerte: 220 223 228;
-    --color-linea: 197 201 208;
-    --color-texto: 30 33 38;
-    --color-texto-suave: 95 102 114;
-  }
-
   html {
     -webkit-text-size-adjust: 100%;
   }
