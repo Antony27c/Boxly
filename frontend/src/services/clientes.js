@@ -56,14 +56,14 @@ export const clientesService = {
       ? operar((datos) => {
           const cliente = buscarCliente(datos, id)
           const conVehiculos = datos.vehiculos.some((v) => v.cliente_id === cliente.id)
-          if (conVehiculos) {
+          const conTurnos = datos.turnos.some((t) => t.cliente_id === cliente.id)
+          if (conVehiculos || conTurnos) {
             throw new MockError(
-              'No se puede eliminar: el cliente tiene vehículos asociados.',
+              'No se puede eliminar: el cliente tiene vehículos, órdenes o turnos asociados.',
               409,
             )
           }
           datos.clientes = datos.clientes.filter((item) => item.id !== cliente.id)
-          datos.turnos = datos.turnos.filter((t) => t.cliente_id !== cliente.id)
           return null
         })
       : api.del(`${RECURSO}/${id}`, token),

@@ -54,7 +54,8 @@ async function request(path, { method = 'GET', body, token, form = false } = {})
     const detail = datos?.detail
     let detalle = Array.isArray(detail) ? detail[0]?.msg : detail
     const campo = datos?.errores?.[0]?.campo?.split(' -> ').pop()
-    if (campo) detalle = `${detalle}: revisá el campo ${campo}.`
+    const base = detalle ?? 'Hay un error en los datos enviados'
+    if (campo) detalle = `${base}: revisá el campo ${campo}.`
     if (response.status === 401 && token && onNoAutorizado) onNoAutorizado()
     throw new ApiError(mensajeSegunEstado(response.status, detalle), response.status)
   }
