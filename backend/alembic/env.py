@@ -22,7 +22,7 @@ config = context.config
 
 # La URL sale de la configuración central del backend (.env / DATABASE_URL),
 # para no tener que repetirla en 2 lugares
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
