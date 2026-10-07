@@ -1,5 +1,5 @@
 export const ROLES_ADMIN = ['admin', 'administrador']
-export const ROLES_MOSTRADOR = [...ROLES_ADMIN, 'recepcionista']
+export const ROLES_MOSTRADOR = [...ROLES_ADMIN, 'recepcion', 'recepcionista']
 export const ROLES_TALLER = [...ROLES_MOSTRADOR, 'mecanico', 'mecánico']
 
 export const navegacion = [

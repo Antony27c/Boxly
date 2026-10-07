@@ -28,8 +28,9 @@ export function AuthProvider({ children }) {
         setUsuario(datos)
         localStorage.setItem(CLAVE_USUARIO, JSON.stringify(datos))
       })
-      .catch(() => {
+      .catch((error) => {
         if (!vigente) return
+        if (error.status !== 401 && error.status !== 403) return
         setToken(null)
         setUsuario(null)
         localStorage.removeItem(CLAVE_TOKEN)
