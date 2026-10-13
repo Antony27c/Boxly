@@ -13,15 +13,16 @@ const VACIO = {
   modelo: '',
   anio: '',
   color: '',
-  kilometraje: '',
-  combustible: 'Nafta',
+  vin: '',
   observaciones: '',
 }
 
-const COMBUSTIBLES = ['Nafta', 'Diésel', 'GNC', 'Híbrido', 'Eléctrico']
-
 export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar, onCancelar }) {
-  const [datos, setDatos] = useState(() => ({ ...VACIO, ...vehiculo }))
+  const [datos, setDatos] = useState(() =>
+    Object.fromEntries(
+      Object.keys(VACIO).map((campo) => [campo, String(vehiculo?.[campo] ?? VACIO[campo])]),
+    ),
+  )
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -49,8 +50,7 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
         modelo: datos.modelo.trim(),
         anio: datos.anio,
         color: datos.color.trim(),
-        kilometraje: datos.kilometraje,
-        combustible: datos.combustible,
+        vin: datos.vin.trim(),
         observaciones: datos.observaciones.trim(),
       })
     } catch (problema) {
@@ -115,28 +115,19 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
           placeholder="2017"
         />
         <Field
-          label="Kilometraje"
-          inputMode="numeric"
-          value={datos.kilometraje}
-          onChange={(e) => cambiar('kilometraje', e.target.value)}
-          error={errores.kilometraje}
-          disabled={guardando}
-          placeholder="98400"
-        />
-        <Field
           label="Color (opcional)"
           value={datos.color}
           onChange={(e) => cambiar('color', e.target.value)}
           disabled={guardando}
           placeholder="Gris"
         />
-        <Select
-          label="Combustible"
+        <Field
+          label="VIN / chasis (opcional)"
           className="sm:col-span-2"
-          value={datos.combustible}
-          onChange={(e) => cambiar('combustible', e.target.value)}
+          value={datos.vin}
+          onChange={(e) => cambiar('vin', e.target.value.toUpperCase())}
           disabled={guardando}
-          opciones={COMBUSTIBLES.map((tipo) => ({ valor: tipo, texto: tipo }))}
+          placeholder="9BWZZZ377VT004251"
         />
       </div>
 

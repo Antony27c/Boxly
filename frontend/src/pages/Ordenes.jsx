@@ -4,7 +4,6 @@ import FormularioOrden from '@/components/ordenes/FormularioOrden'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import Confirmacion from '@/components/ui/Confirmacion'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
@@ -18,10 +17,11 @@ import { ESTADOS_ORDEN, ordenesService } from '@/services/ordenes'
 import { vehiculosService } from '@/services/vehiculos'
 
 const TONOS = {
-  Recibido: 'neutro',
+  Pendiente: 'neutro',
+  Ingresado: 'neutro',
   'En diagnóstico': 'ambar',
   'Esperando repuestos': 'ambar',
-  'En reparación': 'ambar',
+  Listo: 'ok',
   Entregado: 'ok',
   Cancelado: 'peligro',
 }
@@ -47,9 +47,6 @@ export default function Ordenes() {
   const [busqueda, setBusqueda] = useState('')
   const [enEdicion, setEnEdicion] = useState(null)
   const [formularioAbierto, setFormularioAbierto] = useState(false)
-  const [aEliminar, setAEliminar] = useState(null)
-  const [errorEliminar, setErrorEliminar] = useState('')
-  const [eliminando, setEliminando] = useState(false)
   const [aviso, setAviso] = useState('')
 
   const cargarOrdenes = useCallback((t) => ordenesService.listar(t), [])
@@ -124,21 +121,6 @@ export default function Ordenes() {
     setFormularioAbierto(false)
     setEnEdicion(null)
     await recargar()
-  }
-
-  async function confirmarEliminar() {
-    setEliminando(true)
-    setErrorEliminar('')
-    try {
-      await ordenesService.eliminar(aEliminar.id, token)
-      setAEliminar(null)
-      setAviso('Orden eliminada.')
-      await recargar()
-    } catch (problema) {
-      setErrorEliminar(problema.message)
-    } finally {
-      setEliminando(false)
-    }
   }
 
   const sinVehiculos = (vehiculos ?? []).length === 0
@@ -225,7 +207,7 @@ export default function Ordenes() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-muted">Orden #{orden.id}</p>
+                    <p className="text-sm text-muted">Orden {orden.codigo ?? `#${orden.id}`}</p>
                     <p className="mt-0.5 font-mono text-lg font-semibold tracking-wider text-amber">
                       {vehiculo?.patente ?? 'Vehículo eliminado'}
                     </p>
@@ -246,7 +228,7 @@ export default function Ordenes() {
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted">Mecánico</dt>
-                    <dd className="text-right">{orden.mecanico || 'Sin asignar'}</dd>
+                    <dd className="text-right">{orden.mecanico || (orden.mecanico_id ? 'Asignado' : 'Sin asignar')}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted">Total</dt>
@@ -269,15 +251,6 @@ export default function Ordenes() {
                   >
                     Editar
                   </Button>
-                  <Button
-                    variante="fantasma"
-                    onClick={() => {
-                      setErrorEliminar('')
-                      setAEliminar(orden)
-                    }}
-                  >
-                    Eliminar
-                  </Button>
                 </div>
               </li>
             )
@@ -287,7 +260,9 @@ export default function Ordenes() {
 
       <Modal
         abierto={formularioAbierto}
-        titulo={enEdicion ? `Editar orden #${enEdicion.id}` : 'Nueva orden de trabajo'}
+        titulo={
+          enEdicion ? `Editar orden ${enEdicion.codigo ?? `#${enEdicion.id}`}` : 'Nueva orden de trabajo'
+        }
         descripcion="Cada orden registra el trabajo realizado sobre un vehículo del taller."
         onCerrar={() => setFormularioAbierto(false)}
       >
@@ -300,15 +275,6 @@ export default function Ordenes() {
         />
       </Modal>
 
-      <Confirmacion
-        abierto={Boolean(aEliminar)}
-        titulo="Eliminar orden"
-        mensaje={`¿Eliminar la orden #${aEliminar?.id ?? ''}? Se borra también del historial del vehículo.`}
-        error={errorEliminar}
-        procesando={eliminando}
-        onConfirmar={confirmarEliminar}
-        onCerrar={() => setAEliminar(null)}
-      />
     </div>
   )
 }
