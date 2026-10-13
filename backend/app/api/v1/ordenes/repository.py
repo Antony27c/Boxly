@@ -37,7 +37,13 @@ class OrdenRepository:
         db.add(historial)
         
         return historial
-
+    def obtener_historia(self, db:Session, orden_id:int) -> List[Historial_estado]:
+        stmt = (
+            select(Historial_estado)
+            .where(Historial_estado.orden_id == orden_id)
+            .order_by(Historial_estado.fecha, Historial_estado.id)
+        )
+        return list(db.scalars(stmt).all())
     def guardar_cambios(self, db: Session, orden: Orden) -> Orden:
         db.add(orden)
         db.commit()
