@@ -6,6 +6,7 @@ from app.api.v1.users import service
 from app.core.dependencies import DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import (
+    MecanicoResponse,
     MessageResponse,
     UsuarioCreate,
     UsuarioResponse,
@@ -18,7 +19,10 @@ AdminUser = Annotated[
     Usuario,
     Depends(require_roles(RolUsuario.administrador)),
 ]
-
+MostradorUser = Annotated[
+    Usuario, 
+    Depends(require_roles(RolUsuario.administrador, RolUsuario.recepcion))
+]
 
 @router.get(
     "",
@@ -46,7 +50,13 @@ def crear_usuario(
     _: AdminUser,
 ) -> UsuarioResponse:
     return service.create_usuario(db, data)
-
+@router.get(
+        "/mecanicos",
+        response_model=list[MecanicoResponse],
+        summary= "Mecanicos activos (para asignar ordenes)",
+)
+def listar_mecanicos(db: DbSession, _:MostradorUser) -> list[MecanicoResponse]:
+    return service.list_mecanicos(db)
 
 @router.get(
     "/{user_id}",
