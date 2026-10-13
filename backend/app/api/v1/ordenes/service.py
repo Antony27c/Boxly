@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from typing import List, Optional
 from datetime import datetime, timezone
 
-from app.schemas.orden import ESTADOS_ORDEN, OrdenCreate, OrdenUpdate
+from app.schemas.orden import ESTADOS_ORDEN, HistorialResponse, OrdenCreate, OrdenUpdate
 from app.models.orden import Orden
 from app.models.usuario import RolUsuario, Usuario
 from app.models.vehiculo import Vehiculo
@@ -114,5 +114,19 @@ class OrdenService:
             if valor is not None:
                 setattr(orden, campo, valor)
         return orden_repository.guardar_cambios(db, orden)
-       
+
+    def obtener_historial_orden(self, db:Session, orden_id: int) -> List[HistorialResponse]:
+        self.obtener_detalle_orden(db, orden_id)
+        respuesta = []
+        for item in orden_repository.obtener_historial(db,orden_id):
+            fila = HistorialResponse.model_validate(item)
+            if item.usuario:
+                fila.usuario_nombre = f"{item.usuario.apellido},{item.usuario.nombre}"
+            respuesta.append(fila)
+        return respuesta
+
+    def eliminar_orden(self, db:Session, orden_id:int) -> Orden:
+        orden = self.obtener_detalle_orden(db, orden_id)
+        orden_repository.eliminar(db, orden)
+        return orden
 orden_service = OrdenService()
