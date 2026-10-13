@@ -1,8 +1,9 @@
 import { api } from '@/lib/api'
 import { MockError, operar, proximoId } from '@/mocks/db'
-import { USAR_MOCK } from '@/services/config'
+import { usaMock } from '@/services/config'
 
 const RECURSO = '/api/v1/vehiculos'
+const USAR_MOCK = usaMock('vehiculos')
 
 function buscarVehiculo(datos, id) {
   const vehiculo = datos.vehiculos.find((item) => item.id === Number(id))
