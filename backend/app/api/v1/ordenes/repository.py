@@ -37,7 +37,7 @@ class OrdenRepository:
         db.add(historial)
         
         return historial
-    def obtener_historia(self, db:Session, orden_id:int) -> List[Historial_estado]:
+    def obtener_historial(self, db:Session, orden_id:int) -> List[Historial_estado]:
         stmt = (
             select(Historial_estado)
             .where(Historial_estado.orden_id == orden_id)
