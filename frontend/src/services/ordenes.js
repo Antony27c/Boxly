@@ -1,17 +1,49 @@
 import { api } from '@/lib/api'
 import { MockError, operar, proximoId } from '@/mocks/db'
-import { USAR_MOCK } from '@/services/config'
+import { usaMock } from '@/services/config'
 
 const RECURSO = '/api/v1/ordenes'
+const USAR_MOCK = usaMock('ordenes')
 
-export const ESTADOS_ORDEN = [
-  'Recibido',
-  'En diagnóstico',
-  'Esperando repuestos',
-  'En reparación',
-  'Entregado',
-  'Cancelado',
-]
+const CODIGOS = {
+  Pendiente: 'pendiente',
+  Ingresado: 'ingresado',
+  'En diagnóstico': 'en_diagnostico',
+  'Esperando repuestos': 'esperando_repuestos',
+  Listo: 'listo',
+  Entregado: 'entregado',
+  Cancelado: 'cancelado',
+}
+
+export const ESTADOS_ORDEN = Object.keys(CODIGOS)
+
+const TRANSICIONES = {
+  Pendiente: ['Ingresado', 'Cancelado'],
+  Ingresado: ['En diagnóstico', 'Cancelado'],
+  'En diagnóstico': ['Esperando repuestos', 'Listo', 'Cancelado'],
+  'Esperando repuestos': ['Listo', 'Cancelado'],
+  Listo: ['Entregado'],
+  Entregado: [],
+  Cancelado: [],
+}
+
+export function estadosPermitidos(estado) {
+  return [estado, ...(TRANSICIONES[estado] ?? [])]
+}
+
+function nombreEstado(codigo) {
+  return ESTADOS_ORDEN.find((estado) => CODIGOS[estado] === codigo) ?? codigo
+}
+
+export function desdeApi(orden) {
+  return {
+    ...orden,
+    estado: nombreEstado(orden.estado),
+    fecha: orden.fecha_ingreso?.slice(0, 10) ?? '',
+    descripcion: orden.descripcion_ingreso,
+    total: Number(orden.costo_final ?? orden.costo_estimado ?? 0),
+  }
+}
 
 function buscarOrden(datos, id) {
   const orden = datos.ordenes.find((item) => item.id === Number(id))
@@ -19,48 +51,76 @@ function buscarOrden(datos, id) {
   return orden
 }
 
-function normalizar(orden) {
-  return {
-    ...orden,
-    vehiculo_id: Number(orden.vehiculo_id),
-    total: Number(orden.total) || 0,
+function validarTransicion(actual, nuevo) {
+  if (nuevo !== actual && !(TRANSICIONES[actual] ?? []).includes(nuevo)) {
+    throw new MockError(`No se puede pasar de "${actual}" a "${nuevo}".`, 400)
   }
 }
 
 export const ordenesService = {
-  listar: (token) => (USAR_MOCK ? operar((datos) => datos.ordenes) : api.get(RECURSO, token)),
+  listar: (token) =>
+    USAR_MOCK
+      ? operar((datos) => datos.ordenes)
+      : api.get(RECURSO, token).then((ordenes) => ordenes.map(desdeApi)),
 
   obtener: (id, token) =>
-    USAR_MOCK ? operar((datos) => buscarOrden(datos, id)) : api.get(`${RECURSO}/${id}`, token),
+    USAR_MOCK
+      ? operar((datos) => buscarOrden(datos, id))
+      : api.get(`${RECURSO}/${id}`, token).then(desdeApi),
 
   crear: (orden, token) =>
     USAR_MOCK
       ? operar((datos) => {
-          const limpio = normalizar(orden)
-          if (!datos.vehiculos.some((v) => v.id === limpio.vehiculo_id)) {
+          const vehiculoId = Number(orden.vehiculo_id)
+          if (!datos.vehiculos.some((v) => v.id === vehiculoId)) {
             throw new MockError('El vehículo elegido ya no existe.', 400)
           }
-          const nueva = { ...limpio, id: proximoId(datos.ordenes) }
+          const nueva = {
+            id: proximoId(datos.ordenes),
+            vehiculo_id: vehiculoId,
+            fecha: new Date().toISOString().slice(0, 10),
+            estado: 'Pendiente',
+            descripcion: orden.descripcion,
+            mecanico: '',
+            total: Number(orden.total) || 0,
+          }
           datos.ordenes.push(nueva)
           return nueva
         })
-      : api.post(RECURSO, normalizar(orden), token),
+      : api
+          .post(
+            RECURSO,
+            {
+              vehiculo_id: Number(orden.vehiculo_id),
+              descripcion_ingreso: orden.descripcion,
+              costo_estimado: Number(orden.total) || null,
+            },
+            token,
+          )
+          .then(desdeApi),
 
   actualizar: (id, orden, token) =>
     USAR_MOCK
       ? operar((datos) => {
           const actual = buscarOrden(datos, id)
-          Object.assign(actual, normalizar(orden))
+          validarTransicion(actual.estado, orden.estado)
+          Object.assign(actual, {
+            estado: orden.estado,
+            descripcion: orden.descripcion,
+            total: Number(orden.total) || 0,
+          })
           return actual
         })
-      : api.put(`${RECURSO}/${id}`, normalizar(orden), token),
-
-  eliminar: (id, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const orden = buscarOrden(datos, id)
-          datos.ordenes = datos.ordenes.filter((item) => item.id !== orden.id)
-          return null
-        })
-      : api.del(`${RECURSO}/${id}`, token),
+      : api
+          .patch(
+            `${RECURSO}/${id}`,
+            {
+              estado: CODIGOS[orden.estado],
+              descripcion_ingreso: orden.descripcion,
+              [orden.costo_final != null ? 'costo_final' : 'costo_estimado']:
+                Number(orden.total) || 0,
+            },
+            token,
+          )
+          .then(desdeApi),
 }
