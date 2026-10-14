@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import FormularioOrden from '@/components/ordenes/FormularioOrden'
+import HistorialOrden from '@/components/ordenes/HistorialOrden'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
+import Confirmacion from '@/components/ui/Confirmacion'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
@@ -13,7 +15,8 @@ import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
-import { ESTADOS_ORDEN, ordenesService } from '@/services/ordenes'
+import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
+import { ESTADOS_ORDEN, ordenesService, sePuedeEliminar } from '@/services/ordenes'
 import { vehiculosService } from '@/services/vehiculos'
 
 const TONOS = {
@@ -41,21 +44,31 @@ function fechaLegible(fecha) {
 }
 
 export default function Ordenes() {
-  const { token } = useAuth()
+  const { token, usuario } = useAuth()
+  const esMostrador = tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
   const [parametros, setParametros] = useSearchParams()
   const estadoFiltro = parametros.get('estado') ?? ''
   const [busqueda, setBusqueda] = useState('')
   const [enEdicion, setEnEdicion] = useState(null)
   const [formularioAbierto, setFormularioAbierto] = useState(false)
+  const [conHistorial, setConHistorial] = useState(null)
+  const [aEliminar, setAEliminar] = useState(null)
+  const [errorEliminar, setErrorEliminar] = useState('')
+  const [eliminando, setEliminando] = useState(false)
   const [aviso, setAviso] = useState('')
 
   const cargarOrdenes = useCallback((t) => ordenesService.listar(t), [])
   const cargarVehiculos = useCallback((t) => vehiculosService.listar(t), [])
   const cargarClientes = useCallback((t) => clientesService.listar(t), [])
+  const cargarMecanicos = useCallback(
+    (t) => (esMostrador ? ordenesService.mecanicos(t) : Promise.resolve(null)),
+    [esMostrador],
+  )
 
   const { datos: ordenes, cargando, error, recargar } = useRecurso(cargarOrdenes)
   const { datos: vehiculos } = useRecurso(cargarVehiculos)
   const { datos: clientes } = useRecurso(cargarClientes)
+  const { datos: mecanicos } = useRecurso(cargarMecanicos)
 
   const vehiculosPorId = useMemo(() => {
     const mapa = new Map()
@@ -121,6 +134,21 @@ export default function Ordenes() {
     setFormularioAbierto(false)
     setEnEdicion(null)
     await recargar()
+  }
+
+  async function confirmarEliminar() {
+    setEliminando(true)
+    setErrorEliminar('')
+    try {
+      await ordenesService.eliminar(aEliminar.id, token)
+      setAEliminar(null)
+      setAviso('Orden eliminada.')
+      await recargar()
+    } catch (problema) {
+      setErrorEliminar(problema.message)
+    } finally {
+      setEliminando(false)
+    }
   }
 
   const sinVehiculos = (vehiculos ?? []).length === 0
@@ -228,7 +256,7 @@ export default function Ordenes() {
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted">Mecánico</dt>
-                    <dd className="text-right">{orden.mecanico || (orden.mecanico_id ? 'Asignado' : 'Sin asignar')}</dd>
+                    <dd className="text-right">{orden.mecanico || 'Sin asignar'}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted">Total</dt>
@@ -251,6 +279,20 @@ export default function Ordenes() {
                   >
                     Editar
                   </Button>
+                  <Button variante="fantasma" onClick={() => setConHistorial(orden)}>
+                    Historial
+                  </Button>
+                  {esMostrador && sePuedeEliminar(orden) && (
+                    <Button
+                      variante="fantasma"
+                      onClick={() => {
+                        setErrorEliminar('')
+                        setAEliminar(orden)
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  )}
                 </div>
               </li>
             )
@@ -270,11 +312,30 @@ export default function Ordenes() {
           orden={enEdicion}
           clientes={clientes ?? []}
           vehiculos={vehiculos ?? []}
+          mecanicos={mecanicos}
           onGuardar={guardar}
           onCancelar={() => setFormularioAbierto(false)}
         />
       </Modal>
 
+      <Modal
+        abierto={Boolean(conHistorial)}
+        titulo={`Historial de la orden ${conHistorial?.codigo ?? `#${conHistorial?.id ?? ''}`}`}
+        descripcion="Cambios de estado registrados, del más viejo al más reciente."
+        onCerrar={() => setConHistorial(null)}
+      >
+        {conHistorial && <HistorialOrden ordenId={conHistorial.id} />}
+      </Modal>
+
+      <Confirmacion
+        abierto={Boolean(aEliminar)}
+        titulo="Eliminar orden"
+        mensaje={`¿Eliminar la orden ${aEliminar?.codigo ?? `#${aEliminar?.id ?? ''}`}? Solo se pueden borrar órdenes pendientes; las demás se cancelan.`}
+        error={errorEliminar}
+        procesando={eliminando}
+        onConfirmar={confirmarEliminar}
+        onCerrar={() => setAEliminar(null)}
+      />
     </div>
   )
 }

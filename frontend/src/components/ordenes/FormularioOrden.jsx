@@ -15,6 +15,7 @@ const VACIO = {
   fecha: HOY,
   estado: 'Pendiente',
   descripcion: '',
+  mecanico_id: '',
   total: '0',
 }
 
@@ -22,14 +23,29 @@ export default function FormularioOrden({
   orden,
   clientes = [],
   vehiculos = [],
+  mecanicos,
   onGuardar,
   onCancelar,
 }) {
   const [datos, setDatos] = useState(() => {
     if (!orden) return VACIO
     const vehiculo = vehiculos.find((item) => item.id === orden.vehiculo_id)
-    return { ...VACIO, ...orden, cliente_id: vehiculo?.cliente_id ?? '', total: String(orden.total ?? 0) }
+    return {
+      ...VACIO,
+      ...orden,
+      cliente_id: vehiculo?.cliente_id ?? '',
+      mecanico_id: orden.mecanico_id ?? '',
+      total: String(orden.total ?? 0),
+    }
   })
+
+  const opcionesMecanico = useMemo(() => {
+    const opciones = (mecanicos ?? []).map((m) => ({ valor: m.id, texto: `${m.apellido}, ${m.nombre}` }))
+    if (orden?.mecanico_id && !opciones.some((o) => o.valor === orden.mecanico_id)) {
+      opciones.push({ valor: orden.mecanico_id, texto: `${orden.mecanico || 'Mecánico asignado'} (inactivo)` })
+    }
+    return opciones
+  }, [mecanicos, orden])
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -62,6 +78,7 @@ export default function FormularioOrden({
       await onGuardar({
         vehiculo_id: datos.vehiculo_id,
         estado: datos.estado,
+        mecanico_id: datos.mecanico_id,
         descripcion: datos.descripcion.trim(),
         total: datos.total,
         costo_final: orden?.costo_final ?? null,
@@ -120,6 +137,18 @@ export default function FormularioOrden({
               }))}
             />
           </>
+        )}
+        {mecanicos && (
+          <Select
+            label="Mecánico asignado"
+            value={datos.mecanico_id}
+            onChange={(e) => cambiar('mecanico_id', e.target.value)}
+            disabled={guardando}
+            opciones={[
+              ...(orden?.mecanico_id ? [] : [{ valor: '', texto: 'Sin asignar' }]),
+              ...opcionesMecanico,
+            ]}
+          />
         )}
         <Field
           label="Total"

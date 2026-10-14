@@ -44,6 +44,7 @@ class OrdenResponse(OrdenBase):
     vehiculo_id:int
     creado_por_id:int
     mecanico_id:Optional[int]= None
+    mecanico_nombre: Optional[str] = None
     diagnostico: Optional[str] = None
     costo_estimado: Optional[Decimal] = None
     costo_final: Optional[Decimal]= None

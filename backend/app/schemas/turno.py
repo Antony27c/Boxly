@@ -4,9 +4,23 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-# DER §3.7: pendiente | confirmado | cancelado | asistio
-EstadoTurno = Literal["pendiente", "confirmado", "cancelado", "asistio"]
-ESTADOS_TURNO = ("pendiente", "confirmado", "cancelado", "asistio")
+# DER §3.7 + estados de agenda frontend
+EstadoTurno = Literal[
+    "pendiente",
+    "confirmado",
+    "en_taller",
+    "completado",
+    "cancelado",
+    "asistio",
+]
+ESTADOS_TURNO = (
+    "pendiente",
+    "confirmado",
+    "en_taller",
+    "completado",
+    "cancelado",
+    "asistio",
+)
 
 
 def _vacio_a_none(value):
