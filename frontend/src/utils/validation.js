@@ -44,7 +44,7 @@ export function validarCliente({ nombre, apellido, dni, telefono, email }) {
   return errores
 }
 
-export function validarVehiculo({ cliente_id, patente, marca, modelo, anio, kilometraje }) {
+export function validarVehiculo({ cliente_id, patente, marca, modelo, anio }) {
   const errores = {}
 
   if (!cliente_id) errores.cliente_id = 'Elegí a qué cliente pertenece.'
@@ -61,9 +61,6 @@ export function validarVehiculo({ cliente_id, patente, marca, modelo, anio, kilo
   else if (Number(anio) < 1950 || Number(anio) > anioActual + 1)
     errores.anio = `El año debe estar entre 1950 y ${anioActual + 1}.`
 
-  if (String(kilometraje).trim() === '') errores.kilometraje = 'Ingresá el kilometraje.'
-  else if (Number(kilometraje) < 0 || Number(kilometraje) > 2000000)
-    errores.kilometraje = 'El kilometraje no parece válido.'
 
   return errores
 }

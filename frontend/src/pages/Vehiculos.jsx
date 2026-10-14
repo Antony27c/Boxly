@@ -179,8 +179,7 @@ export default function Vehiculos() {
                       {vehiculo.marca} {vehiculo.modelo}
                     </p>
                     <p className="text-sm text-muted">
-                      {vehiculo.anio} · {vehiculo.combustible}
-                      {vehiculo.color ? ` · ${vehiculo.color}` : ''}
+                      {[vehiculo.anio, vehiculo.color].filter(Boolean).join(' · ')}
                     </p>
                   </div>
                 </div>
@@ -191,10 +190,6 @@ export default function Vehiculos() {
                     <dd className="text-right">
                       {cliente ? `${cliente.apellido}, ${cliente.nombre}` : '—'}
                     </dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted">Kilometraje</dt>
-                    <dd>{vehiculo.kilometraje.toLocaleString('es-AR')} km</dd>
                   </div>
                 </dl>
 

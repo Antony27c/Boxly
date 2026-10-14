@@ -4,8 +4,9 @@ from typing import List, Optional, Annotated
 
 from app.core.dependencies import CurrentUser,DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.orden import OrdenCreate, OrdenUpdate, OrdenResponse
+from app.schemas.orden import HistorialResponse, OrdenCreate, OrdenUpdate, OrdenResponse
 from .service import orden_service
+from app.schemas.usuario import MessageResponse
 
 
 router = APIRouter()
@@ -33,3 +34,11 @@ def detalle_orden(orden_id: int, db: DbSession, _:CurrentUser):
 def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:CurrentUser):
 
     return orden_service.editar_orden(db, orden_id, datos, usuario_id=usuario.id)
+@router.get("/{orden_id}/historial", response_model=List[HistorialResponse])
+def historial_orden(orden_id:int, db:DbSession, _: CurrentUser):
+    return orden_service.obtener_historial_orden(db, orden_id)
+
+@router.delete("/{orden_id}", response_model=MessageResponse)
+def eliminar_orden(orden_id: int, db:DbSession,_:RecepcionUser):
+    orden = orden_service.eliminar_orden(db, orden_id)
+    return MessageResponse(detail=f"Orden {orden.codigo} eliminada")

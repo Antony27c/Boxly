@@ -7,6 +7,16 @@ const CLAVE_USUARIO = 'boxly_usuario'
 
 const AuthContext = createContext(null)
 
+function vencimientoDelToken(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const { exp } = JSON.parse(atob(base64))
+    return exp ? exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(CLAVE_TOKEN))
   const [usuario, setUsuario] = useState(() => {
@@ -62,6 +72,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setUnaunthorizedHandler(logout)
   }, [logout])
+
+  useEffect(() => {
+    if (!token) return
+    const vence = vencimientoDelToken(token)
+    if (!vence) return
+    const temporizador = setTimeout(logout, Math.max(vence - Date.now(), 0))
+    return () => clearTimeout(temporizador)
+  }, [token, logout])
 
   const valor = useMemo(
     () => ({ token, usuario, autenticado: Boolean(token), cargandoSesion, login, logout }),
