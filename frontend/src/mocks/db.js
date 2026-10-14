@@ -127,6 +127,7 @@ const SEMILLA = {
       total: 240000,
     },
   ],
+  historial_estados: [],
   usuarios: [
     {
       id: 1,
