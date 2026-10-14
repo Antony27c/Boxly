@@ -99,7 +99,7 @@ export const ordenesService = {
             .filter((u) => u.rol === 'mecanico' && u.activo)
             .map(({ id, nombre, apellido }) => ({ id, nombre, apellido })),
         )
-      : api.get('/api/v1/usuarios/mecanicos', token),
+      : api.get('/api/v1/users/mecanicos', token),
 
   historial: (id, token) =>
     USAR_MOCK
