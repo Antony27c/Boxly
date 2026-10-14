@@ -121,12 +121,17 @@ class OrdenService:
         for item in orden_repository.obtener_historial(db,orden_id):
             fila = HistorialResponse.model_validate(item)
             if item.usuario:
-                fila.usuario_nombre = f"{item.usuario.apellido},{item.usuario.nombre}"
+                fila.usuario_nombre = f"{item.usuario.apellido}, {item.usuario.nombre}"
             respuesta.append(fila)
         return respuesta
 
     def eliminar_orden(self, db:Session, orden_id:int) -> Orden:
         orden = self.obtener_detalle_orden(db, orden_id)
+        if orden.estado != "pendiente":
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se pueden eliminar órdenes pendientes. Para las demás, pasala a 'cancelado'.",
+            )
         orden_repository.eliminar(db, orden)
         return orden
 orden_service = OrdenService()
