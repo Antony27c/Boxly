@@ -51,3 +51,14 @@ class OrdenResponse(OrdenBase):
     fecha_estimada_entrega: Optional[datetime]= None
     fecha_entrega: Optional[datetime]= None
 
+class HistorialResponse(BaseModel):
+    model_config= ConfigDict(from_attributes=True)
+
+    id: int
+    orden_id:int 
+    usuario_id:int
+    usuario_nombre: Optional[str]= None
+    estado_anterior: Optional[str] = None
+    estado_nuevo: str
+    comentario: Optional [str] = None
+    fecha: datetime

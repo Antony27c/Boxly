@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from typing import List, Optional
 
 from app.models.orden import Historial_estado, Orden
-
+from app.models.detalle_orden import DetalleOrden
 class OrdenRepository:
     
     def obtener_ordenes(self, db: Session, estado: Optional[str] = None) -> List[Orden]:
@@ -37,11 +37,28 @@ class OrdenRepository:
         db.add(historial)
         
         return historial
-
+    def obtener_historial(self, db:Session, orden_id:int) -> List[Historial_estado]:
+        stmt = (
+            select(Historial_estado)
+            .where(Historial_estado.orden_id == orden_id)
+            .order_by(Historial_estado.fecha, Historial_estado.id)
+        )
+        return list(db.scalars(stmt).all())
     def guardar_cambios(self, db: Session, orden: Orden) -> Orden:
         db.add(orden)
         db.commit()
         db.refresh(orden)
         return orden
+    def eliminar(self, db:Session, orden: Orden) -> None:
+        for historial in db.scalars(
+            select(Historial_estado).where(Historial_estado.orden_id == orden.id)
+        ):
+            db.delete(historial)
+        for detalle in db.scalars(
+            select(DetalleOrden).where(DetalleOrden.orden_id == orden.id)
+        ):
+            db.delete(detalle)
+        db.delete(orden)
+        db.commit()
 
 orden_repository = OrdenRepository()

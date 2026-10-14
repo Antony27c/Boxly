@@ -6,6 +6,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import (
     LoginRequest,
+    MecanicoResponse,
     TokenResponse,
     UsuarioCreate,
     UsuarioResponse,
@@ -113,3 +114,7 @@ def delete_usuario(db: Session, user_id: int) -> UsuarioResponse:
             detail="Usuario no encontrado",
         )
     return _to_response(repository.soft_delete(db, user))
+
+def list_mecanicos(db: Session) -> list[MecanicoResponse]:
+    users= repository.list_usuarios(db, solo_activos=True, rol=RolUsuario.mecanico)
+    return [MecanicoResponse.model_validate(u) for u in users]
