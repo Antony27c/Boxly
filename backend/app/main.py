@@ -1,30 +1,13 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
-from app.db.base import Base
-from app.db.session import engine
 
 # Importar modelos para que Base.metadata los registre (Usuario).
 # Cliente / Vehículo / etc. los agregará Pablo en BE-03.
 import app.models  # noqa: F401
-
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    # Temporal hasta que Pablo configure Alembic (BD-02).
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as exc:  # noqa: BLE001 — arranque tolerante si la DB aún no está
-        print(
-            f"[Boxly] Aviso: no se pudo crear/verificar tablas "
-            f"(¿PostgreSQL levantado?). Detalle: {exc}"
-        )
-    yield
 
 
 def create_app() -> FastAPI:
@@ -34,9 +17,8 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         description=(
             "API de Boxly — Sistema de Gestión de Taller Mecánico. "
-            "Sprint 1: autenticación JWT, roles y CRUD de usuarios."
+            "Autenticación JWT, roles, clientes, vehículos, turnos, órdenes y repuestos."
         ),
-        lifespan=lifespan,
     )
 
     app.add_middleware(
