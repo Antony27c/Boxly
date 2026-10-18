@@ -5,8 +5,8 @@ const USAR_MOCK = usaMock('auth')
 
 const USUARIO_DEMO = {
   id: 1,
-  nombre: 'Julieta',
-  apellido: 'Cardozo',
+  nombre: 'Admin',
+  apellido: 'Boxly',
   email: 'demo@boxly.com',
   rol: 'admin',
   activo: true,

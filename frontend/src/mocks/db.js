@@ -131,9 +131,9 @@ const SEMILLA = {
   usuarios: [
     {
       id: 1,
-      nombre: 'Julieta',
-      apellido: 'Cardozo',
-      email: 'julieta@boxly.com',
+      nombre: 'Admin',
+      apellido: 'Boxly',
+      email: 'admin@boxly.com',
       rol: 'admin',
       activo: true,
       creado_en: '2026-08-01T09:00:00',
