@@ -31,7 +31,6 @@ function aISO(fecha) {
   return copia.toISOString().slice(0, 10)
 }
 
-// Lunes de la semana a la que pertenece la fecha recibida.
 function lunesDe(fecha) {
   const copia = new Date(`${fecha}T12:00:00`)
   const dia = copia.getDay()

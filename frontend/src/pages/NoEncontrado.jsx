@@ -6,7 +6,7 @@ export default function NoEncontrado() {
       <p className="text-5xl font-bold text-amber">404</p>
       <h1 className="text-xl font-semibold">Esta página no existe</h1>
       <p className="max-w-sm text-muted">
-        Puede que el enlace esté mal escrito o que la sección todavía no esté disponible.
+        Puede que el enlace esté mal escrito.
       </p>
       <Link
         to="/inicio"

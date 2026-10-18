@@ -1,12 +1,12 @@
 const estilos = {
   primario:
-    'bg-amber text-graphite-900 hover:bg-amber-soft disabled:bg-amber/40 disabled:text-graphite-900/60',
+    'bg-amber text-white hover:bg-amber-deep disabled:bg-amber/40 disabled:text-white/70',
   secundario:
     'bg-graphite-600 text-ink hover:bg-graphite-500 disabled:opacity-50',
   fantasma:
     'bg-transparent text-muted hover:text-ink hover:bg-graphite-700 disabled:opacity-50',
   peligro:
-    'bg-danger text-ink hover:bg-danger/85 disabled:opacity-50',
+    'bg-danger text-white hover:bg-danger/85 disabled:opacity-50',
 }
 
 export default function Button({

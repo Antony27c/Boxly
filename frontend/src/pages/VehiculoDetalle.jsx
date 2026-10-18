@@ -10,11 +10,13 @@ import { clientesService } from '@/services/clientes'
 import { vehiculosService } from '@/services/vehiculos'
 
 const TONOS = {
-  Entregado: 'ok',
-  Listo: 'ok',
+  Pendiente: 'neutro',
+  Ingresado: 'neutro',
   'En diagnóstico': 'ambar',
   'Esperando repuestos': 'ambar',
-  Ingresado: 'neutro',
+  Listo: 'ok',
+  Entregado: 'ok',
+  Cancelado: 'peligro',
 }
 
 function formatearPesos(monto) {
@@ -36,8 +38,8 @@ export default function VehiculoDetalle() {
   const cargarHistorial = useCallback((t) => vehiculosService.historial(id, t), [id])
   const cargarClientes = useCallback((t) => clientesService.listar(t), [])
 
-  const { datos: vehiculo, cargando, error, recargar } = useRecurso(cargarVehiculo, [id])
-  const { datos: historial, cargando: cargandoHistorial } = useRecurso(cargarHistorial, [id])
+  const { datos: vehiculo, cargando, error, recargar } = useRecurso(cargarVehiculo)
+  const { datos: historial, cargando: cargandoHistorial } = useRecurso(cargarHistorial)
   const { datos: clientes } = useRecurso(cargarClientes)
 
   if (cargando) return <Loader texto="Cargando ficha del vehículo…" />
@@ -75,8 +77,7 @@ export default function VehiculoDetalle() {
             {vehiculo.marca} {vehiculo.modelo}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {vehiculo.anio} · {vehiculo.combustible}
-            {vehiculo.color ? ` · ${vehiculo.color}` : ''}
+            {[vehiculo.anio, vehiculo.color].filter(Boolean).join(' · ')}
           </p>
         </div>
         <Link to={`/turnos?vehiculo=${vehiculo.id}`}>
@@ -89,12 +90,8 @@ export default function VehiculoDetalle() {
           <h2 className="font-semibold">Ficha técnica</h2>
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between gap-3">
-              <dt className="text-muted">Kilometraje</dt>
-              <dd>{vehiculo.kilometraje.toLocaleString('es-AR')} km</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Alta en el sistema</dt>
-              <dd>{new Date(vehiculo.creado_en).toLocaleDateString('es-AR')}</dd>
+              <dt className="text-muted">VIN / chasis</dt>
+              <dd className="text-right">{vehiculo.vin || '—'}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Observaciones</dt>

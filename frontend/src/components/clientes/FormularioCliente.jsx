@@ -15,7 +15,9 @@ const VACIO = {
 }
 
 export default function FormularioCliente({ cliente, onGuardar, onCancelar }) {
-  const [datos, setDatos] = useState(() => ({ ...VACIO, ...cliente }))
+  const [datos, setDatos] = useState(() =>
+    Object.fromEntries(Object.keys(VACIO).map((campo) => [campo, cliente?.[campo] ?? ''])),
+  )
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)

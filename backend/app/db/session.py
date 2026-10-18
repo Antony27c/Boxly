@@ -1,8 +1,6 @@
 """Sesión SQLAlchemy.
 
-BE-02 (Pablo): ajustar engine, pool y URL de PostgreSQL según el entorno real.
-Esta capa mínima permite que el módulo de autenticación (Antonio) funcione
-cuando la base esté disponible.
+La URL de conexión sale de la configuración central (POSTGRES_* / DATABASE_URL).
 """
 
 from collections.abc import Generator

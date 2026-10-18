@@ -1,10 +1,21 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, use, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { authService } from '@/services/auth'
+import { setUnaunthorizedHandler } from '../lib/api'
 
 const CLAVE_TOKEN = 'boxly_token'
 const CLAVE_USUARIO = 'boxly_usuario'
 
 const AuthContext = createContext(null)
+
+function vencimientoDelToken(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const { exp } = JSON.parse(atob(base64))
+    return exp ? exp * 1000 : null
+  } catch {
+    return null
+  }
+}
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(CLAVE_TOKEN))
@@ -14,7 +25,6 @@ export function AuthProvider({ children }) {
   })
   const [cargandoSesion, setCargandoSesion] = useState(Boolean(localStorage.getItem(CLAVE_TOKEN)))
 
-  // Al recargar la página revalidamos el token contra la API.
   useEffect(() => {
     if (!token) {
       setCargandoSesion(false)
@@ -28,9 +38,9 @@ export function AuthProvider({ children }) {
         setUsuario(datos)
         localStorage.setItem(CLAVE_USUARIO, JSON.stringify(datos))
       })
-      .catch(() => {
+      .catch((error) => {
         if (!vigente) return
-        // Token vencido o inválido: se cierra la sesión.
+        if (error.status !== 401 && error.status !== 403) return
         setToken(null)
         setUsuario(null)
         localStorage.removeItem(CLAVE_TOKEN)
@@ -45,8 +55,6 @@ export function AuthProvider({ children }) {
   }, [token])
 
   const login = useCallback(async ({ email, password }) => {
-    // El login devuelve el token y el usuario completo, así que no hace falta
-    // volver a pedir el perfil.
     const datos = await authService.login({ email, password })
     localStorage.setItem(CLAVE_TOKEN, datos.access_token)
     localStorage.setItem(CLAVE_USUARIO, JSON.stringify(datos.usuario))
@@ -60,6 +68,18 @@ export function AuthProvider({ children }) {
     setToken(null)
     setUsuario(null)
   }, [])
+
+  useEffect(() => {
+    setUnaunthorizedHandler(logout)
+  }, [logout])
+
+  useEffect(() => {
+    if (!token) return
+    const vence = vencimientoDelToken(token)
+    if (!vence) return
+    const temporizador = setTimeout(logout, Math.max(vence - Date.now(), 0))
+    return () => clearTimeout(temporizador)
+  }, [token, logout])
 
   const valor = useMemo(
     () => ({ token, usuario, autenticado: Boolean(token), cargandoSesion, login, logout }),

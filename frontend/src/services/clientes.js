@@ -1,8 +1,9 @@
 import { api } from '@/lib/api'
 import { MockError, operar, proximoId } from '@/mocks/db'
-import { USAR_MOCK } from '@/services/config'
+import { usaMock } from '@/services/config'
 
 const RECURSO = '/api/v1/clientes'
+const USAR_MOCK = usaMock('clientes')
 
 function buscarCliente(datos, id) {
   const cliente = datos.clientes.find((item) => item.id === Number(id))
@@ -55,14 +56,14 @@ export const clientesService = {
       ? operar((datos) => {
           const cliente = buscarCliente(datos, id)
           const conVehiculos = datos.vehiculos.some((v) => v.cliente_id === cliente.id)
-          if (conVehiculos) {
+          const conTurnos = datos.turnos.some((t) => t.cliente_id === cliente.id)
+          if (conVehiculos || conTurnos) {
             throw new MockError(
-              'No se puede eliminar: el cliente tiene vehículos asociados.',
+              'No se puede eliminar: el cliente tiene vehículos, órdenes o turnos asociados.',
               409,
             )
           }
           datos.clientes = datos.clientes.filter((item) => item.id !== cliente.id)
-          datos.turnos = datos.turnos.filter((t) => t.cliente_id !== cliente.id)
           return null
         })
       : api.del(`${RECURSO}/${id}`, token),

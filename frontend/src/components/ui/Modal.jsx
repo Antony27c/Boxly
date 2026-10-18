@@ -17,7 +17,7 @@ export default function Modal({ titulo, descripcion, abierto, onCerrar, children
   if (!abierto) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-5">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-5">
       <button
         type="button"
         aria-label="Cerrar"

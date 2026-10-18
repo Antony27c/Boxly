@@ -1,4 +1,12 @@
-// Mientras el backend de Clientes, Vehículos y Turnos no esté publicado, los
-// servicios trabajan contra la base simulada de src/mocks. Con
-// VITE_USAR_MOCK=false pasan a consumir la API real sin tocar las pantallas.
-export const USAR_MOCK = import.meta.env.VITE_USAR_MOCK !== 'false'
+const MOCK_GENERAL = import.meta.env.VITE_USAR_MOCK !== 'false'
+
+const CON_API = (import.meta.env.VITE_API_REAL ?? '')
+  .split(',')
+  .map((recurso) => recurso.trim())
+  .filter(Boolean)
+
+export const USAR_MOCK = MOCK_GENERAL
+
+export function usaMock(recurso) {
+  return MOCK_GENERAL && !CON_API.includes(recurso)
+}

@@ -135,7 +135,6 @@ export default function Clientes() {
         </div>
       ) : (
         <>
-          {/* Tabla en escritorio */}
           <div className="mt-6 hidden overflow-hidden rounded-box border border-graphite-700 md:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-graphite-800 text-muted">
@@ -193,7 +192,6 @@ export default function Clientes() {
             </table>
           </div>
 
-          {/* Tarjetas en móvil */}
           <ul className="mt-6 space-y-3 md:hidden">
             {filtrados.map((cliente) => (
               <li

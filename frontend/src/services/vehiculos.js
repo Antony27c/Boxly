@@ -1,8 +1,10 @@
 import { api } from '@/lib/api'
 import { MockError, operar, proximoId } from '@/mocks/db'
-import { USAR_MOCK } from '@/services/config'
+import { usaMock } from '@/services/config'
+import { desdeApi } from '@/services/ordenes'
 
 const RECURSO = '/api/v1/vehiculos'
+const USAR_MOCK = usaMock('vehiculos')
 
 function buscarVehiculo(datos, id) {
   const vehiculo = datos.vehiculos.find((item) => item.id === Number(id))
@@ -22,8 +24,7 @@ function normalizar(vehiculo) {
     ...vehiculo,
     patente: vehiculo.patente.toUpperCase().replace(/\s/g, ''),
     cliente_id: Number(vehiculo.cliente_id),
-    anio: Number(vehiculo.anio),
-    kilometraje: Number(vehiculo.kilometraje),
+    anio: vehiculo.anio ? Number(vehiculo.anio) : null,
   }
 }
 
@@ -72,7 +73,6 @@ export const vehiculosService = {
         })
       : api.del(`${RECURSO}/${id}`, token),
 
-  // Historial de reparaciones de la ficha técnica (órdenes de trabajo del vehículo).
   historial: (id, token) =>
     USAR_MOCK
       ? operar((datos) =>
@@ -80,5 +80,9 @@ export const vehiculosService = {
             .filter((orden) => orden.vehiculo_id === Number(id))
             .sort((a, b) => b.fecha.localeCompare(a.fecha)),
         )
-      : api.get(`${RECURSO}/${id}/ordenes`, token),
+      : api
+          .get(`${RECURSO}/${id}/ordenes`, token)
+          .then((ordenes) =>
+            ordenes.map(desdeApi).sort((a, b) => b.fecha.localeCompare(a.fecha)),
+          ),
 }
