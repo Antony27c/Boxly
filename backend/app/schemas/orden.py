@@ -44,6 +44,7 @@ class OrdenResponse(OrdenBase):
     vehiculo_id:int
     creado_por_id:int
     mecanico_id:Optional[int]= None
+    mecanico_nombre: Optional[str] = None
     diagnostico: Optional[str] = None
     costo_estimado: Optional[Decimal] = None
     costo_final: Optional[Decimal]= None
@@ -51,3 +52,14 @@ class OrdenResponse(OrdenBase):
     fecha_estimada_entrega: Optional[datetime]= None
     fecha_entrega: Optional[datetime]= None
 
+class HistorialResponse(BaseModel):
+    model_config= ConfigDict(from_attributes=True)
+
+    id: int
+    orden_id:int 
+    usuario_id:int
+    usuario_nombre: Optional[str]= None
+    estado_anterior: Optional[str] = None
+    estado_nuevo: str
+    comentario: Optional [str] = None
+    fecha: datetime

@@ -1,8 +1,9 @@
 import { api } from '@/lib/api'
 import { MockError, operar, proximoId } from '@/mocks/db'
-import { USAR_MOCK } from '@/services/config'
+import { usaMock } from '@/services/config'
 
 const RECURSO = '/api/v1/turnos'
+const USAR_MOCK = usaMock('turnos')
 
 export const ESTADOS_TURNO = ['pendiente', 'confirmado', 'en_taller', 'completado', 'cancelado']
 
@@ -50,9 +51,35 @@ function normalizar(turno) {
   }
 }
 
+function aPayloadApi(turno) {
+  return {
+    cliente_id: Number(turno.cliente_id),
+    vehiculo_id: turno.vehiculo_id ? Number(turno.vehiculo_id) : null,
+    fecha_hora: `${turno.fecha}T${turno.hora}:00`,
+    motivo: turno.servicio,
+    estado: turno.estado,
+    notas: turno.notas,
+  }
+}
+
+function desdeApi(item) {
+  if (!item) return item
+  const iso = String(item.fecha_hora ?? '')
+  return {
+    ...item,
+    fecha: item.fecha ?? iso.slice(0, 10),
+    hora: item.hora ?? iso.slice(11, 16),
+    servicio: item.servicio ?? item.motivo ?? '',
+    estado: item.estado === 'asistio' ? 'completado' : item.estado,
+    notas: item.notas ?? '',
+  }
+}
+
 export const turnosService = {
   listar: (token) =>
-    USAR_MOCK ? operar((datos) => datos.turnos) : api.get(RECURSO, token),
+    USAR_MOCK
+      ? operar((datos) => datos.turnos)
+      : api.get(RECURSO, token).then((lista) => lista.map(desdeApi)),
 
   crear: (turno, token) =>
     USAR_MOCK
@@ -63,7 +90,7 @@ export const turnosService = {
           datos.turnos.push(nuevo)
           return nuevo
         })
-      : api.post(RECURSO, normalizar(turno), token),
+      : api.post(RECURSO, aPayloadApi(turno), token).then(desdeApi),
 
   actualizar: (id, turno, token) =>
     USAR_MOCK
@@ -74,7 +101,7 @@ export const turnosService = {
           Object.assign(actual, limpio)
           return actual
         })
-      : api.put(`${RECURSO}/${id}`, normalizar(turno), token),
+      : api.put(`${RECURSO}/${id}`, aPayloadApi(turno), token).then(desdeApi),
 
   cambiarEstado: (id, estado, token) =>
     USAR_MOCK
@@ -83,7 +110,7 @@ export const turnosService = {
           turno.estado = estado
           return turno
         })
-      : api.put(`${RECURSO}/${id}/estado`, { estado }, token),
+      : api.put(`${RECURSO}/${id}/estado`, { estado }, token).then(desdeApi),
 
   eliminar: (id, token) =>
     USAR_MOCK

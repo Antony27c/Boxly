@@ -62,6 +62,12 @@ class Orden(Base):
         back_populates="orden"
     )
 
+    @property
+    def mecanico_nombre(self) -> Optional[str]:
+        if self.mecanico is None:
+            return None
+        return f"{self.mecanico.apellido}, {self.mecanico.nombre}"
+
 
 class Historial_estado(Base):
     """Auditoría de cambios de estado de una orden (DER §3.8)."""

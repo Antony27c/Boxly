@@ -93,9 +93,11 @@ def update_turno(db: Session, turno_id: int, data: TurnoUpdate) -> TurnoResponse
     cliente_id = payload.get("cliente_id", turno.cliente_id)
     vehiculo_id = payload.get("vehiculo_id", turno.vehiculo_id)
     fecha_hora = payload.get("fecha_hora", turno.fecha_hora)
+    nuevo_estado = payload.get("estado", turno.estado)
 
     _validar_relaciones(db, cliente_id, vehiculo_id)
-    if "fecha_hora" in payload:
+    reactivado = turno.estado == "cancelado" and nuevo_estado != "cancelado"
+    if nuevo_estado != "cancelado" and ("fecha_hora" in payload or reactivado):
         _validar_disponibilidad(db, fecha_hora, excluir_id=turno.id)
 
     return _to_response(repository.update(db, turno, payload))
@@ -105,6 +107,8 @@ def cambiar_estado(
     db: Session, turno_id: int, data: TurnoEstadoUpdate
 ) -> TurnoResponse:
     turno = _get_or_404(db, turno_id)
+    if turno.estado == "cancelado" and data.estado != "cancelado":
+        _validar_disponibilidad(db, turno.fecha_hora, excluir_id=turno.id)
     return _to_response(repository.update(db, turno, {"estado": data.estado}))
 
 
