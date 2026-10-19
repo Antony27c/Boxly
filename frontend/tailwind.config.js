@@ -36,7 +36,7 @@ export default {
         },
       },
       animation: {
-        'bay-in': 'bay-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both',
+        'bay-in': 'bay-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1)',
       },
     },
   },

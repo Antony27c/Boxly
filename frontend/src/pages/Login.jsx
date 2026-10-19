@@ -91,7 +91,7 @@ export default function Login() {
               name="email"
               type="email"
               autoComplete="username"
-              placeholder="jcardozo@boxly.com"
+              placeholder="usuario@gmail.com"
               value={datos.email}
               onChange={(e) => cambiar('email', e.target.value)}
               error={errores.email}

@@ -2,7 +2,7 @@ import { api } from '@/lib/api'
 import { MockError, operar, proximoId } from '@/mocks/db'
 import { USAR_MOCK } from '@/services/config'
 
-const RECURSO = '/api/v1/usuarios'
+const RECURSO = '/api/v1/users'
 
 export const ROLES = [
   { valor: 'admin', texto: 'Administrador' },
