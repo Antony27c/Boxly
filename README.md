@@ -39,30 +39,26 @@ El proyecto está en desarrollo. Hoy el repo incluye:
 
 ```
 Boxly/
-├── backend/           # API FastAPI (auth JWT + usuarios — Sprint 1)
+├── backend/           # API FastAPI (auth JWT, usuarios, clientes, vehículos, turnos, órdenes, repuestos)
 ├── frontend/          # Interfaz React + Vite (en construcción)
 ├── docs/DER.md        # Modelo entidad-relación completo
 ├── tp-productos-api/  # TP de arquitectura de capas (práctica)
 └── README.md
 ```
 
-### Backend — autenticación (Sprint 1)
+### Backend
 
 Desde `backend/` (venv activo):
 
 ```bash
 pip install -r requirements.txt
-python -m scripts.create_admin   # crea el admin inicial
-python -m scripts.seed           # datos de prueba (clientes, vehículos, órdenes, etc.)
+alembic upgrade head             # crea las tablas (la API ya no las crea sola)
+python -m scripts.seed_demo      # datos de demo: 3 usuarios, 1 cliente, 1 vehículo, 1 turno, 1 orden, 3 repuestos
 uvicorn app.main:app --reload
 ```
 
-Las migraciones formales corren con Alembic (`backend/alembic/`):
-
-```bash
-alembic revision --autogenerate -m "descripcion del cambio"
-alembic upgrade head
-```
+Otros scripts: `python -m scripts.create_admin` (admin inicial) y `python -m scripts.seed` (datos aleatorios con Faker).
+Para cambios de modelo: `alembic revision --autogenerate -m "descripcion del cambio"` y luego `alembic upgrade head`.
 
 Swagger: http://127.0.0.1:8000/docs
 
@@ -71,6 +67,8 @@ Swagger: http://127.0.0.1:8000/docs
 | POST | `/api/v1/auth/login` | Login (JSON: email, password) → JWT |
 | GET | `/api/v1/auth/me` | Usuario actual (Bearer token) |
 | CRUD | `/api/v1/users` | Gestión de usuarios (solo administrador) |
+| CRUD | `/api/v1/repuestos` | Repuestos con control de stock (escritura: administrador y recepción) |
+| GET | `/api/v1/repuestos/stock-bajo` | Repuestos con stock menor o igual al mínimo |
 
 `tp-productos-api/` es un trabajo práctico de la materia (CRUD de productos en memoria). No es el sistema del taller: sirve de práctica de FastAPI, Pydantic y capas (router / schemas / repository / models) antes de pasar a PostgreSQL.
 
