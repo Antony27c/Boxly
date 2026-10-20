@@ -50,9 +50,9 @@ def listar_detalles(orden_id: int, db: DbSession,_:CurrentUser):
 
 @router.post("/{orden_id}/detalles", response_model=DetalleOrdenResponse, status_code=status.HTTP_201_CREATED)
 def agregar_detalle(orden_id:int, datos:DetalleOrdenCreate, db:DbSession, usuario:CurrentUser):
-    return orden_service.agregar_detalles(db, orden_id, datos, usuario_id=usuario.id)
+    return orden_service.agregar_detalle(db, orden_id, datos, usuario_id=usuario.id)
 
-@router.delete("/{orden_id}/detalles", response_model=MessageResponse)
+@router.delete("/{orden_id}/detalles/{detalle_id}", response_model=MessageResponse)
 def quitar_detalle(orden_id: int, detalle_id:int, db:DbSession, usuario: CurrentUser):
     orden_service.quitar_detalle(db, orden_id, detalle_id, usuario_id=usuario.id)
     return MessageResponse(detail="Linea eliminada")
