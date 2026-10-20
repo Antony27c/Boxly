@@ -91,6 +91,28 @@ export function sePuedeEliminar(orden) {
   return orden?.estado === 'Pendiente'
 }
 
+export function sePuedeEditarDetalle(orden) {
+  return orden?.estado !== 'Entregado' && orden?.estado !== 'Cancelado'
+}
+
+function detalleConSubtotal(detalle) {
+  return {
+    ...detalle,
+    subtotal: Number(detalle.cantidad ?? 0) * Number(detalle.precio_unitario ?? 0),
+  }
+}
+
+function repuestoMock(datos, repuestoId, cantidad) {
+  const repuesto = datos.repuestos.find((item) => item.id === Number(repuestoId))
+  if (!repuesto || repuesto.activo === false) {
+    throw new MockError('Repuesto no encontrado o inactivo.', 404)
+  }
+  if (repuesto.stock < cantidad) {
+    throw new MockError(`Stock insuficiente: quedan ${repuesto.stock} de ${repuesto.nombre}.`, 409)
+  }
+  return repuesto
+}
+
 export const ordenesService = {
   mecanicos: (token) =>
     USAR_MOCK
@@ -165,6 +187,86 @@ export const ordenesService = {
             token,
           )
           .then(desdeApi),
+
+  detalles: (ordenId, token) =>
+    USAR_MOCK
+      ? operar((datos) => {
+          buscarOrden(datos, ordenId)
+          return datos.detalles_orden
+            .filter((item) => item.orden_id === Number(ordenId))
+            .map(detalleConSubtotal)
+        })
+      : api.get(`${RECURSO}/${ordenId}/detalles`, token),
+
+  agregarDetalle: (ordenId, linea, token) =>
+    USAR_MOCK
+      ? operar((datos) => {
+          const orden = buscarOrden(datos, ordenId)
+          if (!sePuedeEditarDetalle(orden)) {
+            throw new MockError('No se puede modificar líneas de una orden cerrada.', 400)
+          }
+          const cantidad = Number(linea.cantidad) || 1
+          const repuesto = linea.repuesto_id
+            ? repuestoMock(datos, linea.repuesto_id, cantidad)
+            : null
+          const descripcion =
+            linea.descripcion?.trim() || repuesto?.nombre || ''
+          if (!descripcion) {
+            throw new MockError('Las líneas de mano de obra necesitan descripción.', 422)
+          }
+          const precio =
+            linea.precio_unitario !== '' && linea.precio_unitario != null
+              ? Number(linea.precio_unitario)
+              : repuesto?.precio
+          if (precio == null) {
+            throw new MockError('Las líneas de mano de obra necesitan precio unitario.', 422)
+          }
+          if (repuesto) repuesto.stock -= cantidad
+          const nuevo = {
+            id: proximoId(datos.detalles_orden),
+            orden_id: orden.id,
+            repuesto_id: repuesto?.id ?? null,
+            repuesto_nombre: repuesto?.nombre ?? null,
+            descripcion,
+            cantidad,
+            precio_unitario: precio,
+          }
+          datos.detalles_orden.push(nuevo)
+          return detalleConSubtotal(nuevo)
+        })
+      : api.post(
+          `${RECURSO}/${ordenId}/detalles`,
+          {
+            repuesto_id: linea.repuesto_id ? Number(linea.repuesto_id) : null,
+            descripcion: linea.descripcion?.trim() || null,
+            cantidad: Number(linea.cantidad) || 1,
+            precio_unitario:
+              linea.precio_unitario !== '' && linea.precio_unitario != null
+                ? Number(linea.precio_unitario)
+                : null,
+          },
+          token,
+        ),
+
+  quitarDetalle: (ordenId, detalleId, token) =>
+    USAR_MOCK
+      ? operar((datos) => {
+          const orden = buscarOrden(datos, ordenId)
+          if (!sePuedeEditarDetalle(orden)) {
+            throw new MockError('No se puede modificar líneas de una orden cerrada.', 400)
+          }
+          const detalle = datos.detalles_orden.find(
+            (item) => item.id === Number(detalleId) && item.orden_id === Number(ordenId),
+          )
+          if (!detalle) throw new MockError('Línea no encontrada en esta orden.', 404)
+          if (detalle.repuesto_id != null) {
+            const repuesto = datos.repuestos.find((item) => item.id === detalle.repuesto_id)
+            if (repuesto) repuesto.stock += detalle.cantidad
+          }
+          datos.detalles_orden = datos.detalles_orden.filter((item) => item.id !== detalle.id)
+          return null
+        })
+      : api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),
 
   actualizar: (id, orden, token) =>
     USAR_MOCK
