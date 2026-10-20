@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import DetallesOrden from '@/components/ordenes/DetallesOrden'
 import FormularioOrden from '@/components/ordenes/FormularioOrden'
 import HistorialOrden from '@/components/ordenes/HistorialOrden'
 import Alert from '@/components/ui/Alert'
@@ -52,6 +53,7 @@ export default function Ordenes() {
   const [enEdicion, setEnEdicion] = useState(null)
   const [formularioAbierto, setFormularioAbierto] = useState(false)
   const [conHistorial, setConHistorial] = useState(null)
+  const [conDetalles, setConDetalles] = useState(null)
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
@@ -279,6 +281,9 @@ export default function Ordenes() {
                   >
                     Editar
                   </Button>
+                  <Button variante="fantasma" onClick={() => setConDetalles(orden)}>
+                    Detalles
+                  </Button>
                   <Button variante="fantasma" onClick={() => setConHistorial(orden)}>
                     Historial
                   </Button>
@@ -316,6 +321,15 @@ export default function Ordenes() {
           onGuardar={guardar}
           onCancelar={() => setFormularioAbierto(false)}
         />
+      </Modal>
+
+      <Modal
+        abierto={Boolean(conDetalles)}
+        titulo={`Detalle de la orden ${conDetalles?.codigo ?? `#${conDetalles?.id ?? ''}`}`}
+        descripcion="Trabajos y repuestos cargados a la orden."
+        onCerrar={() => setConDetalles(null)}
+      >
+        {conDetalles && <DetallesOrden orden={conDetalles} />}
       </Modal>
 
       <Modal
