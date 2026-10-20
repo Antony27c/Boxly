@@ -8,6 +8,9 @@ from app.schemas.orden import ESTADOS_ORDEN, HistorialResponse, OrdenCreate, Ord
 from app.models.orden import Orden
 from app.models.usuario import RolUsuario, Usuario
 from app.models.vehiculo import Vehiculo
+from app.models.detalle_orden import DetalleOrden
+from app.models.repuesto import Repuesto
+from app.schemas.detalle_orden import DetalleOrdenCreate, DetalleOrdenResponse
 from .repository import orden_repository 
 
 TRANSICIONES_VALIDAS = {
@@ -134,4 +137,80 @@ class OrdenService:
             )
         orden_repository.eliminar(db, orden)
         return orden
+
+    def _validar_orden_editable(self, orden: Orden) -> None:
+        if orden.estado in ("entregado", "cancelado"):
+            raise HTTPException(
+                status_code=400, 
+                detail="No se puede modificar lineas de una orden cerrada",
+            )
+    def _a_response_detalle(self, detalle:DetalleOrden) -> DetalleOrdenResponse:
+        item= DetalleOrdenResponse.model_validate(detalle)
+        item.subtotal=detalle.cantidad * detalle.precio_unitario
+        if detalle.repuesto:
+            item.repuesto_nombre = detalle.repuesto.nombre
+        return item
+    def listar_detalles(self, db:Session, orden_id:int) -> List[DetalleOrdenResponse]:
+        self.obtener_detalle_orden(db, orden_id)
+        return [
+            self._a_response_detalle(d)
+            for d in orden_repository.listar_detalles(db, orden_id)
+        ]
+    def agregar_detalle(self, db:Session, orden_id:int, datos: DetalleOrdenCreate, usuario_id:int) -> DetalleOrdenResponse:
+        orden= self.obtener_detalle_orden(db, orden_id)
+        self._validar_orden_editable(orden)
+
+        repuesto= None
+        if datos.repuesto_id is not None:
+            repuesto = db.get(Repuesto, datos.repuesto_id)
+            if repuesto is None or not repuesto.activo:
+                raise HTTPException(status_code=404, detail="Repuesto no encontrado o inactivo")
+            if repuesto.stock < datos.cantidad:
+                raise HTTPException(status_code=409, detail=f"Stock insuficiente: quedan {repuesto.stock} de {repuesto.nombre}")
+        descripcion = datos.descripcion or (repuesto.nombre if repuesto else None)
+        if not descripcion:
+            raise HTTPException(status_code=422, detail="Las lineas de mano de obra necesitan descripcion",)
+        precio = datos.precio_unitario if datos.precio_unitario is not None else (repuesto.precio if repuesto else None)
+        if precio is None:
+            raise HTTPException(status_code=422, detail="las lineas de mano de obra necesitan precio unitario",)
+        if repuesto is not None:
+            repuesto.stock -= datos.cantidad
+            db.add(repuesto)
+        detalle = DetalleOrden(
+            orden_id=orden.id,
+            repuesto_id=datos.repuesto_id,
+            descripcion= descripcion,
+            cantidad= datos.cantidad,
+            precio_unitario=precio,
+        )
+        orden_repository.guardar_historial(
+            db,
+            orden_id=orden.id,
+            usuario_id= usuario_id,
+            estado_anterior=orden.estado,
+            estado_nuevo=orden.estado,
+            comentario=f"Linea agregada:{datos.cantidad} x {descripcion}",
+        )   
+        return self._a_response_detalle(orden_repository.guardar_detalle(db,detalle))
+    def quitar_detalle( self, db:Session, orden_id: int, detalle_id:int, usuario_id:int) -> None:
+        orden= self.obtener_detalle_orden(db, orden_id)
+        self._validar_orden_editable(orden)
+
+        detalle = orden_repository.obtener_detalle(db, orden_id, detalle_id)
+        if detalle is None:
+            raise HTTPException(status_code=404, detail="Linea no encontrada en esta Orden")
+        if detalle.repuesto_id is not None: 
+            repuesto = db.get(Repuesto, detalle.repuesto_id)
+            if repuesto is not None:
+                repuesto.stock += detalle.cantidad
+                db.add(repuesto)
+        orden_repository.guardar_historial(
+            db,
+            orden_id=orden.id,
+            usuario_id=usuario_id,
+            estado_anterior=orden.estado,
+            estado_nuevo=orden.estado,
+            comentario=f"Linea quitada: {detalle.cantidad} x {detalle.descripcion}",
+        )
+        orden_repository.eliminar_detalle(db, detalle)
 orden_service = OrdenService()

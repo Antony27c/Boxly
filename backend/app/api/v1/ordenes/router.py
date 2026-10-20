@@ -7,6 +7,7 @@ from app.models.usuario import RolUsuario, Usuario
 from app.schemas.orden import HistorialResponse, OrdenCreate, OrdenUpdate, OrdenResponse
 from .service import orden_service
 from app.schemas.usuario import MessageResponse
+from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
 
 
 router = APIRouter()
@@ -42,3 +43,16 @@ def historial_orden(orden_id:int, db:DbSession, _: CurrentUser):
 def eliminar_orden(orden_id: int, db:DbSession,_:RecepcionUser):
     orden = orden_service.eliminar_orden(db, orden_id)
     return MessageResponse(detail=f"Orden {orden.codigo} eliminada")
+
+@router.get("/{orden_id}/detalles", response_model=List[DetalleOrdenResponse])
+def listar_detalles(orden_id: int, db: DbSession,_:CurrentUser):
+    return orden_service.listar_detalles(db, orden_id)
+
+@router.post("/{orden_id}/detalles", response_model=DetalleOrdenResponse, status_code=status.HTTP_201_CREATED)
+def agregar_detalle(orden_id:int, datos:DetalleOrdenCreate, db:DbSession, usuario:CurrentUser):
+    return orden_service.agregar_detalle(db, orden_id, datos, usuario_id=usuario.id)
+
+@router.delete("/{orden_id}/detalles/{detalle_id}", response_model=MessageResponse)
+def quitar_detalle(orden_id: int, detalle_id:int, db:DbSession, usuario: CurrentUser):
+    orden_service.quitar_detalle(db, orden_id, detalle_id, usuario_id=usuario.id)
+    return MessageResponse(detail="Linea eliminada")
