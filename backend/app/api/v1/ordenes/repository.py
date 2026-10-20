@@ -61,4 +61,26 @@ class OrdenRepository:
         db.delete(orden)
         db.commit()
 
+    def listar_detalles (self, db: Session, orden_id:int) -> List[DetalleOrden]:
+        stmt =(
+            select(DetalleOrden)
+            .where(DetalleOrden.orden_id == orden_id)
+            .order_by(DetalleOrden.id)
+        )
+        return list(db.scalars(stmt).all())
+    def obtener_detalle(self, db:Session, orden_id:int, detalle_id:int) -> Optional[DetalleOrden]:
+        stmt = select(DetalleOrden).where(
+            DetalleOrden.id == detalle_id,
+            DetalleOrden,orden_id == orden_id,   
+        )
+        return db.scalar(stmt)
+
+    def guardar_detalle(self, db: Session, detalle:DetalleOrden) -> DetalleOrden:
+        db.add(detalle)
+        db.commit()
+        db.refresh(detalle)
+        return detalle
+    def eliminar_detalle(self, db:Session, detalle:DetalleOrden) -> None:
+        db.delete(detalle)
+        db.commit
 orden_repository = OrdenRepository()
