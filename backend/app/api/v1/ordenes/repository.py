@@ -71,7 +71,7 @@ class OrdenRepository:
     def obtener_detalle(self, db:Session, orden_id:int, detalle_id:int) -> Optional[DetalleOrden]:
         stmt = select(DetalleOrden).where(
             DetalleOrden.id == detalle_id,
-            DetalleOrden,orden_id == orden_id,   
+            DetalleOrden.orden_id == orden_id,   
         )
         return db.scalar(stmt)
 
@@ -82,5 +82,5 @@ class OrdenRepository:
         return detalle
     def eliminar_detalle(self, db:Session, detalle:DetalleOrden) -> None:
         db.delete(detalle)
-        db.commit
+        db.commit()
 orden_repository = OrdenRepository()
