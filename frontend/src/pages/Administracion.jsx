@@ -15,8 +15,8 @@ import useRecurso from '@/hooks/useRecurso'
 import { ROLES, nombreRol, usuariosService } from '@/services/usuarios'
 
 const TONOS_ROL = {
-  admin: 'ambar',
-  recepcionista: 'neutro',
+  administrador: 'ambar',
+  recepcion: 'neutro',
   mecanico: 'neutro',
 }
 

@@ -104,17 +104,27 @@ export function validarTurno({ cliente_id, vehiculo_id, fecha, hora, servicio })
   return errores
 }
 
-export function validarUsuario({ nombre, apellido, email, rol }) {
+export function validarUsuario({ nombre, apellido, email, rol, password = '' }, { esNuevo = true } = {}) {
   const errores = {}
 
   if (!nombre.trim()) errores.nombre = 'Ingresá el nombre.'
+  else if (nombre.trim().length < 2) errores.nombre = 'El nombre debe tener al menos 2 caracteres.'
   if (!apellido.trim()) errores.apellido = 'Ingresá el apellido.'
+  else if (apellido.trim().length < 2) errores.apellido = 'El apellido debe tener al menos 2 caracteres.'
 
   const correo = email.trim()
   if (!correo) errores.email = 'Ingresá el correo.'
   else if (!EMAIL.test(correo)) errores.email = 'El correo no tiene un formato válido.'
 
   if (!rol) errores.rol = 'Elegí el rol del usuario.'
+
+  if (!password) {
+    if (esNuevo) errores.password = 'Ingresá una contraseña.'
+  } else if (password.length < 8 || password.length > 72) {
+    errores.password = 'La contraseña debe tener entre 8 y 72 caracteres.'
+  } else if (/^\d+$/.test(password) || /^\p{L}+$/u.test(password)) {
+    errores.password = 'La contraseña debe combinar letras y números.'
+  }
 
   return errores
 }

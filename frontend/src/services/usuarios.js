@@ -5,8 +5,8 @@ import { USAR_MOCK } from '@/services/config'
 const RECURSO = '/api/v1/users'
 
 export const ROLES = [
-  { valor: 'admin', texto: 'Administrador' },
-  { valor: 'recepcionista', texto: 'Recepcionista' },
+  { valor: 'administrador', texto: 'Administrador' },
+  { valor: 'recepcion', texto: 'Recepcionista' },
   { valor: 'mecanico', texto: 'Mecánico' },
 ]
 
@@ -31,7 +31,7 @@ function quedaAlgunAdmin(datos, idExcluido, rolNuevo) {
   return datos.usuarios.some((item) => {
     const rol = item.id === Number(idExcluido) ? rolNuevo : item.rol
     const activo = item.id === Number(idExcluido) ? rolNuevo !== null : item.activo
-    return rol === 'admin' && activo
+    return rol === 'administrador' && activo
   })
 }
 
@@ -43,8 +43,9 @@ export const usuariosService = {
     USAR_MOCK
       ? operar((datos) => {
           validarEmailUnico(datos, usuario.email)
+          const { password: _password, ...resto } = usuario
           const nuevo = {
-            ...usuario,
+            ...resto,
             id: proximoId(datos.usuarios),
             activo: true,
             creado_en: new Date().toISOString(),
@@ -59,10 +60,11 @@ export const usuariosService = {
       ? operar((datos) => {
           const actual = buscarUsuario(datos, id)
           validarEmailUnico(datos, usuario.email, id)
-          if (actual.rol === 'admin' && usuario.rol !== 'admin' && !quedaAlgunAdmin(datos, id, usuario.rol)) {
+          if (actual.rol === 'administrador' && usuario.rol !== 'administrador' && !quedaAlgunAdmin(datos, id, usuario.rol)) {
             throw new MockError('Tiene que quedar al menos un administrador activo.', 409)
           }
-          Object.assign(actual, usuario)
+          const { password: _password, ...resto } = usuario
+          Object.assign(actual, resto)
           return actual
         })
       : api.put(`${RECURSO}/${id}`, usuario, token),
@@ -71,7 +73,7 @@ export const usuariosService = {
     USAR_MOCK
       ? operar((datos) => {
           const usuario = buscarUsuario(datos, id)
-          if (!activo && usuario.rol === 'admin' && !quedaAlgunAdmin(datos, id, null)) {
+          if (!activo && usuario.rol === 'administrador' && !quedaAlgunAdmin(datos, id, null)) {
             throw new MockError('Tiene que quedar al menos un administrador activo.', 409)
           }
           usuario.activo = activo
@@ -83,7 +85,7 @@ export const usuariosService = {
     USAR_MOCK
       ? operar((datos) => {
           const usuario = buscarUsuario(datos, id)
-          if (usuario.rol === 'admin' && !quedaAlgunAdmin(datos, id, null)) {
+          if (usuario.rol === 'administrador' && !quedaAlgunAdmin(datos, id, null)) {
             throw new MockError('Tiene que quedar al menos un administrador activo.', 409)
           }
           datos.usuarios = datos.usuarios.filter((item) => item.id !== usuario.id)

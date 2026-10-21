@@ -8,7 +8,7 @@ const USUARIO_DEMO = {
   nombre: 'Admin',
   apellido: 'Boxly',
   email: 'demo@boxly.com',
-  rol: 'admin',
+  rol: 'administrador',
   activo: true,
 }
 

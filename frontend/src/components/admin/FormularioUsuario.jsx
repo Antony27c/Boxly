@@ -10,11 +10,13 @@ const VACIO = {
   nombre: '',
   apellido: '',
   email: '',
-  rol: 'recepcionista',
+  rol: 'recepcion',
+  password: '',
 }
 
 export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
-  const [datos, setDatos] = useState(() => ({ ...VACIO, ...usuario }))
+  const esNuevo = !usuario
+  const [datos, setDatos] = useState(() => ({ ...VACIO, ...usuario, password: '' }))
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -28,7 +30,7 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
   async function enviar(evento) {
     evento.preventDefault()
 
-    const encontrados = validarUsuario(datos)
+    const encontrados = validarUsuario(datos, { esNuevo })
     setErrores(encontrados)
     if (Object.keys(encontrados).length > 0) return
 
@@ -40,6 +42,7 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
         apellido: datos.apellido.trim(),
         email: datos.email.trim().toLowerCase(),
         rol: datos.rol,
+        ...(datos.password && { password: datos.password }),
       })
     } catch (problema) {
       setErrorApi(problema.message)
@@ -88,6 +91,21 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
           disabled={guardando}
           ayuda="El rol define qué secciones ve el usuario al iniciar sesión."
           opciones={ROLES}
+        />
+        <Field
+          label={esNuevo ? 'Contraseña' : 'Nueva contraseña'}
+          type="password"
+          autoComplete="new-password"
+          className="sm:col-span-2"
+          value={datos.password}
+          onChange={(e) => cambiar('password', e.target.value)}
+          error={errores.password}
+          disabled={guardando}
+          ayuda={
+            esNuevo
+              ? 'Mínimo 8 caracteres, combinando letras y números.'
+              : 'Dejala vacía para mantener la contraseña actual.'
+          }
         />
       </div>
 
