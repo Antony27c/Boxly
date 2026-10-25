@@ -15,4 +15,4 @@ class CatalogoService:
         modelos = catalogo_repository.buscar_modelos(db, marca_id)
         return [ModeloResponse.model_validate(m) for m in modelos]
 
-Catalogo_service= CatalogoService()
+catalogo_service= CatalogoService()
