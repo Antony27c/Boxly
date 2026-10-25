@@ -4,16 +4,15 @@ from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 
-ESTADOS_ORDEN =(
-    "pendiente",
-    "ingresado",
-    "en_diagnostico",
-    "esperando_repuestos",
-    "listo",
-    "entregado",
-    "cancelado",
-)
-
+ESTADOS_ORDEN ={
+    "pendiente": "Orden creada",
+    "ingresado": "El vehiculo ingreso al taller",
+    "en_diagnostico": "Se esta diagnosticando el problema",
+    "esperando_repuestos": "Se espera la llegada de repuestos",
+    "listo": "Reparacion finalizada, listo para entrega",
+    "entregado": "Vehiculo entregado al cliente",
+    "cancelado": "Orden cancelada",
+}
 class OrdenBase(BaseModel):
     descripcion_ingreso: str = Field(min_length=5)
  
