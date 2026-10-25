@@ -27,6 +27,20 @@ const TRANSICIONES = {
   Cancelado: [],
 }
 
+export const DESCRIPCION_ESTADOS = {
+  Pendiente: 'La orden está abierta pero el vehículo todavía no entró al taller.',
+  Ingresado: 'El vehículo ya está en el taller y espera que lo revise un mecánico.',
+  'En diagnóstico': 'El mecánico está revisando el vehículo para encontrar la falla y armar el presupuesto.',
+  'Esperando repuestos': 'El trabajo está frenado hasta que lleguen los repuestos pedidos.',
+  Listo: 'El trabajo terminó y el vehículo está listo para que lo retiren.',
+  Entregado: 'El cliente retiró el vehículo. La orden queda cerrada.',
+  Cancelado: 'La orden se canceló y no se va a hacer el trabajo.',
+}
+
+export function proximosEstados(estado) {
+  return TRANSICIONES[estado] ?? []
+}
+
 export function estadosPermitidos(estado) {
   return [estado, ...(TRANSICIONES[estado] ?? [])]
 }
@@ -338,6 +352,23 @@ export const ordenesService = {
           return null
         })
       : api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),
+
+  cambiarEstado: (id, estado, comentario, token) =>
+    USAR_MOCK
+      ? operar((datos) => {
+          const actual = buscarOrden(datos, id)
+          const estadoAnterior = actual.estado
+          if (estado === estadoAnterior) {
+            throw new MockError('La orden ya está en esa etapa.', 400)
+          }
+          validarTransicion(estadoAnterior, estado)
+          actual.estado = estado
+          registrarHistorialMock(datos, actual, estadoAnterior, comentario)
+          return actual
+        })
+      : api
+          .patch(`${RECURSO}/${id}`, { estado: CODIGOS[estado], comentario_cambio: comentario }, token)
+          .then(desdeApi),
 
   actualizar: (id, orden, token) =>
     USAR_MOCK

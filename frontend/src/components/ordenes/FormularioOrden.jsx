@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
-import { estadosPermitidos } from '@/services/ordenes'
+import { DESCRIPCION_ESTADOS } from '@/services/ordenes'
 import { validarOrden } from '@/utils/validation'
 
 const HOY = new Date().toISOString().slice(0, 10)
@@ -181,16 +181,11 @@ export default function FormularioOrden({
         {orden && (
           <>
             <Field label="Fecha de ingreso" type="date" value={datos.fecha} disabled />
-            <Select
-              label="Estado"
+            <Field
+              label="Etapa actual"
               value={datos.estado}
-              onChange={(e) => cambiar('estado', e.target.value)}
-              error={errores.estado}
-              disabled={guardando}
-              opciones={estadosPermitidos(orden.estado).map((estado) => ({
-                valor: estado,
-                texto: estado,
-              }))}
+              disabled
+              ayuda={`${DESCRIPCION_ESTADOS[datos.estado] ?? ''} Para cambiarla usá "Cambiar etapa".`}
             />
           </>
         )}

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import CambioEstado from '@/components/ordenes/CambioEstado'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
 import FormularioOrden from '@/components/ordenes/FormularioOrden'
 import HistorialOrden from '@/components/ordenes/HistorialOrden'
@@ -18,7 +19,7 @@ import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
 import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { ESTADOS_ORDEN, ordenesService, sePuedeEliminar } from '@/services/ordenes'
+import { ESTADOS_ORDEN, ordenesService, proximosEstados, sePuedeEliminar } from '@/services/ordenes'
 import { vehiculosService } from '@/services/vehiculos'
 
 const TONOS = {
@@ -56,6 +57,7 @@ export default function Ordenes() {
   const [conHistorial, setConHistorial] = useState(null)
   const [conDetalles, setConDetalles] = useState(null)
   const [conFotos, setConFotos] = useState(null)
+  const [aCambiar, setACambiar] = useState(null)
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
@@ -274,6 +276,11 @@ export default function Ordenes() {
                       <Button variante="secundario">Ver vehículo</Button>
                     </Link>
                   )}
+                  {proximosEstados(orden.estado).length > 0 && (
+                    <Button variante="secundario" onClick={() => setACambiar(orden)}>
+                      Cambiar etapa
+                    </Button>
+                  )}
                   <Button
                     variante="fantasma"
                     onClick={() => {
@@ -335,6 +342,25 @@ export default function Ordenes() {
         onCerrar={() => setConDetalles(null)}
       >
         {conDetalles && <DetallesOrden orden={conDetalles} />}
+      </Modal>
+
+      <Modal
+        abierto={Boolean(aCambiar)}
+        titulo={`Cambiar etapa de la orden ${aCambiar?.codigo ?? `#${aCambiar?.id ?? ''}`}`}
+        descripcion="Cada cambio de etapa necesita una descripción de lo que se hizo."
+        onCerrar={() => setACambiar(null)}
+      >
+        {aCambiar && (
+          <CambioEstado
+            orden={aCambiar}
+            onCancelar={() => setACambiar(null)}
+            onListo={async (estado) => {
+              setACambiar(null)
+              setAviso(`La orden pasó a "${estado}".`)
+              await recargar()
+            }}
+          />
+        )}
       </Modal>
 
       <Modal
