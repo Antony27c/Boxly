@@ -246,7 +246,14 @@ export default function Ordenes() {
                       {vehiculo?.patente ?? 'Vehículo eliminado'}
                     </p>
                     <p className="text-sm text-muted">
-                      {vehiculo ? `${vehiculo.marca} ${vehiculo.modelo}` : '—'}
+                      {vehiculo ? (
+                        <>
+                          {vehiculo.marca}{' '}
+                          <span className="text-base font-bold text-ink">{vehiculo.modelo}</span>
+                        </>
+                      ) : (
+                        '—'
+                      )}
                       {cliente ? ` · ${cliente.apellido}, ${cliente.nombre}` : ''}
                     </p>
                   </div>
