@@ -5,6 +5,8 @@ from app.models.orden import Historial_estado, Orden
 from app.models.detalle_orden import DetalleOrden
 from app.models.repuesto import Repuesto
 from app.models.turno import Turno
+from app.models.marca import Marca
+from app.models.modelo import Modelo
 
 __all__ = [
     "RolUsuario",
@@ -16,4 +18,6 @@ __all__ = [
     "DetalleOrden",
     "Repuesto",
     "Turno",
+    "Marca",
+    "Modelo"
 ]
