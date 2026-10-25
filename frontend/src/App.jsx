@@ -10,6 +10,7 @@ import Vehiculos from '@/pages/Vehiculos'
 import VehiculoDetalle from '@/pages/VehiculoDetalle'
 import Turnos from '@/pages/Turnos'
 import Ordenes from '@/pages/Ordenes'
+import Inventario from '@/pages/Inventario'
 import Administracion from '@/pages/Administracion'
 import NoEncontrado from '@/pages/NoEncontrado'
 
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="/vehiculos" element={<Vehiculos />} />
               <Route path="/vehiculos/:id" element={<VehiculoDetalle />} />
               <Route path="/ordenes" element={<Ordenes />} />
+              <Route path="/inventario" element={<Inventario />} />
             </Route>
           </Route>
 

@@ -28,6 +28,12 @@ const accesos = [
     roles: ROLES_TALLER,
   },
   {
+    a: '/inventario',
+    titulo: 'Inventario',
+    texto: 'Stock de repuestos, alertas de faltantes e ingresos.',
+    roles: ROLES_TALLER,
+  },
+  {
     a: '/admin',
     titulo: 'Administración',
     texto: 'Usuarios del sistema, roles y permisos de acceso.',
