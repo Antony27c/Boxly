@@ -376,7 +376,7 @@ export default function Ordenes() {
       <Modal
         abierto={Boolean(conHistorial)}
         titulo={`Historial de la orden ${conHistorial?.codigo ?? `#${conHistorial?.id ?? ''}`}`}
-        descripcion="Cambios de estado registrados, del más viejo al más reciente."
+        descripcion="Seguimiento de la orden etapa por etapa, con descripción, responsable y fotos."
         onCerrar={() => setConHistorial(null)}
       >
         {conHistorial && <HistorialOrden ordenId={conHistorial.id} />}
