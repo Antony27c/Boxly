@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
 import FormularioOrden from '@/components/ordenes/FormularioOrden'
 import HistorialOrden from '@/components/ordenes/HistorialOrden'
+import ImagenesOrden from '@/components/ordenes/ImagenesOrden'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -54,6 +55,7 @@ export default function Ordenes() {
   const [formularioAbierto, setFormularioAbierto] = useState(false)
   const [conHistorial, setConHistorial] = useState(null)
   const [conDetalles, setConDetalles] = useState(null)
+  const [conFotos, setConFotos] = useState(null)
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
@@ -284,6 +286,9 @@ export default function Ordenes() {
                   <Button variante="fantasma" onClick={() => setConDetalles(orden)}>
                     Detalles
                   </Button>
+                  <Button variante="fantasma" onClick={() => setConFotos(orden)}>
+                    Fotos
+                  </Button>
                   <Button variante="fantasma" onClick={() => setConHistorial(orden)}>
                     Historial
                   </Button>
@@ -330,6 +335,16 @@ export default function Ordenes() {
         onCerrar={() => setConDetalles(null)}
       >
         {conDetalles && <DetallesOrden orden={conDetalles} />}
+      </Modal>
+
+      <Modal
+        abierto={Boolean(conFotos)}
+        titulo={`Fotos de la orden ${conFotos?.codigo ?? `#${conFotos?.id ?? ''}`}`}
+        descripcion="Fotos del vehículo en cada etapa del trabajo."
+        ancho="max-w-2xl"
+        onCerrar={() => setConFotos(null)}
+      >
+        {conFotos && <ImagenesOrden orden={conFotos} />}
       </Modal>
 
       <Modal
