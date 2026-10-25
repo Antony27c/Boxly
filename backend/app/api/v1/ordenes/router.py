@@ -56,3 +56,4 @@ def agregar_detalle(orden_id:int, datos:DetalleOrdenCreate, db:DbSession, usuari
 def quitar_detalle(orden_id: int, detalle_id:int, db:DbSession, usuario: CurrentUser):
     orden_service.quitar_detalle(db, orden_id, detalle_id, usuario_id=usuario.id)
     return MessageResponse(detail="Linea eliminada")
+ 

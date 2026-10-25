@@ -105,7 +105,7 @@ class OrdenService:
                 usuario_id=usuario_id,
                 estado_anterior=orden.estado, 
                 estado_nuevo=datos.estado,
-                comentario=datos.comentario_cambio
+                comentario=comentario_final
 
             )
             orden.estado = datos.estado
