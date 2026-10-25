@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import Alert from '@/components/ui/Alert'
+import Autocomplete from '@/components/ui/Autocomplete'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
@@ -39,6 +40,17 @@ export default function DetallesOrden({ orden }) {
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [quitando, setQuitando] = useState(null)
+  const [textoRepuesto, setTextoRepuesto] = useState('')
+
+  const opcionesRepuesto = useMemo(
+    () =>
+      (repuestos ?? []).map((repuesto) => ({
+        valor: repuesto.id,
+        texto: repuesto.nombre,
+        detalle: `${repuesto.codigo ?? ''} · ${pesos(repuesto.precio)} · stock ${repuesto.stock}`,
+      })),
+    [repuestos],
+  )
 
   const repuestoElegido = useMemo(
     () => (repuestos ?? []).find((item) => item.id === Number(datos.repuesto_id)),
@@ -102,6 +114,7 @@ export default function DetallesOrden({ orden }) {
         token,
       )
       setDatos(VACIO)
+      setTextoRepuesto('')
       await recargar()
     } catch (problema) {
       setErrorApi(problema.message)
@@ -195,22 +208,22 @@ export default function DetallesOrden({ orden }) {
               ]}
             />
             {datos.tipo === 'repuesto' ? (
-              <Select
+              <Autocomplete
                 label="Repuesto"
-                value={datos.repuesto_id}
-                onChange={(e) => cambiar('repuesto_id', e.target.value)}
+                value={textoRepuesto}
+                onChange={(texto) => {
+                  setTextoRepuesto(texto)
+                  if (datos.repuesto_id) cambiar('repuesto_id', '')
+                }}
+                onElegir={(opcion) => cambiar('repuesto_id', opcion.valor)}
+                opciones={opcionesRepuesto}
                 error={errores.repuesto_id}
                 disabled={guardando}
+                placeholder="Buscá por nombre o código"
+                sinResultados="No hay repuestos con ese nombre."
                 ayuda={
                   repuestoElegido ? `Stock disponible: ${repuestoElegido.stock}` : undefined
                 }
-                opciones={[
-                  { valor: '', texto: 'Elegí el repuesto…' },
-                  ...(repuestos ?? []).map((repuesto) => ({
-                    valor: repuesto.id,
-                    texto: `${repuesto.nombre} (${pesos(repuesto.precio)})`,
-                  })),
-                ]}
               />
             ) : (
               <Field
