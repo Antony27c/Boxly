@@ -91,7 +91,14 @@ class OrdenService:
 
             if datos.estado not in estados_permitidos:
                 raise HTTPException(status_code=400, detail=(f"Transicion invalida. No se puede pasar de "f"'{orden.estado}' a '{datos.estado}' "))
-          
+
+            if not datos.comentario_cambio or not datos.comentario_cambio.strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail= "El comentario es obligatorio al cambiar de estado",
+                )
+            descripcion_estado = ESTADOS_ORDEN[datos.estado]
+            comentario_final = f"{descripcion_estado}. {datos.comentario_cambio}"
             orden_repository.guardar_historial(
                 db, 
                 orden_id=orden.id, 
