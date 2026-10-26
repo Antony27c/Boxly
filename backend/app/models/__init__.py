@@ -7,7 +7,7 @@ from app.models.repuesto import Repuesto
 from app.models.turno import Turno
 from app.models.marca import Marca
 from app.models.modelo import Modelo
-
+from app.models.imagen_orden import ImagenOrden
 __all__ = [
     "RolUsuario",
     "Usuario",
@@ -20,4 +20,5 @@ __all__ = [
     "Turno",
     "Marca",
     "Modelo"
+    "ImagenOrden"
 ]
