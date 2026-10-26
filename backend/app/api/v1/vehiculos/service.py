@@ -11,9 +11,12 @@ def _to_response(vehiculo) -> VehiculoResponse:
     return VehiculoResponse.model_validate(vehiculo)
 
 
-def _get_or_404(db: Session, vehiculo_id: int):
+def _get_or_404(db: Session, vehiculo_id: int, mecanico_id: int | None = None):
     vehiculo = repository.get_by_id(db, vehiculo_id)
-    if vehiculo is None:
+    if vehiculo is None or (
+        mecanico_id is not None
+        and not repository.list_ordenes(db, vehiculo_id, mecanico_id=mecanico_id)
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehículo no encontrado",
@@ -39,20 +42,23 @@ def _validar_patente_unica(db: Session, patente: str, excluir_id: int | None) ->
 
 
 def list_vehiculos(
-    db: Session, *, cliente_id: int | None = None
+    db: Session, *, cliente_id: int | None = None, mecanico_id: int | None = None
 ) -> list[VehiculoResponse]:
-    return [
-        _to_response(v) for v in repository.list_vehiculos(db, cliente_id=cliente_id)
-    ]
+    vehiculos = repository.list_vehiculos(db, cliente_id=cliente_id, mecanico_id=mecanico_id)
+    return [_to_response(v) for v in vehiculos]
 
 
-def get_vehiculo(db: Session, vehiculo_id: int) -> VehiculoResponse:
-    return _to_response(_get_or_404(db, vehiculo_id))
+def get_vehiculo(
+    db: Session, vehiculo_id: int, mecanico_id: int | None = None
+) -> VehiculoResponse:
+    return _to_response(_get_or_404(db, vehiculo_id, mecanico_id))
 
 
-def historial_ordenes(db: Session, vehiculo_id: int) -> list[OrdenResponse]:
-    _get_or_404(db, vehiculo_id)
-    ordenes = repository.list_ordenes(db, vehiculo_id)
+def historial_ordenes(
+    db: Session, vehiculo_id: int, mecanico_id: int | None = None
+) -> list[OrdenResponse]:
+    _get_or_404(db, vehiculo_id, mecanico_id)
+    ordenes = repository.list_ordenes(db, vehiculo_id, mecanico_id=mecanico_id)
     return [OrdenResponse.model_validate(o) for o in ordenes]
 
 

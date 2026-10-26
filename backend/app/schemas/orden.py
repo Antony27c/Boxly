@@ -41,13 +41,18 @@ class OrdenResponse(OrdenBase):
     estado:str
     codigo:str
     cliente_id:int
+    cliente_nombre: Optional[str] = None
     vehiculo_id:int
+    vehiculo_patente: Optional[str] = None
+    vehiculo_marca: Optional[str] = None
+    vehiculo_modelo: Optional[str] = None
     creado_por_id:int
     mecanico_id:Optional[int]= None
     mecanico_nombre: Optional[str] = None
     diagnostico: Optional[str] = None
     costo_estimado: Optional[Decimal] = None
     costo_final: Optional[Decimal]= None
+    pagada: bool = False
     fecha_ingreso: datetime
     fecha_estimada_entrega: Optional[datetime]= None
     fecha_entrega: Optional[datetime]= None

@@ -4,6 +4,8 @@ from app.api.v1.auth.router import router as auth_router
 from app.api.v1.clientes.router import router as clientes_router
 from app.api.v1.users.router import router as users_router
 from app.api.v1.ordenes.router import router as ordenes_router
+from app.api.v1.pagos.router import router as pagos_router
+from app.api.v1.portal.router import router as portal_router
 from app.api.v1.repuestos.router import router as repuestos_router
 from app.api.v1.turnos.router import router as turnos_router
 from app.api.v1.vehiculos.router import router as vehiculos_router
@@ -16,3 +18,5 @@ api_router.include_router(vehiculos_router, prefix="/api/v1")
 api_router.include_router(repuestos_router, prefix="/api/v1")
 api_router.include_router(turnos_router, prefix="/api/v1")
 api_router.include_router(ordenes_router, prefix="/api/v1/ordenes", tags=["Ordenes"])
+api_router.include_router(portal_router, prefix="/api/v1")
+api_router.include_router(pagos_router, prefix="/api/v1")

@@ -13,6 +13,11 @@ def get_by_email(db: Session, email: str) -> Usuario | None:
     return db.scalar(stmt)
 
 
+def get_by_cliente_id(db: Session, cliente_id: int) -> Usuario | None:
+    stmt = select(Usuario).where(Usuario.cliente_id == cliente_id)
+    return db.scalar(stmt)
+
+
 def list_usuarios(
     db: Session,
     *,
@@ -37,6 +42,7 @@ def create(
     email: str,
     password_hash: str,
     rol: RolUsuario,
+    cliente_id: int | None = None,
 ) -> Usuario:
     user = Usuario(
         nombre=nombre.strip(),
@@ -44,6 +50,7 @@ def create(
         email=email.lower().strip(),
         password_hash=password_hash,
         rol=rol,
+        cliente_id=cliente_id,
         activo=True,
     )
     db.add(user)
