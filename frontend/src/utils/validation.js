@@ -128,3 +128,29 @@ export function validarUsuario({ nombre, apellido, email, rol, password = '' }, 
 
   return errores
 }
+
+export function validarRepuesto({ codigo, nombre, stock, stock_minimo, precio }) {
+  const errores = {}
+
+  const cod = String(codigo).trim()
+  if (!cod) errores.codigo = 'Ingresá el código del repuesto.'
+  else if (cod.length < 2 || cod.length > 40) errores.codigo = 'El código debe tener entre 2 y 40 caracteres.'
+
+  const nom = String(nombre).trim()
+  if (!nom) errores.nombre = 'Ingresá el nombre del repuesto.'
+  else if (nom.length < 2 || nom.length > 120) errores.nombre = 'El nombre debe tener entre 2 y 120 caracteres.'
+
+  const textoPrecio = String(precio).trim().replace(',', '.')
+  if (!textoPrecio) errores.precio = 'Ingresá el precio.'
+  else if (!/^\d+(\.\d{1,2})?$/.test(textoPrecio)) errores.precio = 'El precio debe ser un número con hasta 2 decimales.'
+  else if (Number(textoPrecio) >= 10_000_000_000) errores.precio = 'El precio es demasiado alto.'
+
+  if (!String(stock).trim()) errores.stock = 'Ingresá el stock actual (0 si no hay).'
+  else if (!/^\d+$/.test(String(stock).trim())) errores.stock = 'El stock debe ser un número entero, 0 o más.'
+
+  if (!String(stock_minimo).trim()) errores.stock_minimo = 'Ingresá el stock mínimo (0 si no aplica).'
+  else if (!/^\d+$/.test(String(stock_minimo).trim()))
+    errores.stock_minimo = 'El stock mínimo debe ser un número entero, 0 o más.'
+
+  return errores
+}
