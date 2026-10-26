@@ -312,7 +312,7 @@ Responde `200` con el `RepuestoResponse` actualizado (con `stock_bajo` recalcula
 
 ### 5.8 Finanzas, balances y mejor mecánico — Gabriel
 
-**`GET /metricas/finanzas?desde=2026-07-01&hasta=2026-09-30`** (A)
+**`GET /metricas/finanzas?desde=2026-07-01&hasta=2026-09-30`** (A). Si no se mandan fechas, toma los últimos 6 meses: desde el día 1 de hace 5 meses hasta hoy. Si `desde` es posterior a `hasta`, responde `400`.
 
 ```json
 {
