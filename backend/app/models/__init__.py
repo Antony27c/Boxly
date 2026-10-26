@@ -19,6 +19,6 @@ __all__ = [
     "Repuesto",
     "Turno",
     "Marca",
-    "Modelo"
-    "ImagenOrden"
+    "Modelo",
+    "ImagenOrden",
 ]

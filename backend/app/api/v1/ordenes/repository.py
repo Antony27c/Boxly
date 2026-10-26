@@ -85,7 +85,7 @@ class OrdenRepository:
         db.delete(detalle)
         db.commit()
 
-    def listar_imagen(self, db:Session, imagen_id: int) -> List[ImagenOrden]:
+    def listar_imagen(self, db:Session, orden_id: int) -> List[ImagenOrden]:
         stmt = select(ImagenOrden).where(ImagenOrden.orden_id == orden_id).order_by(ImagenOrden.fecha_subida.desc())
         return list(db.scalars(stmt).all())
     def obtener_imagen(self, db:Session, imagen_id:int) -> Optional[ImagenOrden]:

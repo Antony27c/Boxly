@@ -92,7 +92,7 @@ class OrdenService:
             estados_permitidos = TRANSICIONES_VALIDAS.get(orden.estado, [])
 
             if datos.estado not in estados_permitidos:
-                raise HTTPException(status_code=400, detail=(f"Transicion invalida. No se puede pasar de "f"'{orden.estado}' a '{datos.estado}' "))
+                raise HTTPException(status_code=400, detail=(f"Transicion invalida. No se puede pasar de '{orden.estado}' a '{datos.estado}' "))
 
             if not datos.comentario_cambio or not datos.comentario_cambio.strip():
                 raise HTTPException(
@@ -226,7 +226,7 @@ class OrdenService:
         self.obtener_detalle_orden(db, orden_id)
         return [
             ImagenOrdenResponse.model_validate(img)
-            for img in orden_repository.listar_imagen(db, orden_id)
+            for img in orden_repository.listar_imagenes(db, orden_id)
         ]
     def agregar_imagen(self, db: Session, orden_id:int, url: str) -> ImagenOrdenResponse:
         self.obtener_detalle_orden(db, orden_id)
