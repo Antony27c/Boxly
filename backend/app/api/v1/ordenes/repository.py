@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from app.models.orden import Historial_estado, Orden
 from app.models.detalle_orden import DetalleOrden
+from app.models.imagen_orden import ImagenOrden
 class OrdenRepository:
     
     def obtener_ordenes(self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None) -> List[Orden]:
@@ -84,5 +85,19 @@ class OrdenRepository:
         return detalle
     def eliminar_detalle(self, db:Session, detalle:DetalleOrden) -> None:
         db.delete(detalle)
+        db.commit()
+
+    def listar_imagenes(self, db:Session, orden_id: int) -> List[ImagenOrden]:
+        stmt = select(ImagenOrden).where(ImagenOrden.orden_id == orden_id).order_by(ImagenOrden.fecha_subida.desc())
+        return list(db.scalars(stmt).all())
+    def obtener_imagen(self, db:Session, imagen_id:int) -> Optional[ImagenOrden]:
+        return db.get(ImagenOrden,imagen_id)
+    def guardar_imagen(self, db:Session, imagen:ImagenOrden) -> ImagenOrden:
+        db.add(imagen)
+        db.commit()
+        db.refresh(imagen)
+        return imagen
+    def eliminar_imagen(self, db: Session, imagen:ImagenOrden) -> None:
+        db.delete(imagen)
         db.commit()
 orden_repository = OrdenRepository()

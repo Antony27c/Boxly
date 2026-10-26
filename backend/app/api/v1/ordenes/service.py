@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-
+from fastapi import UploadFile
 from typing import List, Optional
 from datetime import datetime, timezone
 
@@ -12,6 +12,10 @@ from app.models.detalle_orden import DetalleOrden
 from app.models.repuesto import Repuesto
 from app.schemas.detalle_orden import DetalleOrdenCreate, DetalleOrdenResponse
 from .repository import orden_repository 
+from app.models.imagen_orden import ImagenOrden
+from app.schemas.imagen_orden import ImagenOrdenResponse
+import os
+import uuid
 
 TRANSICIONES_VALIDAS = {
     "pendiente":["ingresado","cancelado"],
@@ -97,15 +101,22 @@ class OrdenService:
             estados_permitidos = TRANSICIONES_VALIDAS.get(orden.estado, [])
 
             if datos.estado not in estados_permitidos:
-                raise HTTPException(status_code=400, detail=(f"Transicion invalida. No se puede pasar de "f"'{orden.estado}' a '{datos.estado}' "))
-          
+                raise HTTPException(status_code=400, detail=f"Transicion invalida. No se puede pasar de '{orden.estado}' a '{datos.estado}'")
+
+            if not datos.comentario_cambio or not datos.comentario_cambio.strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail= "El comentario es obligatorio al cambiar de estado",
+                )
+            descripcion_estado = ESTADOS_ORDEN[datos.estado]
+            comentario_final = f"{descripcion_estado}. {datos.comentario_cambio}"
             orden_repository.guardar_historial(
                 db, 
                 orden_id=orden.id, 
                 usuario_id=usuario_id,
                 estado_anterior=orden.estado, 
                 estado_nuevo=datos.estado,
-                comentario=datos.comentario_cambio
+                comentario=comentario_final
 
             )
             orden.estado = datos.estado
@@ -220,4 +231,40 @@ class OrdenService:
             comentario=f"Linea quitada: {detalle.cantidad} x {detalle.descripcion}",
         )
         orden_repository.eliminar_detalle(db, detalle)
+    def listar_imagenes(self, db:Session, orden_id: int) -> List[ImagenOrdenResponse]:
+        self.obtener_detalle_orden(db, orden_id)
+        return [
+            ImagenOrdenResponse.model_validate(img)
+            for img in orden_repository.listar_imagenes(db, orden_id)
+        ]
+    def agregar_imagen(self, db: Session, orden_id:int, archivo:UploadFile) -> ImagenOrdenResponse:
+        self.obtener_detalle_orden(db, orden_id)
+        if not archivo.content_type or not archivo.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Solo se permiten archivos de imagen")
+
+        carpeta = "static/ordenes"
+        os.makedirs(carpeta, exist_ok=True)
+
+        extension = os.path.splitext(archivo.filename)[1]
+        nombre_archivo= f"{uuid.uuid4()}{extension}"
+        ruta= os.path.join(carpeta, nombre_archivo)
+
+        with open(ruta, "wb") as f:
+            f.write(archivo.file.read())
+
+        url = f"/static/ordenes/{nombre_archivo}"
+        imagen= ImagenOrden(orden_id=orden_id, url=url)
+        return ImagenOrdenResponse.model_validate(orden_repository.guardar_imagen(db, imagen))
+    def eliminar_imagen(self, db:Session, orden_id:int, imagen_id: int)-> None:
+        self.obtener_detalle_orden(db, orden_id)
+        imagen= orden_repository.obtener_imagen(db, imagen_id)
+        if imagen is None:
+            raise HTTPException(status_code=404, detail="Imagen no encontrada")
+        if imagen.orden_id != orden_id:
+            raise HTTPException(status_code=404, detail="Imagen no pertenece a esta orden")
+        ruta = imagen.url[1:] if imagen.url.startswith("/") else imagen.url
+        if os.path.exists(ruta):
+            os.remove(ruta)
+
+        orden_repository.eliminar_imagen(db, imagen)
 orden_service = OrdenService()

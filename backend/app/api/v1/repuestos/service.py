@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.repuestos import repository
-from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdate
+from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdate, EntradaStockRequest
 
 
 def _to_response(repuesto) -> RepuestoResponse:
@@ -67,3 +67,13 @@ def delete_repuesto(db: Session, repuesto_id: int) -> None:
             detail="No se puede eliminar: el repuesto se usó en órdenes. Desactivalo.",
         )
     repository.delete(db, repuesto)
+
+def entrada_stock(self, db:Session, repuesto_id:int, datos:EntradaStockRequest) -> RepuestoResponse:
+    repuesto = repuesto_repository.obtener_por_id(db, repuesto_id)
+    if repuesto is None:
+        raise HTTPException(status_code=404, detail="Repuesto no encontrado")
+    if not repuesto.activo:
+        raise HTTPException(status_code=400, detail="No se puede agregar stock")
+
+    repuesto_actualizado = repuesto_repository.agregar_stock(db, repuesto_id, datos.cantidad)
+    return RepuestoResponse.model_validate(repuesto_actualizado)
