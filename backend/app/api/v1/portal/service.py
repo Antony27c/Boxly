@@ -7,6 +7,7 @@ from app.api.v1.portal import repository
 from app.api.v1.vehiculos import repository as vehiculos_repository
 from app.models.orden import Orden
 from app.models.usuario import Usuario
+from app.schemas.orden import ESTADOS_ORDEN as ETAPAS
 from app.schemas.pago import PagoResponse
 from app.schemas.portal import (
     EtapaResponse,
@@ -18,15 +19,6 @@ from app.schemas.portal import (
     VehiculoResumen,
 )
 
-ETAPAS = {
-    "pendiente": ("Pendiente", "La orden está abierta pero el vehículo todavía no entró al taller."),
-    "ingresado": ("Ingresado", "El vehículo ya está en el taller y espera que lo revise un mecánico."),
-    "en_diagnostico": ("En diagnóstico", "El mecánico está revisando el vehículo para encontrar la falla y armar el presupuesto."),
-    "esperando_repuestos": ("Esperando repuestos", "El trabajo está frenado hasta que lleguen los repuestos pedidos."),
-    "listo": ("Listo", "El trabajo terminó y el vehículo está listo para que lo retiren."),
-    "entregado": ("Entregado", "El cliente retiró el vehículo. La orden queda cerrada."),
-    "cancelado": ("Cancelado", "La orden se canceló y no se va a hacer el trabajo."),
-}
 CAMINO = ("pendiente", "ingresado", "en_diagnostico", "esperando_repuestos", "listo", "entregado")
 OPCIONALES = {"esperando_repuestos"}
 CERRADOS = {"entregado", "cancelado"}
@@ -132,7 +124,7 @@ def get_mi_orden(db: Session, usuario: Usuario, orden_id: int) -> MiOrdenDetalle
         etapa_actual=_etapa(orden.estado),
         pasos=_armar_pasos(orden),
         historial=orden_service.obtener_historial_orden(db, orden.id),
-        imagenes=[],
+        imagenes=orden_service.listar_imagenes(db, orden.id),
         detalles=orden_service.listar_detalles(db, orden.id),
         pagada=orden.pagada,
         puede_pagar=puede_pagar(orden),

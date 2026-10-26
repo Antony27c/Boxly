@@ -1,8 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
+
+UPLOADS_DIR = Path(__file__).resolve().parents[2] / "uploads"
 
 
 class Settings(BaseSettings):

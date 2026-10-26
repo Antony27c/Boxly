@@ -42,9 +42,15 @@ def _validar_patente_unica(db: Session, patente: str, excluir_id: int | None) ->
 
 
 def list_vehiculos(
-    db: Session, *, cliente_id: int | None = None, mecanico_id: int | None = None
+    db: Session,
+    *,
+    cliente_id: int | None = None,
+    mecanico_id: int | None = None,
+    q: str | None = None,
 ) -> list[VehiculoResponse]:
-    vehiculos = repository.list_vehiculos(db, cliente_id=cliente_id, mecanico_id=mecanico_id)
+    vehiculos = repository.list_vehiculos(
+        db, cliente_id=cliente_id, mecanico_id=mecanico_id, q=q
+    )
     return [_to_response(v) for v in vehiculos]
 
 

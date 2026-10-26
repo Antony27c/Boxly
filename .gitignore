@@ -5,6 +5,8 @@ backend/**/*.pyc
 backend/.env
 backend/.pytest_cache/
 backend/*.db
+backend/uploads/
+backend/static/
 
 # Frontend (Node)
 frontend/node_modules/

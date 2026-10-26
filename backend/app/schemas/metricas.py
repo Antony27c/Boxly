@@ -1,24 +1,47 @@
-from pydantic import BaseModel, ConfigDict, Field
+from datetime import date
 from decimal import Decimal
+from typing import Optional
+
+from pydantic import BaseModel
+
 
 class MecanicoMetricasResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     mecanico_id: int
-    mecanico_nombre: str
+    nombre: str
     ordenes_cerradas: int
-    tiempo_promedio_dias: Decimal = Field(default=Decimal("0"))
-    monto_facturado: Decimal = Field(default=Decimal("0"))
+    ordenes_en_curso: int
+    tiempo_promedio_horas: Optional[float] = None
+    facturado: Decimal
+
 
 class BalanceMensualResponse(BaseModel):
     mes: str
-    ingreso: Decimal
-    gastos_repuesto: Decimal
+    ingresos: Decimal
+    egresos: Decimal
     balance: Decimal
 
-class MejorMecanicoResponse(BaseModel):
+
+class FinanzasResponse(BaseModel):
+    desde: date
+    hasta: date
+    ingresos: Decimal
+    cobrado_online: Decimal
+    egresos_repuestos: Decimal
+    balance: Decimal
+    mensual: list[BalanceMensualResponse]
+
+
+class MecanicoDestacadoResponse(BaseModel):
     mecanico_id: int
-    mecanico_nombre: str
+    nombre: str
+    ordenes_cerradas: int
+    tiempo_promedio_horas: Optional[float] = None
+    facturado: Decimal
+
+
+class MejorMecanicoResponse(BaseModel):
     trimestre: str
-    monto_facturado: Decimal
-    
+    desde: date
+    hasta: date
+    criterio: str
+    mecanico: Optional[MecanicoDestacadoResponse] = None

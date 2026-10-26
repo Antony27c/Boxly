@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 from typing import List, Optional
 
 from app.core.dependencies import CurrentUser, DbSession
@@ -13,6 +13,10 @@ def listar_marcas(db:DbSession, _:CurrentUser, q:Optional[str] = Query(default=N
     return catalogo_service.listar_marcas(db, q)
 
 @router.get("/modelos", response_model=List[ModeloResponse])
-def listar_modelos(db:DbSession, _:CurrentUser, marca_id: Optional[int] = Query(default=None, description="Filtrar por marca"),
+def listar_modelos(
+    db:DbSession,
+    _:CurrentUser,
+    marca_id: Optional[int] = Query(default=None, description="Filtrar por marca"),
+    q: Optional[str] = Query(default=None, description="Busqueda parcial por nombre"),
 ):
-    return catalogo_service.listar_modelos(db, marca_id)
+    return catalogo_service.listar_modelos(db, marca_id, q)

@@ -5,6 +5,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.detalle_orden import DetalleOrdenResponse
+from app.schemas.imagen_orden import ImagenOrdenResponse
 from app.schemas.orden import HistorialResponse
 from app.schemas.pago import PagoResponse
 from app.schemas.vehiculo import VehiculoResponse
@@ -60,16 +61,6 @@ class PasoResponse(BaseModel):
     estado: Literal["completado", "actual", "pendiente", "omitido"]
 
 
-class ImagenOrdenPortal(BaseModel):
-    id: int
-    orden_id: int
-    etapa: Optional[str] = None
-    url: str
-    usuario_id: Optional[int] = None
-    usuario_nombre: Optional[str] = None
-    fecha: datetime
-
-
 class MiOrdenDetalle(BaseModel):
     id: int
     codigo: str
@@ -86,7 +77,7 @@ class MiOrdenDetalle(BaseModel):
     etapa_actual: EtapaResponse
     pasos: list[PasoResponse]
     historial: list[HistorialResponse]
-    imagenes: list[ImagenOrdenPortal] = []
+    imagenes: list[ImagenOrdenResponse] = []
     detalles: list[DetalleOrdenResponse]
     pagada: bool = False
     puede_pagar: bool = False

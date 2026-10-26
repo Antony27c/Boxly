@@ -16,11 +16,22 @@ def get_by_patente(db: Session, patente: str) -> Vehiculo | None:
 
 
 def list_vehiculos(
-    db: Session, *, cliente_id: int | None = None, mecanico_id: int | None = None
+    db: Session,
+    *,
+    cliente_id: int | None = None,
+    mecanico_id: int | None = None,
+    q: str | None = None,
 ) -> list[Vehiculo]:
     stmt = select(Vehiculo).order_by(Vehiculo.patente)
     if cliente_id is not None:
         stmt = stmt.where(Vehiculo.cliente_id == cliente_id)
+    if q:
+        patron = f"%{q.strip()}%"
+        stmt = stmt.where(
+            Vehiculo.patente.ilike(patron)
+            | Vehiculo.marca.ilike(patron)
+            | Vehiculo.modelo.ilike(patron)
+        )
     if mecanico_id is not None:
         stmt = stmt.where(
             Vehiculo.id.in_(select(Orden.vehiculo_id).where(Orden.mecanico_id == mecanico_id))

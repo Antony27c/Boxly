@@ -10,6 +10,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
     from app.models.detalle_orden import DetalleOrden
+    from app.models.imagen_orden import ImagenOrden
     from app.models.pago import Pago
     from app.models.usuario import Usuario
     from app.models.vehiculo import Vehiculo
@@ -64,6 +65,9 @@ class Orden(Base):
     )
     pagos: Mapped[List["Pago"]] = relationship(
         back_populates="orden", order_by="Pago.id"
+    )
+    imagenes: Mapped[List["ImagenOrden"]] = relationship(
+        back_populates="orden", order_by="ImagenOrden.id"
     )
 
     @property
