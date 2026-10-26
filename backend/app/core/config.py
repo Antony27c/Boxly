@@ -45,6 +45,10 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    mp_access_token: str | None = None
+    frontend_url: str = "http://localhost:5173"
+    backend_public_url: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

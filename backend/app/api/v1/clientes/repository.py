@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.cliente import Cliente
 from app.models.orden import Orden
 from app.models.turno import Turno
+from app.models.usuario import Usuario
 from app.models.vehiculo import Vehiculo
 
 
@@ -52,6 +53,9 @@ def contar_relacionados(db: Session, cliente_id: int) -> dict[str, int]:
         ),
         "ordenes": db.scalar(
             select(func.count(Orden.id)).where(Orden.cliente_id == cliente_id)
+        ),
+        "usuarios": db.scalar(
+            select(func.count(Usuario.id)).where(Usuario.cliente_id == cliente_id)
         ),
     }
 

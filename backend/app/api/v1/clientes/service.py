@@ -69,4 +69,9 @@ def delete_cliente(db: Session, cliente_id: int) -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail="No se puede eliminar: el cliente tiene órdenes asociadas.",
         )
+    if relacionados["usuarios"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No se puede eliminar: el cliente tiene un usuario de acceso.",
+        )
     repository.delete(db, cliente)
