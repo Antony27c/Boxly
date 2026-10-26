@@ -57,7 +57,7 @@ python -m scripts.seed_demo      # datos de demo (se puede correr varias veces, 
 uvicorn app.main:app --reload
 ```
 
-El seed de demo carga 3 clientes, 4 vehículos, 6 repuestos (2 con stock bajo), 3 turnos y 13 órdenes repartidas en los últimos meses, con historial por etapa, repuestos, mano de obra y pagos (aprobados, uno rechazado y órdenes cobradas en el taller). Las fechas son relativas al día en que se corre.
+El seed de demo carga el catálogo de marcas y modelos (también se puede cargar solo con `python -m scripts.seed_catalogo`), 3 clientes, 4 vehículos, 6 repuestos (2 con stock bajo), 3 turnos y 13 órdenes repartidas en los últimos meses, con historial por etapa, repuestos, mano de obra y pagos (aprobados, uno rechazado y órdenes cobradas en el taller). Las fechas son relativas al día en que se corre.
 
 | Usuario | Rol | Para probar |
 |---|---|---|

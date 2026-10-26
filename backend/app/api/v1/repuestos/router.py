@@ -25,8 +25,9 @@ def listar_repuestos(
     db: DbSession,
     _: PersonalUser,
     solo_activos: bool = Query(default=False),
+    q: str | None = Query(default=None),
 ) -> list[RepuestoResponse]:
-    return service.list_repuestos(db, solo_activos=solo_activos)
+    return service.list_repuestos(db, solo_activos=solo_activos, q=q)
 
 
 @router.get(

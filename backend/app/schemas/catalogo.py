@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict
 
 class MarcaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

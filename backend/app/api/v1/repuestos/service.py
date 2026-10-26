@@ -30,8 +30,13 @@ def _validar_codigo_unico(db: Session, codigo: str, excluir_id: int | None) -> N
         )
 
 
-def list_repuestos(db: Session, *, solo_activos: bool = False) -> list[RepuestoResponse]:
-    return [_to_response(r) for r in repository.list_repuestos(db, solo_activos=solo_activos)]
+def list_repuestos(
+    db: Session, *, solo_activos: bool = False, q: str | None = None
+) -> list[RepuestoResponse]:
+    return [
+        _to_response(r)
+        for r in repository.list_repuestos(db, solo_activos=solo_activos, q=q)
+    ]
 
 
 def list_stock_bajo(db: Session) -> list[RepuestoResponse]:

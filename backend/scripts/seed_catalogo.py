@@ -1,50 +1,51 @@
-from sqlalchemy.orm import Session
+import sys
+
+from sqlalchemy import select
+
 from app.db.session import SessionLocal
 from app.models.marca import Marca
 from app.models.modelo import Modelo
 
-def seed_catalogo():
-    db= SessionLocal()
+CATALOGO = {
+    "Chevrolet": ["Onix", "Prisma", "Cruze", "Tracker", "S10", "Spin", "Corsa", "Agile"],
+    "Citroën": ["C3", "C4 Cactus", "Berlingo", "C-Elysée"],
+    "Fiat": ["Cronos", "Argo", "Mobi", "Toro", "Strada", "Palio", "Siena", "Uno", "Fiorino"],
+    "Ford": ["Ranger", "EcoSport", "Ka", "Fiesta", "Focus", "Territory", "Maverick", "Transit"],
+    "Honda": ["Civic", "Fit", "City", "HR-V", "CR-V", "WR-V"],
+    "Hyundai": ["HB20", "Creta", "Tucson", "i10", "Santa Fe"],
+    "Iveco": ["Daily 35", "Daily 55", "Tector"],
+    "Jeep": ["Renegade", "Compass", "Commander"],
+    "Nissan": ["Versa", "Sentra", "March", "Kicks", "Frontier"],
+    "Peugeot": ["208", "2008", "308", "408", "3008", "Partner", "Expert"],
+    "Renault": ["Sandero", "Logan", "Stepway", "Duster", "Kangoo", "Kwid", "Clio", "Alaskan"],
+    "Toyota": ["Corolla", "Corolla Cross", "Etios", "Yaris", "Hilux", "Hilux SRV", "SW4", "RAV4"],
+    "Volkswagen": ["Gol", "Gol Trend", "Polo", "Virtus", "T-Cross", "Taos", "Amarok", "Saveiro", "Vento", "Up!"],
+}
+
+
+def seed_catalogo() -> tuple[int, int]:
+    db = SessionLocal()
     try:
-        #Marcas
-        marcas_data =[
-            "Toyota", "Ford", "Volkswagen", "Chevrolet", "Peugeot", "Renault", "Fiat", "Honda", "Nissan", "Hyundai"]
-        marcas ={}
-        for nombre in marcas_data:
-            nombre = nombre.upper()
-            marca = db.query(Marca).filter(Marca.nombre == nombre).first()
-            if not marca:
-                marca= Marca(nombre=nombre)
+        marcas_nuevas = modelos_nuevos = 0
+        for nombre_marca, modelos in CATALOGO.items():
+            marca = db.scalar(select(Marca).where(Marca.nombre == nombre_marca))
+            if marca is None:
+                marca = Marca(nombre=nombre_marca, activo=True)
                 db.add(marca)
                 db.flush()
-            marcas[nombre] = marca
-
-        modelos_por_marca = {
-            "TOYOTA":["Corolla", "Hilux", "Yaris", "RAV4", "Etios"],
-            "FORD": ["Fiesta","Focus", "Ranger", "Mustang", "Ka"],
-            "VOLKSWAGEN": ["Gol", "Vento", "Polo", "Bora", "Tiguan"],
-            "CHEVROLET": ["Onix", "Cruze", "Sonic", "Captiva", "Corsa"],
-            "PEUGEOT": ["208", "308", "408", "2008", "Partner"],
-            "FIAT": ["Uno", "Palio", "Siena", "Toro", "Cronos"],
-            "RENAULT": ["Clio", "Sandero", "Duster", "Logan", "kwid"],
-            "HONDA": ["Civic", "Fit", "Cr-V", "HR-V"],
-            "NISSAN": ["Versa", "Sentra", "March", "Kicks", "Frontier"],
-            "HYUNDAY": ["HB20", "Creta", "i20", "Tucson", "Santa fe"],
-        }
-        for nombre_marca, modelos in modelos_por_marca.items():
-            marca = marcas[nombre_marca]
+                marcas_nuevas += 1
+            existentes = set(db.scalars(select(Modelo.nombre).where(Modelo.marca_id == marca.id)))
             for nombre_modelo in modelos:
-                nombre_modelo = nombre_modelo.upper()
-                existe = db.query(Modelo).filter(
-                    Modelo.marca_id == marca.id,
-                    Modelo.nombre == nombre_modelo
-                ).first()
-                if not existe:
-                    modelo = Modelo(marca_id=marca.id, nombre=nombre_modelo)
-                    db.add(modelo)
+                if nombre_modelo not in existentes:
+                    db.add(Modelo(marca_id=marca.id, nombre=nombre_modelo, activo=True))
+                    modelos_nuevos += 1
         db.commit()
-        print("Catalogo seeded: marcas y modelos cargados.")
+        return marcas_nuevas, modelos_nuevos
     finally:
         db.close()
-if __name__== "__main__":
-    seed_catalogo       
+
+
+if __name__ == "__main__":
+    marcas, modelos = seed_catalogo()
+    print(f"Catálogo listo ({marcas} marcas y {modelos} modelos nuevos).")
+    sys.exit(0)

@@ -26,9 +26,10 @@ def listar_vehiculos(
     db: DbSession,
     usuario: PersonalUser,
     cliente_id: int | None = Query(default=None),
+    q: str | None = Query(default=None),
 ) -> list[VehiculoResponse]:
     return service.list_vehiculos(
-        db, cliente_id=cliente_id, mecanico_id=filtro_mecanico(usuario)
+        db, cliente_id=cliente_id, mecanico_id=filtro_mecanico(usuario), q=q
     )
 
 

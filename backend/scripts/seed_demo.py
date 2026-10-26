@@ -14,6 +14,7 @@ from app.models.repuesto import Repuesto
 from app.models.turno import Turno
 from app.models.usuario import RolUsuario, Usuario
 from app.models.vehiculo import Vehiculo
+from scripts.seed_catalogo import seed_catalogo
 
 PASSWORD = "Demo1234"
 
@@ -357,7 +358,8 @@ def main() -> int:
                 creadas += 1
 
         db.commit()
-        print(f"Datos de demo listos ({creadas} órdenes nuevas).")
+        marcas, modelos = seed_catalogo()
+        print(f"Datos de demo listos ({creadas} órdenes nuevas, {marcas} marcas y {modelos} modelos nuevos en el catálogo).")
         print(f"Clave de todos los usuarios: {PASSWORD}")
         print("  Personal:  admin@boxly.com, recepcion@boxly.com, mecanico@boxly.com, mecanico2@boxly.com")
         print("  Clientes:  cliente@boxly.com (Juan Perez), cliente2@boxly.com (Laura Gomez)")
