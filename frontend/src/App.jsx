@@ -11,7 +11,7 @@ import VehiculoDetalle from '@/pages/VehiculoDetalle'
 import Turnos from '@/pages/Turnos'
 import Ordenes from '@/pages/Ordenes'
 import Inventario from '@/pages/Inventario'
-import Administracion from '@/pages/Administracion'
+import Usuarios from '@/pages/Usuarios'
 import NoEncontrado from '@/pages/NoEncontrado'
 
 export default function App() {
@@ -45,7 +45,8 @@ export default function App() {
 
           <Route element={<ProtectedRoute roles={ROLES_ADMIN} />}>
             <Route element={<AppLayout />}>
-              <Route path="/admin" element={<Administracion />} />
+              <Route path="/usuarios" element={<Usuarios />} />
+              <Route path="/admin" element={<Navigate to="/usuarios" replace />} />
             </Route>
           </Route>
 

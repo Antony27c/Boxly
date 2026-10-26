@@ -9,7 +9,7 @@ export const navegacion = [
   { a: '/turnos', texto: 'Turnos', roles: ROLES_MOSTRADOR },
   { a: '/ordenes', texto: 'Órdenes', roles: ROLES_TALLER },
   { a: '/inventario', texto: 'Inventario', roles: ROLES_TALLER },
-  { a: '/admin', texto: 'Administración', roles: ROLES_ADMIN },
+  { a: '/usuarios', texto: 'Usuarios', roles: ROLES_ADMIN },
 ]
 
 export function tieneAcceso(roles, rol) {

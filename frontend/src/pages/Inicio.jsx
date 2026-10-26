@@ -34,8 +34,8 @@ const accesos = [
     roles: ROLES_TALLER,
   },
   {
-    a: '/admin',
-    titulo: 'Administración',
+    a: '/usuarios',
+    titulo: 'Usuarios',
     texto: 'Usuarios del sistema, roles y permisos de acceso.',
     roles: ROLES_ADMIN,
   },
