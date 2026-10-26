@@ -73,6 +73,24 @@ class Orden(Base):
         return f"{self.mecanico.apellido}, {self.mecanico.nombre}"
 
     @property
+    def cliente_nombre(self) -> Optional[str]:
+        if self.cliente is None:
+            return None
+        return f"{self.cliente.apellido}, {self.cliente.nombre}"
+
+    @property
+    def vehiculo_patente(self) -> Optional[str]:
+        return self.vehiculo.patente if self.vehiculo else None
+
+    @property
+    def vehiculo_marca(self) -> Optional[str]:
+        return self.vehiculo.marca if self.vehiculo else None
+
+    @property
+    def vehiculo_modelo(self) -> Optional[str]:
+        return self.vehiculo.modelo if self.vehiculo else None
+
+    @property
     def pagada(self) -> bool:
         return any(pago.estado == "aprobado" for pago in self.pagos)
 

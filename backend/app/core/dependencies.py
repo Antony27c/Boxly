@@ -67,3 +67,7 @@ def require_roles(*roles: RolUsuario) -> Callable[..., Usuario]:
 
 PersonalUser = Annotated[Usuario, Depends(require_roles(*ROLES_PERSONAL))]
 ClienteUser = Annotated[Usuario, Depends(require_roles(RolUsuario.cliente))]
+
+
+def filtro_mecanico(usuario: Usuario) -> int | None:
+    return usuario.id if usuario.rol == RolUsuario.mecanico else None

@@ -6,10 +6,12 @@ from app.models.orden import Historial_estado, Orden
 from app.models.detalle_orden import DetalleOrden
 class OrdenRepository:
     
-    def obtener_ordenes(self, db: Session, estado: Optional[str] = None) -> List[Orden]:
+    def obtener_ordenes(self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None) -> List[Orden]:
         query = select(Orden).order_by(Orden.fecha_ingreso.desc())
         if estado:
             query = query.where(Orden.estado == estado)
+        if mecanico_id is not None:
+            query = query.where(Orden.mecanico_id == mecanico_id)
         return list(db.scalars(query).all())
 
     def obtener_por_id(self, db: Session, orden_id: int) -> Optional[Orden]:

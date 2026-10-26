@@ -41,7 +41,11 @@ class OrdenResponse(OrdenBase):
     estado:str
     codigo:str
     cliente_id:int
+    cliente_nombre: Optional[str] = None
     vehiculo_id:int
+    vehiculo_patente: Optional[str] = None
+    vehiculo_marca: Optional[str] = None
+    vehiculo_modelo: Optional[str] = None
     creado_por_id:int
     mecanico_id:Optional[int]= None
     mecanico_nombre: Optional[str] = None

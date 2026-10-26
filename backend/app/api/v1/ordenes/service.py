@@ -25,16 +25,23 @@ TRANSICIONES_VALIDAS = {
 
 class OrdenService:
     
-    def obtener_lista_ordenes(self, db: Session, estado: Optional[str] = None) -> List[Orden]:
+    def obtener_lista_ordenes(self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None) -> List[Orden]:
         
-        return orden_repository.obtener_ordenes(db, estado)
+        return orden_repository.obtener_ordenes(db, estado, mecanico_id)
 
-    def obtener_detalle_orden(self, db: Session, orden_id: int) -> Orden:
+    def obtener_detalle_orden(self, db: Session, orden_id: int, mecanico_id: Optional[int] = None) -> Orden:
         orden = orden_repository.obtener_por_id(db, orden_id)
-        if not orden:
+        if not orden or (mecanico_id is not None and orden.mecanico_id != mecanico_id):
             
             raise HTTPException(status_code=404, detail="Orden no encontrada")
         return orden
+
+    def validar_edicion_mecanico(self, db: Session, orden_id: int, datos: OrdenUpdate, mecanico_id: Optional[int]) -> None:
+        if mecanico_id is None:
+            return
+        self.obtener_detalle_orden(db, orden_id, mecanico_id)
+        if datos.mecanico_id is not None and datos.mecanico_id != mecanico_id:
+            raise HTTPException(status_code=403, detail="No podés reasignar la orden a otro mecánico")
 
     def _validar_mecanico(self, db:Session, mecanico_id: int)-> None:
         mecanico = db.get(Usuario, mecanico_id)
