@@ -53,9 +53,22 @@ Desde `backend/` (venv activo):
 ```bash
 pip install -r requirements.txt
 alembic upgrade head             # crea las tablas (la API ya no las crea sola)
-python -m scripts.seed_demo      # datos de demo: 3 usuarios, 1 cliente, 1 vehículo, 1 turno, 1 orden, 3 repuestos
+python -m scripts.seed_demo      # datos de demo (se puede correr varias veces, no duplica)
 uvicorn app.main:app --reload
 ```
+
+El seed de demo carga 3 clientes, 4 vehículos, 6 repuestos (2 con stock bajo), 3 turnos y 13 órdenes repartidas en los últimos meses, con historial por etapa, repuestos, mano de obra y pagos (aprobados, uno rechazado y órdenes cobradas en el taller). Las fechas son relativas al día en que se corre.
+
+| Usuario | Rol | Para probar |
+|---|---|---|
+| `admin@boxly.com` | Administrador | Todo el sistema |
+| `recepcion@boxly.com` | Recepción | Clientes, vehículos, turnos y órdenes |
+| `mecanico@boxly.com` | Mecánico (Mario) | Solo sus órdenes y vehículos |
+| `mecanico2@boxly.com` | Mecánico (Lucía) | Solo sus órdenes y vehículos |
+| `cliente@boxly.com` | Cliente (Juan Perez) | Portal: tiene la orden `OT-DEMO-10` lista para pagar |
+| `cliente2@boxly.com` | Cliente (Laura Gomez) | Portal: orden con pago rechazado y reintentado, y una cancelada |
+
+Contraseña de todos: `Demo1234`.
 
 Otros scripts: `python -m scripts.create_admin` (admin inicial) y `python -m scripts.seed` (datos aleatorios con Faker).
 Para cambios de modelo: `alembic revision --autogenerate -m "descripcion del cambio"` y luego `alembic upgrade head`.
