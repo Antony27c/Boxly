@@ -2,10 +2,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.ordenes.service import orden_service
+from app.api.v1.pagos.service import puede_pagar
 from app.api.v1.portal import repository
 from app.api.v1.vehiculos import repository as vehiculos_repository
 from app.models.orden import Orden
 from app.models.usuario import Usuario
+from app.schemas.pago import PagoResponse
 from app.schemas.portal import (
     EtapaResponse,
     MiOrdenDetalle,
@@ -28,7 +30,6 @@ ETAPAS = {
 CAMINO = ("pendiente", "ingresado", "en_diagnostico", "esperando_repuestos", "listo", "entregado")
 OPCIONALES = {"esperando_repuestos"}
 CERRADOS = {"entregado", "cancelado"}
-PAGABLES = {"listo", "entregado"}
 
 
 def _nombre(codigo: str) -> str:
@@ -72,19 +73,6 @@ def _armar_pasos(orden: Orden) -> list[PasoResponse]:
     return pasos
 
 
-def _pagada(orden: Orden) -> bool:
-    return False
-
-
-def _puede_pagar(orden: Orden) -> bool:
-    return (
-        orden.estado in PAGABLES
-        and orden.costo_final is not None
-        and orden.costo_final > 0
-        and not _pagada(orden)
-    )
-
-
 def _resumen(orden: Orden) -> MiOrdenResumen:
     return MiOrdenResumen(
         id=orden.id,
@@ -97,7 +85,7 @@ def _resumen(orden: Orden) -> MiOrdenResumen:
         fecha_ingreso=orden.fecha_ingreso,
         fecha_estimada_entrega=orden.fecha_estimada_entrega,
         costo_final=orden.costo_final,
-        pagada=_pagada(orden),
+        pagada=orden.pagada,
     )
 
 
@@ -146,7 +134,7 @@ def get_mi_orden(db: Session, usuario: Usuario, orden_id: int) -> MiOrdenDetalle
         historial=orden_service.obtener_historial_orden(db, orden.id),
         imagenes=[],
         detalles=orden_service.listar_detalles(db, orden.id),
-        pagada=_pagada(orden),
-        puede_pagar=_puede_pagar(orden),
-        pago=None,
+        pagada=orden.pagada,
+        puede_pagar=puede_pagar(orden),
+        pago=PagoResponse.model_validate(orden.pagos[-1]) if orden.pagos else None,
     )

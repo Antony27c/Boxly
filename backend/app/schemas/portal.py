@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.detalle_orden import DetalleOrdenResponse
 from app.schemas.orden import HistorialResponse
+from app.schemas.pago import PagoResponse
 from app.schemas.vehiculo import VehiculoResponse
 
 
@@ -89,4 +90,4 @@ class MiOrdenDetalle(BaseModel):
     detalles: list[DetalleOrdenResponse]
     pagada: bool = False
     puede_pagar: bool = False
-    pago: Optional[dict] = None
+    pago: Optional[PagoResponse] = None

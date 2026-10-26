@@ -48,6 +48,7 @@ class OrdenResponse(OrdenBase):
     diagnostico: Optional[str] = None
     costo_estimado: Optional[Decimal] = None
     costo_final: Optional[Decimal]= None
+    pagada: bool = False
     fecha_ingreso: datetime
     fecha_estimada_entrega: Optional[datetime]= None
     fecha_entrega: Optional[datetime]= None

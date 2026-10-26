@@ -10,6 +10,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
     from app.models.detalle_orden import DetalleOrden
+    from app.models.pago import Pago
     from app.models.usuario import Usuario
     from app.models.vehiculo import Vehiculo
 
@@ -61,12 +62,19 @@ class Orden(Base):
     historial_estados: Mapped[List["Historial_estado"]] = relationship(
         back_populates="orden"
     )
+    pagos: Mapped[List["Pago"]] = relationship(
+        back_populates="orden", order_by="Pago.id"
+    )
 
     @property
     def mecanico_nombre(self) -> Optional[str]:
         if self.mecanico is None:
             return None
         return f"{self.mecanico.apellido}, {self.mecanico.nombre}"
+
+    @property
+    def pagada(self) -> bool:
+        return any(pago.estado == "aprobado" for pago in self.pagos)
 
 
 class Historial_estado(Base):

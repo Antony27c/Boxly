@@ -494,7 +494,11 @@ Respuesta `201`:
 }
 ```
 
-Errores: `400` si la orden no está `listo` ni `entregado` o no tiene `costo_final`, `409` si ya está pagada y `404` si no es del cliente.
+Errores: `400` si la orden no está `listo` ni `entregado` o no tiene `costo_final`, `409` si ya está pagada, `404` si no es del cliente, `502` si Mercado Pago no responde y `503` si no hay `MP_ACCESS_TOKEN` ni `DEBUG=true`.
+
+Sin `MP_ACCESS_TOKEN` y con `DEBUG=true`, no se llama a Mercado Pago: `preference_id` es `null` y `url_pago` apunta a `{FRONTEND_URL}/portal/pago/pendiente?pago_id=9`. Desde ahí se usa `POST /pagos/{pago_id}/simular`.
+
+Si un pago se rechaza, se puede volver a llamar a este endpoint: se crea un pago nuevo y el detalle de la orden muestra el último.
 
 El frontend redirige a `url_pago`. Mercado Pago vuelve a:
 
@@ -512,7 +516,7 @@ Al volver, el frontend confirma el resultado con `GET /pagos/{pago_id}` y no con
 { "id": 9, "orden_id": 2, "monto": "112000.00", "estado": "aprobado", "preference_id": "1234567890-abcd-4ef0-9a1b-112233445566", "payment_id": "1319283712", "creado_en": "2026-09-04T17:00:00", "fecha_pago": "2026-09-04T17:02:41" }
 ```
 
-**`POST /pagos/webhook`** (sin token, lo llama Mercado Pago): recibe `{"type": "payment", "data": {"id": "1319283712"}}`. El backend **consulta el pago a la API de Mercado Pago**, no confía en el cuerpo, y actualiza el `Pago` usando `external_reference = pago_id`. Siempre responde `200`.
+**`POST /pagos/webhook`** (sin token, lo llama Mercado Pago): recibe `{"type": "payment", "data": {"id": "1319283712"}}`. El backend **consulta el pago a la API de Mercado Pago**, no confía en el cuerpo, y actualiza el `Pago` usando `external_reference = pago_id`. También acepta el formato por query (`?type=payment&data.id=...` o `?topic=payment&id=...`). Responde `200` aunque la notificación no sea de un pago o la referencia no exista. Si no puede consultar a Mercado Pago responde `502`, para que Mercado Pago reintente. Un pago `aprobado` no vuelve atrás, y si el monto cobrado es menor al de la orden queda `rechazado`.
 
 | Estado en Mercado Pago | Estado en Boxly |
 |---|---|
