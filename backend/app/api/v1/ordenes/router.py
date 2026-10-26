@@ -9,7 +9,6 @@ from .service import orden_service
 from app.schemas.usuario import MessageResponse
 from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
 from app.schemas.imagen_orden import ImagenOrdenResponse
-from .repository import orden_repository
 import os 
 import uuid
 
@@ -67,34 +66,11 @@ def listar_imagenes(orden_id: int, db:DbSession, _: CurrentUser):
 def agregar_imagen(
     orden_id:int,
     db:DbSession,
-    archivo: UploadFile = File(...),
     _:CurrentUser,
+    archivo: UploadFile = File(...),
 ):
-    if not archivo.content_type or not archivo.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Solo se permiten archivos de imagen")
-
-    carpeta = "static/ordenes"
-    os.makedirs(carpeta, exist_ok=True)
-
-    extension = os.path.splitext(archivo.filename)[1]
-    nombre_archivo = f"{uuid.uuid4()}{extension}"
-    ruta = os.path.join(carpeta, nombre_archivo)
-
-    with open(ruta, "wb") as f:
-        f.write(archivo.file.read())
-
-    url= f"/static/ordenes/{nombre_archivo}"
-    return orden_service.agregar_imagen(db, orden_id, url)
+    return orden_service.agregar_imagen(db, orden_id, archivo)
 @router.delete("/{orden_id}/imagenes/{imagen_id}", response_model=MessageResponse)
 def eliminar_imagen(orden_id: int, imagen_id: int, db:DbSession,_: CurrentUser):
-    imagen = orden_repository.obtener_imagen(db, imagen_id)
-    if imagen is None:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
-    if imagen.orden_id != orden_id:
-        raise HTTPException(status_code=404, detail=" Imagen no pertenece a esta orden")
-
-    ruta= imagen.url[1:] if imagen.url.startswith("/")else imagen.url
-    if os.path.exists(ruta):
-        os.remove(ruta)
     orden_service.eliminar_imagen(db, orden_id, imagen_id)
     return MessageResponse(detail="Imagen eliminada")
