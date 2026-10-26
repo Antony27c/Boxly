@@ -58,3 +58,13 @@ def tiene_detalles(db: Session, repuesto_id: int) -> bool:
 def delete(db: Session, repuesto: Repuesto) -> None:
     db.delete(repuesto)
     db.commit()
+
+def agregar_stock(self, db:Session, repuesto_id: int, cantidad: int) -> Repuesto:
+    repuesto = db.get(Repuesto, repuesto_id)
+    if repuesto is None:
+        return None
+    repuesto.stock += cantidad
+    db.add(repuesto)
+    db.commit()
+    db.refresh(repuesto)
+    return repuesto

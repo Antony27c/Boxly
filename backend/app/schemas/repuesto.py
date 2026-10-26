@@ -62,3 +62,6 @@ class RepuestoResponse(RepuestoBase):
     id: int
     activo: bool
     stock_bajo: bool = False
+
+class EntradaStockRequest(BaseModel):
+    cantidad: int =Field(..., ge=1, description="Cantidad a agregar al stock")
