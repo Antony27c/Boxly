@@ -4,15 +4,24 @@ from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 
-ESTADOS_ORDEN ={
-    "pendiente": "Orden creada",
-    "ingresado": "El vehiculo ingreso al taller",
-    "en_diagnostico": "Se esta diagnosticando el problema",
-    "esperando_repuestos": "Se espera la llegada de repuestos",
-    "listo": "Reparacion finalizada, listo para entrega",
-    "entregado": "Vehiculo entregado al cliente",
-    "cancelado": "Orden cancelada",
+ESTADOS_ORDEN = {
+    "pendiente": ("Pendiente", "La orden está abierta pero el vehículo todavía no entró al taller."),
+    "ingresado": ("Ingresado", "El vehículo ya está en el taller y espera que lo revise un mecánico."),
+    "en_diagnostico": ("En diagnóstico", "El mecánico está revisando el vehículo para encontrar la falla y armar el presupuesto."),
+    "esperando_repuestos": ("Esperando repuestos", "El trabajo está frenado hasta que lleguen los repuestos pedidos."),
+    "listo": ("Listo", "El trabajo terminó y el vehículo está listo para que lo retiren."),
+    "entregado": ("Entregado", "El cliente retiró el vehículo. La orden queda cerrada."),
+    "cancelado": ("Cancelado", "La orden se canceló y no se va a hacer el trabajo."),
 }
+
+
+class EstadoOrdenResponse(BaseModel):
+    codigo: str
+    nombre: str
+    descripcion: str
+    siguientes: list[str]
+
+
 class OrdenBase(BaseModel):
     descripcion_ingreso: str = Field(min_length=5)
  

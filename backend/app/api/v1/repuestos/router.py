@@ -5,9 +5,8 @@ from fastapi import APIRouter, Depends, Query, status
 from app.api.v1.repuestos import service
 from app.core.dependencies import PersonalUser, DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdate, EntradaStockRequest
+from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate
 from app.schemas.usuario import MessageResponse
-
 
 router = APIRouter(prefix="/repuestos", tags=["Repuestos"])
 
@@ -93,14 +92,16 @@ def eliminar_repuesto(
     service.delete_repuesto(db, repuesto_id)
     return MessageResponse(detail="Repuesto eliminado")
 
+
 @router.post(
-    "/{repuesto_id}/entrada-stock",
-    response_model=RepuestoResponse ,
+    "/{repuesto_id}/ingresos",
+    response_model=RepuestoResponse,
+    summary="Ingresar stock de un repuesto",
 )
-def entrada_stock(
+def ingresar_stock(
     repuesto_id: int,
-    datos: EntradaStockRequest,
+    datos: IngresoStockRequest,
     db: DbSession,
-    _: AdminUser,
-):
-    return repuesto_service.entrada_stock(db, repuesto_id, datos)
+    _: MostradorUser,
+) -> RepuestoResponse:
+    return service.ingresar_stock(db, repuesto_id, datos)

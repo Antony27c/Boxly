@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, status, UploadFile, File
+from fastapi import APIRouter, Depends, Form, status, UploadFile, File
 from typing import List, Optional, Annotated
 
 
-from app.core.dependencies import PersonalUser,DbSession, filtro_mecanico, require_roles
+from app.core.dependencies import CurrentUser, PersonalUser,DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.orden import HistorialResponse, OrdenCreate, OrdenUpdate, OrdenResponse
+from app.schemas.orden import EstadoOrdenResponse, HistorialResponse, OrdenCreate, OrdenUpdate, OrdenResponse
 from .service import orden_service
 from app.schemas.usuario import MessageResponse
 from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
@@ -25,6 +25,10 @@ def listar_ordenes(db: DbSession, usuario:PersonalUser, estado: Optional[str] = 
 @router.post("", response_model=OrdenResponse, status_code=status.HTTP_201_CREATED)
 def crear_orden(datos: OrdenCreate, db: DbSession, usuario:RecepcionUser):
     return orden_service.crear_orden(db, datos, creado_por_id=usuario.id)
+
+@router.get("/estados", response_model=List[EstadoOrdenResponse])
+def listar_estados(_: CurrentUser):
+    return orden_service.listar_estados()
 
 @router.get("/{orden_id}", response_model=OrdenResponse)
 def detalle_orden(orden_id: int, db: DbSession, usuario:PersonalUser):
@@ -62,18 +66,22 @@ def quitar_detalle(orden_id: int, detalle_id:int, db:DbSession, usuario: Persona
     orden_service.quitar_detalle(db, orden_id, detalle_id, usuario_id=usuario.id)
     return MessageResponse(detail="Linea eliminada")
 @router.get("/{orden_id}/imagenes", response_model=List[ImagenOrdenResponse])
-def listar_imagenes(orden_id: int, db:DbSession, _: CurrentUser):
+def listar_imagenes(orden_id: int, db:DbSession, usuario: PersonalUser):
+    orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
     return orden_service.listar_imagenes(db, orden_id)
 
 @router.post("/{orden_id}/imagenes", response_model=ImagenOrdenResponse, status_code=status.HTTP_201_CREATED)
 def agregar_imagen(
     orden_id:int,
     db:DbSession,
-    _:CurrentUser,
+    usuario: PersonalUser,
     archivo: UploadFile = File(...),
+    etapa: Optional[str] = Form(default=None),
 ):
-    return orden_service.agregar_imagen(db, orden_id, archivo)
+    orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
+    return orden_service.agregar_imagen(db, orden_id, archivo, etapa, usuario_id=usuario.id)
 @router.delete("/{orden_id}/imagenes/{imagen_id}", response_model=MessageResponse)
-def eliminar_imagen(orden_id: int, imagen_id: int, db:DbSession,_: CurrentUser):
-    orden_service.eliminar_imagen(db, orden_id, imagen_id)
+def eliminar_imagen(orden_id: int, imagen_id: int, db:DbSession, usuario: PersonalUser):
+    orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
+    orden_service.eliminar_imagen(db, orden_id, imagen_id, usuario)
     return MessageResponse(detail="Imagen eliminada")

@@ -61,6 +61,10 @@ class OrdenRepository:
             select(DetalleOrden).where(DetalleOrden.orden_id == orden.id)
         ):
             db.delete(detalle)
+        for imagen in db.scalars(
+            select(ImagenOrden).where(ImagenOrden.orden_id == orden.id)
+        ):
+            db.delete(imagen)
         db.delete(orden)
         db.commit()
 
@@ -88,7 +92,7 @@ class OrdenRepository:
         db.commit()
 
     def listar_imagenes(self, db:Session, orden_id: int) -> List[ImagenOrden]:
-        stmt = select(ImagenOrden).where(ImagenOrden.orden_id == orden_id).order_by(ImagenOrden.fecha_subida.desc())
+        stmt = select(ImagenOrden).where(ImagenOrden.orden_id == orden_id).order_by(ImagenOrden.fecha, ImagenOrden.id)
         return list(db.scalars(stmt).all())
     def obtener_imagen(self, db:Session, imagen_id:int) -> Optional[ImagenOrden]:
         return db.get(ImagenOrden,imagen_id)

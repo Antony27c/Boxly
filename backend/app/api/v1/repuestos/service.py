@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.repuestos import repository
-from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdate, EntradaStockRequest
+from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate
 
 
 def _to_response(repuesto) -> RepuestoResponse:
@@ -68,12 +68,13 @@ def delete_repuesto(db: Session, repuesto_id: int) -> None:
         )
     repository.delete(db, repuesto)
 
-def entrada_stock(self, db:Session, repuesto_id:int, datos:EntradaStockRequest) -> RepuestoResponse:
-    repuesto = repuesto_repository.obtener_por_id(db, repuesto_id)
-    if repuesto is None:
-        raise HTTPException(status_code=404, detail="Repuesto no encontrado")
-    if not repuesto.activo:
-        raise HTTPException(status_code=400, detail="No se puede agregar stock")
 
-    repuesto_actualizado = repuesto_repository.agregar_stock(db, repuesto_id, datos.cantidad)
-    return RepuestoResponse.model_validate(repuesto_actualizado)
+def ingresar_stock(db: Session, repuesto_id: int, datos: IngresoStockRequest) -> RepuestoResponse:
+    repuesto = _get_or_404(db, repuesto_id)
+    if not repuesto.activo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede ingresar stock de un repuesto inactivo.",
+        )
+    return _to_response(repository.agregar_stock(db, repuesto, datos.cantidad))
+

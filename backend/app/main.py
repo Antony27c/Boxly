@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
-from app.core.config import get_settings
+from app.core.config import UPLOADS_DIR, get_settings
 from app.core.exceptions import register_exception_handlers
 
 # Importar modelos para que Base.metadata los registre (Usuario).
@@ -32,6 +32,8 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(api_router)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
     @app.get("/", tags=["Health"])
     def health():
@@ -45,5 +47,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
