@@ -9,8 +9,7 @@ from .service import orden_service
 from app.schemas.usuario import MessageResponse
 from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
 from app.schemas.imagen_orden import ImagenOrdenResponse
-import os 
-import uuid
+
 
 router = APIRouter()
 RecepcionUser= Annotated[

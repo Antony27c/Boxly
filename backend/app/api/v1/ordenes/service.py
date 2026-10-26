@@ -224,7 +224,7 @@ class OrdenService:
             comentario=f"Linea quitada: {detalle.cantidad} x {detalle.descripcion}",
         )
         orden_repository.eliminar_detalle(db, detalle)
-    def listar_imagenes(self, db:Session, orden_id: int) -> List[ImagenOrden]:
+    def listar_imagenes(self, db:Session, orden_id: int) -> List[ImagenOrdenResponse]:
         self.obtener_detalle_orden(db, orden_id)
         return [
             ImagenOrdenResponse.model_validate(img)
