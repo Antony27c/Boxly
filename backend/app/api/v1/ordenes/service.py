@@ -12,6 +12,8 @@ from app.models.detalle_orden import DetalleOrden
 from app.models.repuesto import Repuesto
 from app.schemas.detalle_orden import DetalleOrdenCreate, DetalleOrdenResponse
 from .repository import orden_repository 
+from app.models.imagen_orden import ImagenOrden
+from app.schemas.imagen_orden import ImagenOrdenResponse
 
 TRANSICIONES_VALIDAS = {
     "pendiente":["ingresado","cancelado"],
@@ -220,4 +222,22 @@ class OrdenService:
             comentario=f"Linea quitada: {detalle.cantidad} x {detalle.descripcion}",
         )
         orden_repository.eliminar_detalle(db, detalle)
+    def listar_imagenes(self, db:Session, orden_id: int) -> List[ImagenOrden]:
+        self.obtener_detalle_orden(db, orden_id)
+        return [
+            ImagenOrdenResponse.model_validate(img)
+            for img in orden_repository.listar_imagen(db, orden_id)
+        ]
+    def agregar_imagen(self, db: Session, orden_id:int, url: str) -> ImagenOrdenResponse:
+        self.obtener_detalle_orden(db, orden_id)
+        imagen= ImagenOrden(orden_id=orden_id, url=url)
+        return ImagenOrdenResponse.model_validate(orden_repository.guardar_imagen(db, imagen))
+    def eliminar_imagen(self, db:Session, orden_id:int, imagen_id: int)-> None:
+        self.obtener_detalle_orden(db, orden_id)
+        imagen= orden_repository.obtener_imagen(db, imagen_id)
+        if imagen is None:
+            raise HTTPException(status_code=404, detail="Imagen no encontrada")
+        if imagen.orden_id != orden_id:
+            raise HTTPException(status_code=404, detail="Imagen no pertenece a esta orden")
+        orden_repository.eliminar_imagen(db, imagen)
 orden_service = OrdenService()
