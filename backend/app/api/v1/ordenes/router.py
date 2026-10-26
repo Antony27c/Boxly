@@ -9,6 +9,7 @@ from .service import orden_service
 from app.schemas.usuario import MessageResponse
 from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
 from app.schemas.imagen_orden import ImagenOrdenResponse
+from .repository import orden_repository
 import os 
 import uuid
 
@@ -69,7 +70,7 @@ def agregar_imagen(
     archivo: UploadFile = File(...),
     _:CurrentUser,
 ):
-    if not archivo.content_type or not archivo.content_type.startswith("imagen/"):
+    if not archivo.content_type or not archivo.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos de imagen")
 
     carpeta = "static/ordenes"
@@ -92,7 +93,7 @@ def eliminar_imagen(orden_id: int, imagen_id: int, db:DbSession,_: CurrentUser):
     if imagen.orden_id != orden_id:
         raise HTTPException(status_code=404, detail=" Imagen no pertenece a esta orden")
 
-    ruta= imagen.url.lstrip("/")
+    ruta= imagen.url[1:] if imagen.url.startswith("/")else imagen.url
     if os.path.exists(ruta):
         os.remove(ruta)
     orden_service.eliminar_imagen(db, orden_id, imagen_id)

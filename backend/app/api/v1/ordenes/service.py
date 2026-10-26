@@ -92,7 +92,7 @@ class OrdenService:
             estados_permitidos = TRANSICIONES_VALIDAS.get(orden.estado, [])
 
             if datos.estado not in estados_permitidos:
-                raise HTTPException(status_code=400, detail=(f"Transicion invalida. No se puede pasar de '{orden.estado}' a '{datos.estado}' "))
+                raise HTTPException(status_code=400, detail=f"Transicion invalida. No se puede pasar de '{orden.estado}' a '{datos.estado}' ")
 
             if not datos.comentario_cambio or not datos.comentario_cambio.strip():
                 raise HTTPException(

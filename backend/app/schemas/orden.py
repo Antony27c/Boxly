@@ -60,5 +60,5 @@ class HistorialResponse(BaseModel):
     usuario_nombre: Optional[str]= None
     estado_anterior: Optional[str] = None
     estado_nuevo: str
-    comentario: Optional [str] = None
+    comentario: Optional[str] = None
     fecha: datetime
