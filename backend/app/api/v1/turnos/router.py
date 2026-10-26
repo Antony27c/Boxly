@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.v1.turnos import service
-from app.core.dependencies import CurrentUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import MessageResponse
 from app.schemas.turno import (
@@ -28,7 +28,7 @@ MostradorUser = Annotated[
 )
 def listar_turnos(
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
     estado: str | None = Query(default=None),
     cliente_id: int | None = Query(default=None),
 ) -> list[TurnoResponse]:
@@ -57,7 +57,7 @@ def crear_turno(
 def obtener_turno(
     turno_id: int,
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
 ) -> TurnoResponse:
     return service.get_turno(db, turno_id)
 

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.v1.clientes import service
-from app.core.dependencies import CurrentUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import MessageResponse
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
@@ -23,7 +23,7 @@ MostradorUser = Annotated[
 )
 def listar_clientes(
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
     q: str | None = Query(default=None),
 ) -> list[ClienteResponse]:
     return service.list_clientes(db, q=q)
@@ -51,7 +51,7 @@ def crear_cliente(
 def obtener_cliente(
     cliente_id: int,
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
 ) -> ClienteResponse:
     return service.get_cliente(db, cliente_id)
 

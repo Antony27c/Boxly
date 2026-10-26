@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.v1.repuestos import service
-from app.core.dependencies import CurrentUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdate
 from app.schemas.usuario import MessageResponse
@@ -23,7 +23,7 @@ MostradorUser = Annotated[
 )
 def listar_repuestos(
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
     solo_activos: bool = Query(default=False),
 ) -> list[RepuestoResponse]:
     return service.list_repuestos(db, solo_activos=solo_activos)
@@ -34,7 +34,7 @@ def listar_repuestos(
     response_model=list[RepuestoResponse],
     summary="Repuestos con stock menor o igual al mínimo",
 )
-def listar_stock_bajo(db: DbSession, _: CurrentUser) -> list[RepuestoResponse]:
+def listar_stock_bajo(db: DbSession, _: PersonalUser) -> list[RepuestoResponse]:
     return service.list_stock_bajo(db)
 
 
@@ -60,7 +60,7 @@ def crear_repuesto(
 def obtener_repuesto(
     repuesto_id: int,
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
 ) -> RepuestoResponse:
     return service.get_repuesto(db, repuesto_id)
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
-from app.models.usuario import RolUsuario, Usuario
+from app.models.usuario import ROLES_PERSONAL, RolUsuario, Usuario
 
 bearer_scheme = HTTPBearer(auto_error=True)
 
@@ -63,3 +63,7 @@ def require_roles(*roles: RolUsuario) -> Callable[..., Usuario]:
         return current_user
 
     return _checker
+
+
+PersonalUser = Annotated[Usuario, Depends(require_roles(*ROLES_PERSONAL))]
+ClienteUser = Annotated[Usuario, Depends(require_roles(RolUsuario.cliente))]

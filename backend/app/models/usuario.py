@@ -1,13 +1,14 @@
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.cliente import Cliente
     from app.models.orden import Orden
     from app.models.turno import Turno
 
@@ -16,6 +17,10 @@ class RolUsuario(str, enum.Enum):
     administrador = "administrador"
     recepcion = "recepcion"
     mecanico = "mecanico"
+    cliente = "cliente"
+
+
+ROLES_PERSONAL = (RolUsuario.administrador, RolUsuario.recepcion, RolUsuario.mecanico)
 
 
 class Usuario(Base):
@@ -34,6 +39,11 @@ class Usuario(Base):
         default=RolUsuario.recepcion,
     )
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    cliente_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("clientes.id", name="fk_usuarios_cliente_id_clientes"),
+        unique=True,
+        nullable=True,
+    )
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -57,3 +67,4 @@ class Usuario(Base):
     turnos_registrados: Mapped[List["Turno"]] = relationship(
         "Turno", back_populates="registrado_por"
     )
+    cliente: Mapped[Optional["Cliente"]] = relationship("Cliente")

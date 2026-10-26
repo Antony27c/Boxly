@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.v1.vehiculos import service
-from app.core.dependencies import CurrentUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import MessageResponse
 from app.schemas.orden import OrdenResponse
@@ -24,7 +24,7 @@ MostradorUser = Annotated[
 )
 def listar_vehiculos(
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
     cliente_id: int | None = Query(default=None),
 ) -> list[VehiculoResponse]:
     return service.list_vehiculos(db, cliente_id=cliente_id)
@@ -52,7 +52,7 @@ def crear_vehiculo(
 def obtener_vehiculo(
     vehiculo_id: int,
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
 ) -> VehiculoResponse:
     return service.get_vehiculo(db, vehiculo_id)
 
@@ -65,7 +65,7 @@ def obtener_vehiculo(
 def historial_vehiculo(
     vehiculo_id: int,
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
 ) -> list[OrdenResponse]:
     return service.historial_ordenes(db, vehiculo_id)
 
