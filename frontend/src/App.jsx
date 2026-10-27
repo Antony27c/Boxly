@@ -13,6 +13,7 @@ import Ordenes from '@/pages/Ordenes'
 import Inventario from '@/pages/Inventario'
 import Usuarios from '@/pages/Usuarios'
 import Horarios from '@/pages/Horarios'
+import Dashboard from '@/pages/Dashboard'
 import Portal from '@/pages/Portal'
 import ResultadoPago from '@/pages/ResultadoPago'
 import NoEncontrado from '@/pages/NoEncontrado'
@@ -57,6 +58,7 @@ export default function App() {
           <Route element={<ProtectedRoute roles={ROLES_ADMIN} />}>
             <Route element={<AppLayout />}>
               <Route path="/usuarios" element={<Usuarios />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/admin" element={<Navigate to="/usuarios" replace />} />
             </Route>
           </Route>

@@ -9,6 +9,7 @@ export function inicioSegunRol(rol) {
 
 export const navegacion = [
   { a: '/inicio', texto: 'Inicio', roles: ROLES_TALLER },
+  { a: '/dashboard', texto: 'Dashboard', roles: ROLES_ADMIN },
   { a: '/portal', texto: 'Mis órdenes', roles: ROLES_CLIENTE },
   { a: '/clientes', texto: 'Clientes', roles: ROLES_MOSTRADOR },
   { a: '/vehiculos', texto: 'Vehículos', roles: ROLES_TALLER },

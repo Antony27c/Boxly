@@ -4,6 +4,12 @@ import { ROLES_ADMIN, ROLES_MOSTRADOR, ROLES_TALLER, tieneAcceso } from '@/route
 
 const accesos = [
   {
+    a: '/dashboard',
+    titulo: 'Dashboard',
+    texto: 'Productividad de cada mecánico: órdenes cerradas, tiempos y facturación.',
+    roles: ROLES_ADMIN,
+  },
+  {
     a: '/clientes',
     titulo: 'Clientes',
     texto: 'Alta, edición y búsqueda de los clientes del taller.',
