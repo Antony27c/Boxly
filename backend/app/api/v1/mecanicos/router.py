@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, status
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import date
  
 from app.core.dependencies import DbSession, require_roles
@@ -13,7 +13,7 @@ from .service import mecanicos_service
  
 router = APIRouter(prefix="/mecanicos", tags=["Mecánicos"])
  
-AdminUser = Usuario.__class__
+AdminUser = Annotated[Usuario, Depends(require_roles(RolUsuario.administrador))]
  
  
 @router.get("/{mecanico_id}/horarios", response_model=list[HorarioMecanicoResponse])
