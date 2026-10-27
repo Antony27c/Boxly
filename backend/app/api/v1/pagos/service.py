@@ -124,22 +124,17 @@ def get_pago(db: Session, usuario: Usuario, pago_id: int) -> PagoResponse:
     return PagoResponse.model_validate(_pago_del_usuario(db, usuario, pago_id))
 
 
-def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None) -> None:
-    token = get_settings().mp_access_token
-    if tipo != "payment" or not payment_id or not token:
-        return
+def _consultar_mp(token: str, payment_id: str) -> dict:
     try:
-        info = mercadopago.obtener_pago(token, payment_id)
+        return mercadopago.obtener_pago(token, payment_id)
     except mercadopago.MercadoPagoError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="No pudimos consultar el pago en Mercado Pago",
         ) from None
 
-    referencia = str(info.get("external_reference") or "")
-    pago = db.get(Pago, int(referencia)) if referencia.isdigit() else None
-    if pago is None:
-        return
+
+def _actualizar_desde_mp(pago: Pago, info: dict, payment_id: str) -> None:
     estado = ESTADOS_MP.get(info.get("status"), "pendiente")
     try:
         cobrado = Decimal(str(info.get("transaction_amount")))
@@ -148,7 +143,35 @@ def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None)
     if estado == "aprobado" and cobrado < pago.monto:
         estado = "rechazado"
     _aplicar_estado(pago, estado, str(info.get("id") or payment_id))
+
+
+def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None) -> None:
+    token = get_settings().mp_access_token
+    if tipo != "payment" or not payment_id or not token:
+        return
+    info = _consultar_mp(token, payment_id)
+    referencia = str(info.get("external_reference") or "")
+    pago = db.get(Pago, int(referencia)) if referencia.isdigit() else None
+    if pago is None:
+        return
+    _actualizar_desde_mp(pago, info, payment_id)
     db.commit()
+
+
+def confirmar_pago(db: Session, usuario: Usuario, pago_id: int, payment_id: str) -> PagoResponse:
+    pago = _pago_del_usuario(db, usuario, pago_id)
+    token = get_settings().mp_access_token
+    if token and payment_id.isdigit() and pago.estado != "aprobado":
+        info = _consultar_mp(token, payment_id)
+        if str(info.get("external_reference") or "") != str(pago.id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El pago de Mercado Pago no corresponde a este pago",
+            )
+        _actualizar_desde_mp(pago, info, payment_id)
+        db.commit()
+        db.refresh(pago)
+    return PagoResponse.model_validate(pago)
 
 
 def simular_pago(db: Session, usuario: Usuario, pago_id: int, estado: str) -> PagoResponse:

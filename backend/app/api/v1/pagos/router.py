@@ -5,7 +5,12 @@ from fastapi import APIRouter, Body, Depends, Query, status
 from app.api.v1.pagos import service
 from app.core.dependencies import DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.pago import PagoResponse, PreferenciaPagoResponse, SimularPagoRequest
+from app.schemas.pago import (
+    ConfirmarPagoRequest,
+    PagoResponse,
+    PreferenciaPagoResponse,
+    SimularPagoRequest,
+)
 from app.schemas.usuario import MessageResponse
 
 router = APIRouter(prefix="/pagos", tags=["Pagos"])
@@ -55,6 +60,20 @@ def crear_pago(orden_id: int, db: DbSession, usuario: PagadorUser) -> Preferenci
 )
 def obtener_pago(pago_id: int, db: DbSession, usuario: PagadorUser) -> PagoResponse:
     return service.get_pago(db, usuario, pago_id)
+
+
+@router.post(
+    "/{pago_id}/confirmar",
+    response_model=PagoResponse,
+    summary="Confirmar un pago al volver de Mercado Pago",
+)
+def confirmar_pago(
+    pago_id: int,
+    datos: ConfirmarPagoRequest,
+    db: DbSession,
+    usuario: PagadorUser,
+) -> PagoResponse:
+    return service.confirmar_pago(db, usuario, pago_id, datos.payment_id)
 
 
 @router.post(

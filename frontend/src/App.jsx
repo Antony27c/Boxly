@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/routes/ProtectedRoute'
-import { ROLES_ADMIN, ROLES_MOSTRADOR, ROLES_TALLER } from '@/routes/navegacion'
+import { ROLES_ADMIN, ROLES_CLIENTE, ROLES_MOSTRADOR, ROLES_TALLER } from '@/routes/navegacion'
 import AppLayout from '@/layouts/AppLayout'
 import Login from '@/pages/Login'
 import Inicio from '@/pages/Inicio'
@@ -12,6 +12,9 @@ import Turnos from '@/pages/Turnos'
 import Ordenes from '@/pages/Ordenes'
 import Inventario from '@/pages/Inventario'
 import Usuarios from '@/pages/Usuarios'
+import Horarios from '@/pages/Horarios'
+import Portal from '@/pages/Portal'
+import ResultadoPago from '@/pages/ResultadoPago'
 import NoEncontrado from '@/pages/NoEncontrado'
 
 export default function App() {
@@ -21,9 +24,16 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
 
-          <Route element={<ProtectedRoute />}>
+          <Route element={<ProtectedRoute roles={ROLES_TALLER} />}>
             <Route element={<AppLayout />}>
               <Route path="/inicio" element={<Inicio />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute roles={ROLES_CLIENTE} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/portal" element={<Portal />} />
+              <Route path="/portal/pago/:resultado" element={<ResultadoPago />} />
             </Route>
           </Route>
 
@@ -40,6 +50,7 @@ export default function App() {
               <Route path="/vehiculos/:id" element={<VehiculoDetalle />} />
               <Route path="/ordenes" element={<Ordenes />} />
               <Route path="/inventario" element={<Inventario />} />
+              <Route path="/horarios" element={<Horarios />} />
             </Route>
           </Route>
 
