@@ -27,5 +27,9 @@ class PreferenciaPagoResponse(BaseModel):
     url_pago: str
 
 
+class ConfirmarPagoRequest(BaseModel):
+    payment_id: str
+
+
 class SimularPagoRequest(BaseModel):
     estado: Literal["aprobado", "rechazado"]
