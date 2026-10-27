@@ -10,19 +10,7 @@ import SeccionFinanzas from '@/components/metricas/SeccionFinanzas'
 import useRecurso from '@/hooks/useRecurso'
 import { metricasService } from '@/services/metricas'
 import { aISO, sumarDias } from '@/utils/fechas'
-
-function pesos(valor) {
-  return Number(valor ?? 0).toLocaleString('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-  })
-}
-
-function horas(valor) {
-  if (valor === null || valor === undefined) return '—'
-  return valor >= 48 ? `${(valor / 24).toFixed(1)} días` : `${valor.toFixed(1)} h`
-}
+import { horas, pesos } from '@/utils/formato'
 
 function inicioDeMes(fecha, mesesAtras = 0) {
   const d = new Date(`${fecha}T12:00:00`)
@@ -109,6 +97,11 @@ export default function Dashboard() {
         titulo="Dashboard"
         descripcion="Productividad de cada mecánico, finanzas del taller y mejor mecánico del trimestre."
       />
+
+      <h2 className="mt-8 text-xl font-semibold tracking-tight">Productividad por mecánico</h2>
+      <p className="mt-1.5 text-sm text-muted">
+        Órdenes cerradas, tiempos y facturación de cada mecánico. El período de abajo aplica solo a esta sección.
+      </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         {presets.map((preset) => {

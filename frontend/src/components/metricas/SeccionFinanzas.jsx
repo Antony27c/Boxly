@@ -105,7 +105,7 @@ export default function SeccionFinanzas() {
     <section className="mt-12 border-t border-graphite-700 pt-8">
       <h2 className="text-xl font-semibold tracking-tight">Finanzas</h2>
       <p className="mt-1.5 text-sm text-muted">
-        Ingresos por órdenes entregadas, gasto en repuestos y balance del taller.
+        Ingresos por órdenes entregadas, gasto en repuestos y balance del taller. Tiene su propio período.
       </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
@@ -174,7 +174,11 @@ export default function SeccionFinanzas() {
               <Kpi
                 titulo="Cobrado online"
                 valor={pesos(finanzas.cobrado_online)}
-                detalle={finanzas.ingresos ? `${porcentajeOnline}% de los ingresos` : 'Pagos aprobados en el período'}
+                detalle={
+                  finanzas.ingresos && porcentajeOnline <= 100
+                    ? `${porcentajeOnline}% de los ingresos`
+                    : 'Pagos aprobados en el período'
+                }
               />
             </div>
 
