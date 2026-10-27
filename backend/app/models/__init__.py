@@ -9,7 +9,7 @@ from app.models.marca import Marca
 from app.models.modelo import Modelo
 from app.models.imagen_orden import ImagenOrden
 from app.models.pago import Pago
-
+from app.models.horario_mecanico import HorarioMecanico
 __all__ = [
     "RolUsuario",
     "Usuario",
@@ -24,4 +24,5 @@ __all__ = [
     "Modelo",
     "ImagenOrden",
     "Pago",
+    "HorarioMecanico",
 ]
