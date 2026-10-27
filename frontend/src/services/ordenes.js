@@ -41,10 +41,6 @@ export function proximosEstados(estado) {
   return TRANSICIONES[estado] ?? []
 }
 
-export function estadosPermitidos(estado) {
-  return [estado, ...(TRANSICIONES[estado] ?? [])]
-}
-
 function nombreEstado(codigo) {
   return ESTADOS_ORDEN.find((estado) => CODIGOS[estado] === codigo) ?? codigo
 }

@@ -5,19 +5,33 @@ import Loader from '@/components/ui/Loader'
 import Select from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import { ROLES_ADMIN, tieneAcceso } from '@/routes/navegacion'
 import { ESTADOS_ORDEN, ordenesService } from '@/services/ordenes'
 
 export const TAMANO_MAXIMO = 5 * 1024 * 1024
 export const TIPOS_IMAGEN = 'image/jpeg,image/png,image/webp'
 
 export default function ImagenesOrden({ orden }) {
-  const { token } = useAuth()
+  const { token, usuario } = useAuth()
   const entrada = useRef(null)
   const [etapa, setEtapa] = useState(orden.estado)
   const [subiendo, setSubiendo] = useState(false)
-  const [quitando, setQuitando] = useState(null)
+  const [quitando, setQuitando] = useState(false)
+  const [confirmarQuitar, setConfirmarQuitar] = useState(false)
   const [errorAccion, setErrorAccion] = useState('')
   const [ampliada, setAmpliada] = useState(null)
+
+  // Misma regla que la API: solo el administrador o quien subió la foto puede quitarla
+  const esAdmin = Boolean(usuario?.rol) && tieneAcceso(ROLES_ADMIN, usuario.rol)
+  const puedeQuitar = (imagen) => esAdmin || (imagen.usuario_id != null && imagen.usuario_id === usuario?.id)
+
+  // La etapa actual siempre está entre las opciones (aunque la orden esté cancelada)
+  const etapas = ESTADOS_ORDEN.filter((estado) => estado !== 'Cancelado' || estado === orden.estado)
+
+  function ampliar(imagen) {
+    setAmpliada(imagen)
+    setConfirmarQuitar(false)
+  }
 
   const cargar = useCallback((t) => ordenesService.imagenes(orden.id, t), [orden.id])
   const { datos: imagenes, cargando, error, recargar } = useRecurso(cargar)
@@ -58,16 +72,17 @@ export default function ImagenesOrden({ orden }) {
   }
 
   async function quitar(imagen) {
-    setQuitando(imagen.id)
+    setQuitando(true)
     setErrorAccion('')
     try {
       await ordenesService.quitarImagen(orden.id, imagen.id, token)
-      if (ampliada?.id === imagen.id) setAmpliada(null)
+      setAmpliada(null)
+      setConfirmarQuitar(false)
       await recargar()
     } catch (problema) {
       setErrorAccion(problema.message)
     } finally {
-      setQuitando(null)
+      setQuitando(false)
     }
   }
 
@@ -95,10 +110,7 @@ export default function ImagenesOrden({ orden }) {
           value={etapa}
           onChange={(e) => setEtapa(e.target.value)}
           disabled={subiendo}
-          opciones={ESTADOS_ORDEN.filter((estado) => estado !== 'Cancelado').map((estado) => ({
-            valor: estado,
-            texto: estado,
-          }))}
+          opciones={etapas.map((estado) => ({ valor: estado, texto: estado }))}
         />
         <input
           ref={entrada}
@@ -124,10 +136,10 @@ export default function ImagenesOrden({ orden }) {
             </h3>
             <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
               {lista.map((imagen) => (
-                <li key={imagen.id} className="group relative">
+                <li key={imagen.id} className="group">
                   <button
                     type="button"
-                    onClick={() => setAmpliada(imagen)}
+                    onClick={() => ampliar(imagen)}
                     className="block aspect-square w-full overflow-hidden rounded-box border border-graphite-700"
                   >
                     <img
@@ -136,15 +148,6 @@ export default function ImagenesOrden({ orden }) {
                       loading="lazy"
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Quitar foto"
-                    disabled={quitando === imagen.id}
-                    onClick={() => quitar(imagen)}
-                    className="absolute right-1 top-1 rounded-box bg-black/60 px-1.5 text-xs text-white opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
-                  >
-                    ✕
                   </button>
                 </li>
               ))}
@@ -160,15 +163,34 @@ export default function ImagenesOrden({ orden }) {
             alt={`Foto de la etapa ${ampliada.etapa ?? ''}`}
             className="max-h-[60vh] w-full rounded-box object-contain"
           />
-          <div className="flex items-center justify-between text-sm text-muted">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
             <span>
               {ampliada.etapa}
               {ampliada.fecha ? ` · ${new Date(ampliada.fecha).toLocaleString('es-AR')}` : ''}
               {ampliada.usuario_nombre ? ` · ${ampliada.usuario_nombre}` : ''}
             </span>
-            <Button variante="fantasma" onClick={() => setAmpliada(null)}>
-              Cerrar
-            </Button>
+            {confirmarQuitar ? (
+              <div className="flex items-center gap-2">
+                <span className="text-ink">¿Quitar esta foto?</span>
+                <Button variante="fantasma" onClick={() => setConfirmarQuitar(false)} disabled={quitando}>
+                  No
+                </Button>
+                <Button variante="peligro" onClick={() => quitar(ampliada)} cargando={quitando}>
+                  Sí, quitar
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {puedeQuitar(ampliada) && (
+                  <Button variante="fantasma" onClick={() => setConfirmarQuitar(true)}>
+                    Quitar foto
+                  </Button>
+                )}
+                <Button variante="fantasma" onClick={() => setAmpliada(null)}>
+                  Cerrar
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

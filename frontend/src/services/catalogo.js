@@ -43,6 +43,20 @@ function esperar(valor) {
   return new Promise((resolve) => setTimeout(() => resolve(valor), 150))
 }
 
+// Marca escrita (normalizada) -> id de la marca en la API (o null si no existe), para no
+// volver a buscar la marca cada vez que se escribe una letra en el modelo.
+const idsDeMarca = new Map()
+
+async function idDeMarca(marca, token) {
+  const clave = normalizar(marca)
+  if (!clave) return null
+  if (!idsDeMarca.has(clave)) {
+    const marcas = await api.get(`/api/v1/catalogo/marcas?q=${encodeURIComponent(marca)}`, token)
+    idsDeMarca.set(clave, marcas.find((item) => normalizar(item.nombre) === clave)?.id ?? null)
+  }
+  return idsDeMarca.get(clave)
+}
+
 export const catalogoService = {
   marcas: (q, token) =>
     USAR_MOCK
@@ -59,12 +73,10 @@ export const catalogoService = {
         : Object.values(CATALOGO).flat()
       return esperar(filtrar(modelos, q).map(aOpcion))
     }
-    return api
-      .get(`/api/v1/catalogo/marcas?q=${encodeURIComponent(marca ?? '')}`, token)
-      .then((marcas) => {
-        const elegida = marcas.find((item) => normalizar(item.nombre) === normalizar(marca))
+    return idDeMarca(marca, token)
+      .then((marcaId) => {
         const parametros = new URLSearchParams({ q: q ?? '' })
-        if (elegida) parametros.set('marca_id', elegida.id)
+        if (marcaId) parametros.set('marca_id', marcaId)
         return api.get(`/api/v1/catalogo/modelos?${parametros}`, token)
       })
       .then((lista) => lista.slice(0, 8).map(aOpcion))

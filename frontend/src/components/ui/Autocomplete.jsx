@@ -43,6 +43,7 @@ export default function Autocomplete({
   const [buscando, setBuscando] = useState(false)
   const contenedor = useRef(null)
   const consulta = useRef(0)
+  const escribioSinElegir = useRef(false)
 
   useEffect(() => {
     if (!abierto) return
@@ -84,9 +85,21 @@ export default function Autocomplete({
   }, [abierto])
 
   function elegir(opcion) {
+    escribioSinElegir.current = false
     onChange?.(opcion.texto)
     onElegir?.(opcion)
     setAbierto(false)
+  }
+
+  // Al salir del campo (Tab o clic afuera) se cierra la lista. Si se escribió un texto
+  // que coincide exacto con una sola opción, se toma como elegida.
+  function alSalir(evento) {
+    if (contenedor.current?.contains(evento.relatedTarget)) return
+    setAbierto(false)
+    if (!escribioSinElegir.current || !onElegir || buscar) return
+    const termino = normalizar(value).trim()
+    const iguales = (opciones ?? []).filter((opcion) => normalizar(opcion.texto).trim() === termino)
+    if (termino && iguales.length === 1) elegir(iguales[0])
   }
 
   function alPresionar(evento) {
@@ -109,7 +122,7 @@ export default function Autocomplete({
   const mostrarLista = abierto && !disabled && (value ?? '').trim().length >= minimo
 
   return (
-    <div ref={contenedor} className={`relative ${className}`}>
+    <div ref={contenedor} onBlur={alSalir} className={`relative ${className}`}>
       {label && (
         <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink">
           {label}
@@ -130,6 +143,7 @@ export default function Autocomplete({
         placeholder={placeholder}
         disabled={disabled}
         onChange={(e) => {
+          escribioSinElegir.current = true
           onChange?.(e.target.value)
           setAbierto(true)
         }}

@@ -355,7 +355,7 @@ export default function Inventario() {
         abierto={Boolean(aIngresar)}
         titulo={`Ingreso de stock · ${aIngresar?.nombre ?? ''}`}
         descripcion={`Stock actual: ${aIngresar?.stock ?? 0} unidades (mínimo ${aIngresar?.stock_minimo ?? 0}).`}
-        onCerrar={() => setAIngresar(null)}
+        onCerrar={() => !guardando && setAIngresar(null)}
       >
         <form onSubmit={ingresar} noValidate className="space-y-4">
           {errorIngreso && <Alert>{errorIngreso}</Alert>}

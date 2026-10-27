@@ -62,6 +62,7 @@ export default function Ordenes() {
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
   const [aviso, setAviso] = useState('')
+  const [errorFotos, setErrorFotos] = useState('')
 
   const cargarOrdenes = useCallback((t) => ordenesService.listar(t), [])
   const cargarVehiculos = useCallback((t) => vehiculosService.listar(t), [])
@@ -209,6 +210,11 @@ export default function Ordenes() {
       {aviso && (
         <div className="mt-4">
           <Alert tipo="ok">{aviso}</Alert>
+        </div>
+      )}
+      {errorFotos && (
+        <div className="mt-4">
+          <Alert>{errorFotos}</Alert>
         </div>
       )}
 
@@ -361,9 +367,14 @@ export default function Ordenes() {
           <CambioEstado
             orden={aCambiar}
             onCancelar={() => setACambiar(null)}
-            onListo={async (estado) => {
+            onListo={async (estado, fotosFallidas = []) => {
               setACambiar(null)
               setAviso(`La orden pasó a "${estado}".`)
+              setErrorFotos(
+                fotosFallidas.length > 0
+                  ? `No se pudieron subir estas fotos: ${fotosFallidas.join(', ')}. Cargalas de nuevo desde "Fotos".`
+                  : '',
+              )
               await recargar()
             }}
           />

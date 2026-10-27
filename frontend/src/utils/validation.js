@@ -65,12 +65,11 @@ export function validarVehiculo({ cliente_id, patente, marca, modelo, anio }) {
   return errores
 }
 
-export function validarOrden({ vehiculo_id, fecha, estado, descripcion, total }) {
+export function validarOrden({ vehiculo_id, fecha, descripcion, total }) {
   const errores = {}
 
   if (!vehiculo_id) errores.vehiculo_id = 'Elegí el vehículo.'
   if (!fecha) errores.fecha = 'Elegí la fecha de ingreso.'
-  if (!estado) errores.estado = 'Elegí el estado de la orden.'
 
   const detalle = descripcion.trim()
   if (!detalle) errores.descripcion = 'Describí el trabajo a realizar.'
