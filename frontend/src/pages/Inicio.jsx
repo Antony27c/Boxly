@@ -34,6 +34,12 @@ const accesos = [
     roles: ROLES_TALLER,
   },
   {
+    a: '/horarios',
+    titulo: 'Horarios y calendario',
+    texto: 'Franjas de trabajo de cada mecánico, turnos y órdenes de la semana.',
+    roles: ROLES_TALLER,
+  },
+  {
     a: '/usuarios',
     titulo: 'Usuarios',
     texto: 'Usuarios del sistema, roles y permisos de acceso.',

@@ -60,6 +60,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem(CLAVE_USUARIO, JSON.stringify(datos.usuario))
     setToken(datos.access_token)
     setUsuario(datos.usuario)
+    return datos.usuario
   }, [])
 
   const logout = useCallback(() => {

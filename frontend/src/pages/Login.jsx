@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { inicioSegunRol } from '@/routes/navegacion'
 import { validarLogin } from '@/utils/validation'
 import Field from '@/components/ui/Field'
 import Button from '@/components/ui/Button'
@@ -16,7 +17,6 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const destino = location.state?.desde ?? '/inicio'
 
   function cambiar(campo, valor) {
     setDatos((previo) => ({ ...previo, [campo]: valor }))
@@ -34,8 +34,8 @@ export default function Login() {
     setEnviando(true)
     setErrorApi('')
     try {
-      await login({ email: datos.email.trim(), password: datos.password })
-      navigate(destino, { replace: true })
+      const usuario = await login({ email: datos.email.trim(), password: datos.password })
+      navigate(location.state?.desde ?? inicioSegunRol(usuario?.rol), { replace: true })
     } catch (error) {
       setErrorApi(error.message)
     } finally {
