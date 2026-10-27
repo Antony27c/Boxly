@@ -35,6 +35,7 @@ class TurnoBase(BaseModel):
 
     cliente_id: int = Field(gt=0)
     vehiculo_id: Optional[int] = Field(default=None, gt=0)
+    mecanico_id: Optional[int] = Field(default=None, gt=0)
     fecha_hora: datetime
     motivo: Optional[str] = Field(default=None, max_length=200)
     notas: Optional[str] = None
@@ -52,6 +53,7 @@ class TurnoCreate(TurnoBase):
 class TurnoUpdate(BaseModel):
     cliente_id: Optional[int] = Field(default=None, gt=0)
     vehiculo_id: Optional[int] = Field(default=None, gt=0)
+    mecanico_id: Optional[int] = Field(default=None, gt=0)
     fecha_hora: Optional[datetime] = None
     estado: Optional[EstadoTurno] = None
     motivo: Optional[str] = Field(default=None, max_length=200)

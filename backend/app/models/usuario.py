@@ -65,6 +65,6 @@ class Usuario(Base):
         "Orden", foreign_keys="Orden.mecanico_id", back_populates="mecanico"
     )
     turnos_registrados: Mapped[List["Turno"]] = relationship(
-        "Turno", back_populates="registrado_por"
+        "Turno", foreign_keys="Turno.registrado_por_id", back_populates="registrado_por"
     )
     cliente: Mapped[Optional["Cliente"]] = relationship("Cliente")

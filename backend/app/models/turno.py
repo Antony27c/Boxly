@@ -25,6 +25,10 @@ class Turno(Base):
     registrado_por_id: Mapped[int] = mapped_column(
         ForeignKey("usuarios.id"), nullable=False
     )
+    # Mecánico que va a atender el turno (opcional, contrato S7 D8)
+    mecanico_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("usuarios.id", name="fk_turnos_mecanico_id_usuarios"), nullable=True
+    )
     fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # DER §3.7: pendiente | confirmado | cancelado | asistio
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="pendiente")
@@ -33,4 +37,8 @@ class Turno(Base):
 
     cliente: Mapped["Cliente"] = relationship(back_populates="turnos")
     vehiculo: Mapped[Optional["Vehiculo"]] = relationship(back_populates="turnos")
-    registrado_por: Mapped["Usuario"] = relationship(back_populates="turnos_registrados")
+    # foreign_keys explícito porque registrado_por_id y mecanico_id apuntan a usuarios
+    registrado_por: Mapped["Usuario"] = relationship(
+        foreign_keys=[registrado_por_id], back_populates="turnos_registrados"
+    )
+    mecanico: Mapped[Optional["Usuario"]] = relationship(foreign_keys=[mecanico_id])
