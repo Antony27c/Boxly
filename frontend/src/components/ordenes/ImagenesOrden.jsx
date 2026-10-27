@@ -7,7 +7,8 @@ import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { ESTADOS_ORDEN, ordenesService } from '@/services/ordenes'
 
-const TAMANO_MAXIMO = 8 * 1024 * 1024
+export const TAMANO_MAXIMO = 5 * 1024 * 1024
+export const TIPOS_IMAGEN = 'image/jpeg,image/png,image/webp'
 
 export default function ImagenesOrden({ orden }) {
   const { token } = useAuth()
@@ -37,10 +38,10 @@ export default function ImagenesOrden({ orden }) {
     const archivos = [...(evento.target.files ?? [])]
     evento.target.value = ''
     if (archivos.length === 0) return
-    const invalido = archivos.find((archivo) => !archivo.type.startsWith('image/'))
+    const invalido = archivos.find((archivo) => !TIPOS_IMAGEN.split(',').includes(archivo.type))
     if (invalido) return setErrorAccion(`"${invalido.name}" no es una imagen.`)
     const pesado = archivos.find((archivo) => archivo.size > TAMANO_MAXIMO)
-    if (pesado) return setErrorAccion(`"${pesado.name}" pesa más de 8 MB.`)
+    if (pesado) return setErrorAccion(`"${pesado.name}" pesa más de 5 MB.`)
 
     setSubiendo(true)
     setErrorAccion('')
@@ -102,7 +103,7 @@ export default function ImagenesOrden({ orden }) {
         <input
           ref={entrada}
           type="file"
-          accept="image/*"
+          accept={TIPOS_IMAGEN}
           capture="environment"
           multiple
           className="hidden"

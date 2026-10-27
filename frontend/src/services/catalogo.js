@@ -59,9 +59,14 @@ export const catalogoService = {
         : Object.values(CATALOGO).flat()
       return esperar(filtrar(modelos, q).map(aOpcion))
     }
-    const parametros = new URLSearchParams({ marca: marca ?? '' })
     return api
-      .get(`/api/v1/catalogo/modelos?${parametros}`, token)
-      .then((lista) => filtrar(lista.map((item) => aOpcion(item).texto), q).map(aOpcion))
+      .get(`/api/v1/catalogo/marcas?q=${encodeURIComponent(marca ?? '')}`, token)
+      .then((marcas) => {
+        const elegida = marcas.find((item) => normalizar(item.nombre) === normalizar(marca))
+        const parametros = new URLSearchParams({ q: q ?? '' })
+        if (elegida) parametros.set('marca_id', elegida.id)
+        return api.get(`/api/v1/catalogo/modelos?${parametros}`, token)
+      })
+      .then((lista) => lista.slice(0, 8).map(aOpcion))
   },
 }

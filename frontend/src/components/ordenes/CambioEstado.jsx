@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TAMANO_MAXIMO, TIPOS_IMAGEN } from '@/components/ordenes/ImagenesOrden'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Textarea from '@/components/ui/Textarea'
@@ -98,11 +99,24 @@ export default function CambioEstado({ orden, onListo, onCancelar }) {
         </label>
         <input
           type="file"
-          accept="image/*"
+          accept={TIPOS_IMAGEN}
           capture="environment"
           multiple
           disabled={guardando}
-          onChange={(e) => setFotos([...(e.target.files ?? [])])}
+          onChange={(e) => {
+            const elegidas = [...(e.target.files ?? [])]
+            const mala = elegidas.find(
+              (foto) => !TIPOS_IMAGEN.split(',').includes(foto.type) || foto.size > TAMANO_MAXIMO,
+            )
+            if (mala) {
+              setErrorApi(`"${mala.name}" tiene que ser JPG, PNG o WEBP de hasta 5 MB.`)
+              e.target.value = ''
+              setFotos([])
+              return
+            }
+            setErrorApi('')
+            setFotos(elegidas)
+          }}
           className="block w-full text-sm text-muted file:mr-3 file:rounded-box file:border-0 file:bg-graphite-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink"
         />
         {fotos.length > 0 && (

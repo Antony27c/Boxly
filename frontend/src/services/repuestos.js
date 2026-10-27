@@ -34,9 +34,5 @@ export const repuestosService = {
           actual.stock += Number(cantidad)
           return conAlerta(actual)
         })
-      : api.put(
-          `${RECURSO}/${repuesto.id}`,
-          { stock: Number(repuesto.stock) + Number(cantidad) },
-          token,
-        ),
+      : api.post(`${RECURSO}/${repuesto.id}/ingresos`, { cantidad: Number(cantidad) }, token),
 }
