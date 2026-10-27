@@ -128,6 +128,9 @@ export function validarUsuario({ nombre, apellido, email, rol, password = '' }, 
   return errores
 }
 
+// Máximo de una columna INTEGER en PostgreSQL: más grande, la base rechaza el valor
+export const STOCK_MAXIMO = 2_147_483_647
+
 export function validarRepuesto({ codigo, nombre, stock, stock_minimo, precio }) {
   const errores = {}
 
@@ -146,10 +149,12 @@ export function validarRepuesto({ codigo, nombre, stock, stock_minimo, precio })
 
   if (!String(stock).trim()) errores.stock = 'Ingresá el stock actual (0 si no hay).'
   else if (!/^\d+$/.test(String(stock).trim())) errores.stock = 'El stock debe ser un número entero, 0 o más.'
+  else if (Number(stock) > STOCK_MAXIMO) errores.stock = 'El stock es demasiado alto.'
 
   if (!String(stock_minimo).trim()) errores.stock_minimo = 'Ingresá el stock mínimo (0 si no aplica).'
   else if (!/^\d+$/.test(String(stock_minimo).trim()))
     errores.stock_minimo = 'El stock mínimo debe ser un número entero, 0 o más.'
+  else if (Number(stock_minimo) > STOCK_MAXIMO) errores.stock_minimo = 'El stock mínimo es demasiado alto.'
 
   return errores
 }
