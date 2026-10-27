@@ -28,15 +28,25 @@ export default function CambioEstado({ orden, onListo, onCancelar }) {
     setErrorApi('')
     try {
       await ordenesService.cambiarEstado(orden.id, nuevo, texto, token)
-      for (const foto of fotos) {
-        await ordenesService.subirImagen(orden.id, foto, nuevo, token)
-      }
-      onListo(nuevo)
     } catch (problema) {
       setErrorApi(problema.message)
-    } finally {
       setGuardando(false)
+      return
     }
+
+    // El cambio de etapa ya quedó guardado: si alguna foto falla, reintentar todo duplicaría
+    // las fotos que sí subieron (y el mock rechaza el cambio repetido). Se avisa cuáles faltan
+    // y se cierra igual.
+    const fallidas = []
+    for (const foto of fotos) {
+      try {
+        await ordenesService.subirImagen(orden.id, foto, nuevo, token)
+      } catch {
+        fallidas.push(foto.name)
+      }
+    }
+    setGuardando(false)
+    onListo(nuevo, fallidas)
   }
 
   return (

@@ -311,7 +311,15 @@ function leer() {
 }
 
 function escribir(datos) {
-  localStorage.setItem(CLAVE, JSON.stringify(datos))
+  try {
+    localStorage.setItem(CLAVE, JSON.stringify(datos))
+  } catch {
+    // Las fotos del mock se guardan en localStorage y su espacio es limitado (~5 MB)
+    throw new MockError(
+      'No hay más espacio para guardar datos de prueba. Quitá algunas fotos o reiniciá los datos simulados.',
+      507,
+    )
+  }
 }
 
 function esperar() {

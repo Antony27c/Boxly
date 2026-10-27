@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
 import { repuestosService, tieneStockBajo } from '@/services/repuestos'
+import { STOCK_MAXIMO } from '@/utils/validation'
 
 function pesos(valor) {
   const numero = Number(valor ?? 0)
@@ -33,6 +34,7 @@ export default function Inventario() {
   // ---------- Alta / edición ----------
   const [formularioAbierto, setFormularioAbierto] = useState(false)
   const [enEdicion, setEnEdicion] = useState(null)
+  const [guardandoRepuesto, setGuardandoRepuesto] = useState(false)
 
   // ---------- Ingreso de stock ----------
   const [aIngresar, setAIngresar] = useState(null)
@@ -98,16 +100,27 @@ export default function Inventario() {
   // Si la API rechaza (ej. código repetido) el error sube al formulario, que lo muestra.
   // Solo se cierra el modal y se recarga la lista cuando se guardó bien.
   async function guardar(datosRepuesto) {
-    if (enEdicion) {
-      await repuestosService.actualizar(enEdicion.id, datosRepuesto, token)
-      setAviso('Repuesto actualizado.')
-    } else {
-      await repuestosService.crear(datosRepuesto, token)
-      setAviso('Repuesto creado.')
+    setGuardandoRepuesto(true)
+    try {
+      if (enEdicion) {
+        await repuestosService.actualizar(enEdicion.id, datosRepuesto, token)
+        setAviso('Repuesto actualizado.')
+      } else {
+        await repuestosService.crear(datosRepuesto, token)
+        setAviso('Repuesto creado.')
+      }
+    } finally {
+      setGuardandoRepuesto(false)
     }
     setFormularioAbierto(false)
     setEnEdicion(null)
     await recargar()
+  }
+
+  // Mientras se guarda no se cierra el modal (Escape, ✕ o clic afuera): si la API
+  // devuelve un error, el formulario tiene que seguir abierto para mostrarlo.
+  function cerrarFormulario() {
+    if (!guardandoRepuesto) setFormularioAbierto(false)
   }
 
   // ---------- Activar / desactivar ----------
@@ -151,6 +164,10 @@ export default function Inventario() {
     const numero = Number(cantidad)
     if (!Number.isInteger(numero) || numero < 1) {
       setErrorCantidad('Ingresá una cantidad entera mayor a 0.')
+      return
+    }
+    if (Number(aIngresar.stock) + numero > STOCK_MAXIMO) {
+      setErrorCantidad('Con esa cantidad el stock supera el máximo permitido.')
       return
     }
     setGuardando(true)
@@ -339,14 +356,14 @@ export default function Inventario() {
         abierto={formularioAbierto}
         titulo={enEdicion ? 'Editar repuesto' : 'Nuevo repuesto'}
         descripcion="El código es único: no puede repetirse entre repuestos."
-        onCerrar={() => setFormularioAbierto(false)}
+        onCerrar={cerrarFormulario}
       >
         {/* key: al cambiar de repuesto el formulario se reinicia con los datos correctos */}
         <FormularioRepuesto
           key={enEdicion?.id ?? 'nuevo'}
           repuesto={enEdicion}
           onGuardar={guardar}
-          onCancelar={() => setFormularioAbierto(false)}
+          onCancelar={cerrarFormulario}
         />
       </Modal>
 
@@ -355,7 +372,7 @@ export default function Inventario() {
         abierto={Boolean(aIngresar)}
         titulo={`Ingreso de stock · ${aIngresar?.nombre ?? ''}`}
         descripcion={`Stock actual: ${aIngresar?.stock ?? 0} unidades (mínimo ${aIngresar?.stock_minimo ?? 0}).`}
-        onCerrar={() => setAIngresar(null)}
+        onCerrar={() => !guardando && setAIngresar(null)}
       >
         <form onSubmit={ingresar} noValidate className="space-y-4">
           {errorIngreso && <Alert>{errorIngreso}</Alert>}

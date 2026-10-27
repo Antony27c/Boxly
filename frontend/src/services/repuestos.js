@@ -25,6 +25,13 @@ function aPayloadApi(repuesto) {
   }
 }
 
+/* Al editar no se manda el stock: solo cambia con "Ingresar stock" o al usarlo en órdenes,
+   así no se pisan ingresos hechos mientras el formulario estaba abierto. */
+function aPayloadEdicion(repuesto) {
+  const { stock: _stock, ...resto } = aPayloadApi(repuesto)
+  return resto
+}
+
 /* Mock: la API real normaliza el código (mayúsculas y sin espacios), así que el mock también. */
 function normalizarCodigo(codigo) {
   return String(codigo).toUpperCase().replace(/\s/g, '').trim()
@@ -74,13 +81,13 @@ export const repuestosService = {
       ? operar((datos) => {
           const actual = datos.repuestos.find((item) => item.id === Number(id))
           if (!actual) throw new MockError('Repuesto no encontrado', 404)
-          const limpio = aPayloadApi(repuesto)
+          const limpio = aPayloadEdicion(repuesto)
           limpio.codigo = normalizarCodigo(limpio.codigo)
           validarCodigoUnicoMock(datos, limpio.codigo, id)
           Object.assign(actual, limpio)
           return conAlerta(actual)
         })
-      : api.put(`${RECURSO}/${id}`, aPayloadApi(repuesto), token),
+      : api.put(`${RECURSO}/${id}`, aPayloadEdicion(repuesto), token),
 
   /* "Eliminar" = desactivar: si el repuesto ya se usó en órdenes, la API no deja borrarlo. */
   cambiarEstado: (id, activo, token) =>

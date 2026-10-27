@@ -8,6 +8,7 @@ from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models.cliente import Cliente
 from app.models.detalle_orden import DetalleOrden
+from app.models.horario_mecanico import HorarioMecanico
 from app.models.orden import Historial_estado, Orden
 from app.models.pago import Pago
 from app.models.repuesto import Repuesto
@@ -204,9 +205,18 @@ ORDENES = [
 ]
 
 TURNOS = [
-    ("AB123CD", 1, 10, "confirmado", "Cambio de aceite y revision de frenos"),
-    ("AD789GH", 2, 9, "pendiente", "Revisión de la junta reparada"),
-    ("AE321JK", 3, 15, "confirmado", "Cambio de cubiertas"),
+    ("AB123CD", 1, 10, "confirmado", "Cambio de aceite y revision de frenos", MARIO),
+    ("AD789GH", 2, 9, "pendiente", "Revisión de la junta reparada", LUCIA),
+    ("AE321JK", 3, 15, "confirmado", "Cambio de cubiertas", MARIO),
+]
+
+# (mecánico, día 0=lunes..6=domingo, desde, hasta). Mario hace mañana y tarde.
+HORARIOS = [
+    (MARIO, 0, "08:00", "12:00"), (MARIO, 0, "14:00", "18:00"),
+    (MARIO, 2, "08:00", "12:00"), (MARIO, 2, "14:00", "18:00"),
+    (MARIO, 4, "08:00", "16:00"),
+    (LUCIA, 1, "09:00", "17:00"), (LUCIA, 3, "09:00", "17:00"),
+    (LUCIA, 5, "08:00", "12:00"),
 ]
 
 
@@ -322,15 +332,25 @@ def main() -> int:
         }
 
         ahora = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
-        for patente, dias, hora, estado, motivo in TURNOS:
+        for patente, dias, hora, estado, motivo, mecanico in TURNOS:
             vehiculo = vehiculos[patente]
             obtener_o_crear(
                 db, Turno, [Turno.vehiculo_id == vehiculo.id, Turno.motivo == motivo],
                 dict(
                     cliente_id=vehiculo.cliente_id, vehiculo_id=vehiculo.id, registrado_por_id=recepcion.id,
+                    mecanico_id=usuarios[mecanico].id,
                     fecha_hora=(ahora + timedelta(days=dias)).replace(hour=hora, tzinfo=timezone.utc),
                     estado=estado, motivo=motivo,
                 ),
+            )
+
+        for mecanico, dia, desde, hasta in HORARIOS:
+            mecanico_id = usuarios[mecanico].id
+            obtener_o_crear(
+                db, HorarioMecanico,
+                [HorarioMecanico.mecanico_id == mecanico_id, HorarioMecanico.dia_semana == dia,
+                 HorarioMecanico.hora_desde == desde],
+                dict(mecanico_id=mecanico_id, dia_semana=dia, hora_desde=desde, hora_hasta=hasta),
             )
 
         if db.scalar(select(Orden).where(Orden.codigo == "OT-DEMO-1")) is None:

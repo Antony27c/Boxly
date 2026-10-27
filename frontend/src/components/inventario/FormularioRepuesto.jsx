@@ -102,7 +102,8 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
           value={datos.stock}
           onChange={(e) => cambiar('stock', e.target.value)}
           error={errores.stock}
-          disabled={guardando}
+          ayuda={esEdicion ? 'Para sumar unidades usá "Ingresar stock".' : undefined}
+          disabled={guardando || esEdicion}
         />
         <Field
           label="Stock mínimo"
