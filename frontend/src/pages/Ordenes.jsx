@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import CambioEstado from '@/components/ordenes/CambioEstado'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
 import FormularioOrden from '@/components/ordenes/FormularioOrden'
 import HistorialOrden from '@/components/ordenes/HistorialOrden'
+import ImagenesOrden from '@/components/ordenes/ImagenesOrden'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -17,7 +19,7 @@ import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
 import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { ESTADOS_ORDEN, ordenesService, sePuedeEliminar } from '@/services/ordenes'
+import { ESTADOS_ORDEN, ordenesService, proximosEstados, sePuedeEliminar } from '@/services/ordenes'
 import { vehiculosService } from '@/services/vehiculos'
 
 const TONOS = {
@@ -54,6 +56,8 @@ export default function Ordenes() {
   const [formularioAbierto, setFormularioAbierto] = useState(false)
   const [conHistorial, setConHistorial] = useState(null)
   const [conDetalles, setConDetalles] = useState(null)
+  const [conFotos, setConFotos] = useState(null)
+  const [aCambiar, setACambiar] = useState(null)
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
@@ -242,7 +246,14 @@ export default function Ordenes() {
                       {vehiculo?.patente ?? 'Vehículo eliminado'}
                     </p>
                     <p className="text-sm text-muted">
-                      {vehiculo ? `${vehiculo.marca} ${vehiculo.modelo}` : '—'}
+                      {vehiculo ? (
+                        <>
+                          {vehiculo.marca}{' '}
+                          <span className="text-base font-bold text-ink">{vehiculo.modelo}</span>
+                        </>
+                      ) : (
+                        '—'
+                      )}
                       {cliente ? ` · ${cliente.apellido}, ${cliente.nombre}` : ''}
                     </p>
                   </div>
@@ -272,6 +283,11 @@ export default function Ordenes() {
                       <Button variante="secundario">Ver vehículo</Button>
                     </Link>
                   )}
+                  {proximosEstados(orden.estado).length > 0 && (
+                    <Button variante="secundario" onClick={() => setACambiar(orden)}>
+                      Cambiar etapa
+                    </Button>
+                  )}
                   <Button
                     variante="fantasma"
                     onClick={() => {
@@ -283,6 +299,9 @@ export default function Ordenes() {
                   </Button>
                   <Button variante="fantasma" onClick={() => setConDetalles(orden)}>
                     Detalles
+                  </Button>
+                  <Button variante="fantasma" onClick={() => setConFotos(orden)}>
+                    Fotos
                   </Button>
                   <Button variante="fantasma" onClick={() => setConHistorial(orden)}>
                     Historial
@@ -333,9 +352,38 @@ export default function Ordenes() {
       </Modal>
 
       <Modal
+        abierto={Boolean(aCambiar)}
+        titulo={`Cambiar etapa de la orden ${aCambiar?.codigo ?? `#${aCambiar?.id ?? ''}`}`}
+        descripcion="Cada cambio de etapa necesita una descripción de lo que se hizo."
+        onCerrar={() => setACambiar(null)}
+      >
+        {aCambiar && (
+          <CambioEstado
+            orden={aCambiar}
+            onCancelar={() => setACambiar(null)}
+            onListo={async (estado) => {
+              setACambiar(null)
+              setAviso(`La orden pasó a "${estado}".`)
+              await recargar()
+            }}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        abierto={Boolean(conFotos)}
+        titulo={`Fotos de la orden ${conFotos?.codigo ?? `#${conFotos?.id ?? ''}`}`}
+        descripcion="Fotos del vehículo en cada etapa del trabajo."
+        ancho="max-w-2xl"
+        onCerrar={() => setConFotos(null)}
+      >
+        {conFotos && <ImagenesOrden orden={conFotos} />}
+      </Modal>
+
+      <Modal
         abierto={Boolean(conHistorial)}
         titulo={`Historial de la orden ${conHistorial?.codigo ?? `#${conHistorial?.id ?? ''}`}`}
-        descripcion="Cambios de estado registrados, del más viejo al más reciente."
+        descripcion="Seguimiento de la orden etapa por etapa, con descripción, responsable y fotos."
         onCerrar={() => setConHistorial(null)}
       >
         {conHistorial && <HistorialOrden ordenId={conHistorial.id} />}

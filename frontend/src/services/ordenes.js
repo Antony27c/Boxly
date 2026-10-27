@@ -1,4 +1,4 @@
-import { api } from '@/lib/api'
+import { api, urlArchivo } from '@/lib/api'
 import { MockError, operar, proximoId } from '@/mocks/db'
 import { usaMock } from '@/services/config'
 
@@ -25,6 +25,20 @@ const TRANSICIONES = {
   Listo: ['Entregado'],
   Entregado: [],
   Cancelado: [],
+}
+
+export const DESCRIPCION_ESTADOS = {
+  Pendiente: 'La orden está abierta pero el vehículo todavía no entró al taller.',
+  Ingresado: 'El vehículo ya está en el taller y espera que lo revise un mecánico.',
+  'En diagnóstico': 'El mecánico está revisando el vehículo para encontrar la falla y armar el presupuesto.',
+  'Esperando repuestos': 'El trabajo está frenado hasta que lleguen los repuestos pedidos.',
+  Listo: 'El trabajo terminó y el vehículo está listo para que lo retiren.',
+  Entregado: 'El cliente retiró el vehículo. La orden queda cerrada.',
+  Cancelado: 'La orden se canceló y no se va a hacer el trabajo.',
+}
+
+export function proximosEstados(estado) {
+  return TRANSICIONES[estado] ?? []
 }
 
 export function estadosPermitidos(estado) {
@@ -113,7 +127,78 @@ function repuestoMock(datos, repuestoId, cantidad) {
   return repuesto
 }
 
+function imagenDesdeApi(imagen) {
+  return {
+    ...imagen,
+    etapa: imagen.etapa ? nombreEstado(imagen.etapa) : null,
+    url: urlArchivo(imagen.url),
+  }
+}
+
+function achicarImagen(archivo, ladoMaximo = 1280) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader()
+    lector.onerror = () => reject(new MockError('No pudimos leer la imagen.', 400))
+    lector.onload = () => {
+      const imagen = new Image()
+      imagen.onerror = () => reject(new MockError('El archivo no es una imagen válida.', 400))
+      imagen.onload = () => {
+        const escala = Math.min(1, ladoMaximo / Math.max(imagen.width, imagen.height))
+        const lienzo = document.createElement('canvas')
+        lienzo.width = Math.round(imagen.width * escala)
+        lienzo.height = Math.round(imagen.height * escala)
+        lienzo.getContext('2d').drawImage(imagen, 0, 0, lienzo.width, lienzo.height)
+        resolve(lienzo.toDataURL('image/jpeg', 0.8))
+      }
+      imagen.src = lector.result
+    }
+    lector.readAsDataURL(archivo)
+  })
+}
+
 export const ordenesService = {
+  imagenes: (ordenId, token) =>
+    USAR_MOCK
+      ? operar((datos) => {
+          buscarOrden(datos, ordenId)
+          return (datos.imagenes_orden ?? []).filter((item) => item.orden_id === Number(ordenId))
+        })
+      : api.get(`${RECURSO}/${ordenId}/imagenes`, token).then((lista) => lista.map(imagenDesdeApi)),
+
+  subirImagen: async (ordenId, archivo, etapa, token) => {
+    if (USAR_MOCK) {
+      const url = await achicarImagen(archivo)
+      return operar((datos) => {
+        buscarOrden(datos, ordenId)
+        datos.imagenes_orden = datos.imagenes_orden ?? []
+        const nueva = {
+          id: proximoId(datos.imagenes_orden),
+          orden_id: Number(ordenId),
+          etapa,
+          url,
+          usuario_nombre: null,
+          fecha: new Date().toISOString(),
+        }
+        datos.imagenes_orden.push(nueva)
+        return nueva
+      })
+    }
+    const formulario = new FormData()
+    formulario.append('archivo', archivo)
+    if (etapa) formulario.append('etapa', CODIGOS[etapa] ?? etapa)
+    return api.subir(`${RECURSO}/${ordenId}/imagenes`, formulario, token).then(imagenDesdeApi)
+  },
+
+  quitarImagen: (ordenId, imagenId, token) =>
+    USAR_MOCK
+      ? operar((datos) => {
+          datos.imagenes_orden = (datos.imagenes_orden ?? []).filter(
+            (item) => !(item.id === Number(imagenId) && item.orden_id === Number(ordenId)),
+          )
+          return null
+        })
+      : api.del(`${RECURSO}/${ordenId}/imagenes/${imagenId}`, token),
+
   mecanicos: (token) =>
     USAR_MOCK
       ? operar((datos) =>
@@ -267,6 +352,23 @@ export const ordenesService = {
           return null
         })
       : api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),
+
+  cambiarEstado: (id, estado, comentario, token) =>
+    USAR_MOCK
+      ? operar((datos) => {
+          const actual = buscarOrden(datos, id)
+          const estadoAnterior = actual.estado
+          if (estado === estadoAnterior) {
+            throw new MockError('La orden ya está en esa etapa.', 400)
+          }
+          validarTransicion(estadoAnterior, estado)
+          actual.estado = estado
+          registrarHistorialMock(datos, actual, estadoAnterior, comentario)
+          return actual
+        })
+      : api
+          .patch(`${RECURSO}/${id}`, { estado: CODIGOS[estado], comentario_cambio: comentario }, token)
+          .then(desdeApi),
 
   actualizar: (id, orden, token) =>
     USAR_MOCK

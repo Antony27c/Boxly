@@ -10,7 +10,8 @@ import Vehiculos from '@/pages/Vehiculos'
 import VehiculoDetalle from '@/pages/VehiculoDetalle'
 import Turnos from '@/pages/Turnos'
 import Ordenes from '@/pages/Ordenes'
-import Administracion from '@/pages/Administracion'
+import Inventario from '@/pages/Inventario'
+import Usuarios from '@/pages/Usuarios'
 import NoEncontrado from '@/pages/NoEncontrado'
 
 export default function App() {
@@ -38,12 +39,14 @@ export default function App() {
               <Route path="/vehiculos" element={<Vehiculos />} />
               <Route path="/vehiculos/:id" element={<VehiculoDetalle />} />
               <Route path="/ordenes" element={<Ordenes />} />
+              <Route path="/inventario" element={<Inventario />} />
             </Route>
           </Route>
 
           <Route element={<ProtectedRoute roles={ROLES_ADMIN} />}>
             <Route element={<AppLayout />}>
-              <Route path="/admin" element={<Administracion />} />
+              <Route path="/usuarios" element={<Usuarios />} />
+              <Route path="/admin" element={<Navigate to="/usuarios" replace />} />
             </Route>
           </Route>
 

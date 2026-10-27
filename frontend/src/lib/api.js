@@ -22,12 +22,19 @@ function mensajeSegunEstado(status, detalle) {
   return 'No pudimos completar la operación.'
 }
 
+export function urlArchivo(ruta) {
+  if (!ruta || /^(https?:|data:|blob:)/.test(ruta)) return ruta
+  return `${BASE_URL}${ruta.startsWith('/') ? '' : '/'}${ruta}`
+}
+
 async function request(path, { method = 'GET', body, token, form = false } = {}) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
 
   let payload
-  if (form) {
+  if (body instanceof FormData) {
+    payload = body
+  } else if (form) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded'
     payload = new URLSearchParams(body).toString()
   } else if (body !== undefined) {
@@ -69,6 +76,7 @@ export const api = {
   put: (path, body, token) => request(path, { method: 'PUT', body, token }),
   patch: (path, body, token) => request(path, { method: 'PATCH', body, token }),
   del: (path, token) => request(path, { method: 'DELETE', token }),
+  subir: (path, formData, token) => request(path, { method: 'POST', body: formData, token }),
 }
 
 export const authApi = {

@@ -73,8 +73,9 @@ export default function VehiculoDetalle() {
           <p className="font-mono text-3xl font-bold tracking-widest text-amber">
             {vehiculo.patente}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            {vehiculo.marca} {vehiculo.modelo}
+          <h1 className="mt-1 tracking-tight">
+            <span className="text-lg font-medium text-muted">{vehiculo.marca}</span>{' '}
+            <span className="text-3xl font-bold">{vehiculo.modelo}</span>
           </h1>
           <p className="mt-1 text-sm text-muted">
             {[vehiculo.anio, vehiculo.color].filter(Boolean).join(' · ')}

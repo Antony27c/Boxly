@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Alert from '@/components/ui/Alert'
+import Autocomplete from '@/components/ui/Autocomplete'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Select from '@/components/ui/Select'
@@ -38,6 +39,20 @@ export default function FormularioTurno({
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [textoCliente, setTextoCliente] = useState(() => {
+    const cliente = clientes.find((item) => item.id === Number(datos.cliente_id))
+    return cliente ? `${cliente.apellido}, ${cliente.nombre}` : ''
+  })
+
+  const opcionesCliente = useMemo(
+    () =>
+      clientes.map((cliente) => ({
+        valor: cliente.id,
+        texto: `${cliente.apellido}, ${cliente.nombre}`,
+        detalle: cliente.telefono ? `Tel. ${cliente.telefono}` : undefined,
+      })),
+    [clientes],
+  )
 
   const vehiculosDelCliente = useMemo(
     () => vehiculos.filter((v) => v.cliente_id === Number(datos.cliente_id)),
@@ -97,19 +112,19 @@ export default function FormularioTurno({
       {errorApi && <Alert>{errorApi}</Alert>}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Select
+        <Autocomplete
           label="Cliente"
-          value={datos.cliente_id}
-          onChange={(e) => cambiar('cliente_id', e.target.value)}
+          value={textoCliente}
+          onChange={(texto) => {
+            setTextoCliente(texto)
+            if (datos.cliente_id) cambiar('cliente_id', '')
+          }}
+          onElegir={(opcion) => cambiar('cliente_id', opcion.valor)}
+          opciones={opcionesCliente}
           error={errores.cliente_id}
           disabled={guardando}
-          opciones={[
-            { valor: '', texto: 'Elegí un cliente…' },
-            ...clientes.map((cliente) => ({
-              valor: cliente.id,
-              texto: `${cliente.apellido}, ${cliente.nombre}`,
-            })),
-          ]}
+          placeholder="Buscá por apellido o nombre"
+          sinResultados="No hay clientes con ese nombre."
         />
         <Select
           label="Vehículo"

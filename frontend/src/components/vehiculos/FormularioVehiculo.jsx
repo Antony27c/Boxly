@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Alert from '@/components/ui/Alert'
+import Autocomplete from '@/components/ui/Autocomplete'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
-import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
+import { useAuth } from '@/context/AuthContext'
+import { catalogoService } from '@/services/catalogo'
 import { validarVehiculo } from '@/utils/validation'
 
 const VACIO = {
@@ -18,6 +20,7 @@ const VACIO = {
 }
 
 export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar, onCancelar }) {
+  const { token } = useAuth()
   const [datos, setDatos] = useState(() =>
     Object.fromEntries(
       Object.keys(VACIO).map((campo) => [campo, String(vehiculo?.[campo] ?? VACIO[campo])]),
@@ -26,6 +29,27 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
+
+  const [textoCliente, setTextoCliente] = useState(() => {
+    const cliente = clientes.find((item) => item.id === Number(datos.cliente_id))
+    return cliente ? `${cliente.apellido}, ${cliente.nombre}` : ''
+  })
+
+  const opcionesCliente = useMemo(
+    () =>
+      clientes.map((cliente) => ({
+        valor: String(cliente.id),
+        texto: `${cliente.apellido}, ${cliente.nombre}`,
+        detalle: `DNI ${cliente.dni}`,
+      })),
+    [clientes],
+  )
+
+  const buscarMarcas = useCallback((texto) => catalogoService.marcas(texto, token), [token])
+  const buscarModelos = useCallback(
+    (texto) => catalogoService.modelos(datos.marca, texto, token),
+    [datos.marca, token],
+  )
 
   function cambiar(campo, valor) {
     setDatos((previo) => ({ ...previo, [campo]: valor }))
@@ -64,19 +88,19 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
     <form onSubmit={enviar} noValidate className="space-y-4">
       {errorApi && <Alert>{errorApi}</Alert>}
 
-      <Select
+      <Autocomplete
         label="Cliente"
-        value={datos.cliente_id}
-        onChange={(e) => cambiar('cliente_id', e.target.value)}
+        value={textoCliente}
+        onChange={(texto) => {
+          setTextoCliente(texto)
+          if (datos.cliente_id) cambiar('cliente_id', '')
+        }}
+        onElegir={(opcion) => cambiar('cliente_id', opcion.valor)}
+        opciones={opcionesCliente}
         error={errores.cliente_id}
         disabled={guardando}
-        opciones={[
-          { valor: '', texto: 'Elegí un cliente…' },
-          ...clientes.map((cliente) => ({
-            valor: cliente.id,
-            texto: `${cliente.apellido}, ${cliente.nombre} — DNI ${cliente.dni}`,
-          })),
-        ]}
+        placeholder="Buscá por apellido o DNI"
+        sinResultados="No hay clientes con ese nombre o DNI."
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -89,21 +113,25 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
           disabled={guardando}
           placeholder="AC482KL"
         />
-        <Field
+        <Autocomplete
           label="Marca"
           value={datos.marca}
-          onChange={(e) => cambiar('marca', e.target.value)}
+          onChange={(valor) => cambiar('marca', valor)}
+          buscar={buscarMarcas}
           error={errores.marca}
           disabled={guardando}
           placeholder="Volkswagen"
+          sinResultados="No está en el catálogo, podés escribirla igual."
         />
-        <Field
+        <Autocomplete
           label="Modelo"
           value={datos.modelo}
-          onChange={(e) => cambiar('modelo', e.target.value)}
+          onChange={(valor) => cambiar('modelo', valor)}
+          buscar={buscarModelos}
           error={errores.modelo}
           disabled={guardando}
           placeholder="Gol Trend"
+          sinResultados="No está en el catálogo, podés escribirlo igual."
         />
         <Field
           label="Año"

@@ -20,7 +20,7 @@ const TONOS_ROL = {
   mecanico: 'neutro',
 }
 
-export default function Administracion() {
+export default function Usuarios() {
   const { token } = useAuth()
   const [busqueda, setBusqueda] = useState('')
   const [rolFiltro, setRolFiltro] = useState('')
@@ -101,7 +101,7 @@ export default function Administracion() {
   return (
     <div className="animate-bay-in">
       <EncabezadoPagina
-        titulo="Administración"
+        titulo="Usuarios"
         descripcion={`Usuarios del sistema y permisos de acceso. ${activos} ${
           activos === 1 ? 'usuario activo' : 'usuarios activos'
         }.`}

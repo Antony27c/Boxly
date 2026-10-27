@@ -175,8 +175,9 @@ export default function Vehiculos() {
                     <p className="font-mono text-lg font-semibold tracking-wider text-amber">
                       {vehiculo.patente}
                     </p>
-                    <p className="mt-1 font-medium">
-                      {vehiculo.marca} {vehiculo.modelo}
+                    <p className="mt-1">
+                      <span className="text-sm text-muted">{vehiculo.marca}</span>{' '}
+                      <span className="text-lg font-bold tracking-tight">{vehiculo.modelo}</span>
                     </p>
                     <p className="text-sm text-muted">
                       {[vehiculo.anio, vehiculo.color].filter(Boolean).join(' · ')}

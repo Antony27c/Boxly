@@ -128,6 +128,7 @@ const SEMILLA = {
     },
   ],
   historial_estados: [],
+  imagenes_orden: [],
   repuestos: [
     {
       id: 1,
