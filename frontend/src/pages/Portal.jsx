@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -38,6 +39,10 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
         Ingresó el {fecha(orden.fecha_ingreso)}
         {orden.fecha_estimada_entrega && ` · Entrega estimada ${fecha(orden.fecha_estimada_entrega)}`}
       </p>
+
+      <Link to={`/portal/orden/${orden.id}`} className="mt-3 inline-block text-sm text-amber-deep hover:underline">
+        Ver seguimiento →
+      </Link>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-graphite-700 pt-4">
         <div>

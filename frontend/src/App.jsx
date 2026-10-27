@@ -14,6 +14,8 @@ import Inventario from '@/pages/Inventario'
 import Usuarios from '@/pages/Usuarios'
 import Horarios from '@/pages/Horarios'
 import Dashboard from '@/pages/Dashboard'
+import PortalOrden from '@/pages/PortalOrden'
+import Raiz from '@/routes/Raiz'
 import Portal from '@/pages/Portal'
 import ResultadoPago from '@/pages/ResultadoPago'
 import NoEncontrado from '@/pages/NoEncontrado'
@@ -34,6 +36,7 @@ export default function App() {
           <Route element={<ProtectedRoute roles={ROLES_CLIENTE} />}>
             <Route element={<AppLayout />}>
               <Route path="/portal" element={<Portal />} />
+              <Route path="/portal/orden/:id" element={<PortalOrden />} />
               <Route path="/portal/pago/:resultado" element={<ResultadoPago />} />
             </Route>
           </Route>
@@ -59,11 +62,12 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/usuarios" element={<Usuarios />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/finanzas" element={<Navigate to="/dashboard" replace />} />
               <Route path="/admin" element={<Navigate to="/usuarios" replace />} />
             </Route>
           </Route>
 
-          <Route path="/" element={<Navigate to="/inicio" replace />} />
+          <Route path="/" element={<Raiz />} />
           <Route path="*" element={<NoEncontrado />} />
         </Routes>
       </AuthProvider>
