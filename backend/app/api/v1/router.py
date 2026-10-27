@@ -11,6 +11,7 @@ from app.api.v1.turnos.router import router as turnos_router
 from app.api.v1.vehiculos.router import router as vehiculos_router
 from app.api.v1.catalogo.router import router as catalogo_router
 from app.api.v1.metricas.router import router as metricas_router
+from app.api.v1.mecanicos.router import router as mecanicos_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/api/v1")
@@ -24,3 +25,4 @@ api_router.include_router(catalogo_router, prefix="/api/v1")
 api_router.include_router(metricas_router,prefix="/api/v1")
 api_router.include_router(portal_router, prefix="/api/v1")
 api_router.include_router(pagos_router, prefix="/api/v1")
+api_router.include_router(mecanicos_router, prefix="/api/v1")
