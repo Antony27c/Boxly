@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.repuestos import repository
-from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdate
+from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate
 
 
 def _to_response(repuesto) -> RepuestoResponse:
@@ -30,8 +30,13 @@ def _validar_codigo_unico(db: Session, codigo: str, excluir_id: int | None) -> N
         )
 
 
-def list_repuestos(db: Session, *, solo_activos: bool = False) -> list[RepuestoResponse]:
-    return [_to_response(r) for r in repository.list_repuestos(db, solo_activos=solo_activos)]
+def list_repuestos(
+    db: Session, *, solo_activos: bool = False, q: str | None = None
+) -> list[RepuestoResponse]:
+    return [
+        _to_response(r)
+        for r in repository.list_repuestos(db, solo_activos=solo_activos, q=q)
+    ]
 
 
 def list_stock_bajo(db: Session) -> list[RepuestoResponse]:
@@ -67,3 +72,14 @@ def delete_repuesto(db: Session, repuesto_id: int) -> None:
             detail="No se puede eliminar: el repuesto se usó en órdenes. Desactivalo.",
         )
     repository.delete(db, repuesto)
+
+
+def ingresar_stock(db: Session, repuesto_id: int, datos: IngresoStockRequest) -> RepuestoResponse:
+    repuesto = _get_or_404(db, repuesto_id)
+    if not repuesto.activo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede ingresar stock de un repuesto inactivo.",
+        )
+    return _to_response(repository.agregar_stock(db, repuesto, datos.cantidad))
+

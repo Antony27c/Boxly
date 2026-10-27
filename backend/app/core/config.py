@@ -1,8 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
+
+UPLOADS_DIR = Path(__file__).resolve().parents[2] / "uploads"
 
 
 class Settings(BaseSettings):
@@ -44,6 +47,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    mp_access_token: str | None = None
+    frontend_url: str = "http://localhost:5173"
+    backend_public_url: str | None = None
 
     @property
     def cors_origins_list(self) -> list[str]:

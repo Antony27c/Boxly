@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.v1.vehiculos import service
-from app.core.dependencies import CurrentUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import MessageResponse
 from app.schemas.orden import OrdenResponse
@@ -24,10 +24,13 @@ MostradorUser = Annotated[
 )
 def listar_vehiculos(
     db: DbSession,
-    _: CurrentUser,
+    usuario: PersonalUser,
     cliente_id: int | None = Query(default=None),
+    q: str | None = Query(default=None),
 ) -> list[VehiculoResponse]:
-    return service.list_vehiculos(db, cliente_id=cliente_id)
+    return service.list_vehiculos(
+        db, cliente_id=cliente_id, mecanico_id=filtro_mecanico(usuario), q=q
+    )
 
 
 @router.post(
@@ -52,9 +55,9 @@ def crear_vehiculo(
 def obtener_vehiculo(
     vehiculo_id: int,
     db: DbSession,
-    _: CurrentUser,
+    usuario: PersonalUser,
 ) -> VehiculoResponse:
-    return service.get_vehiculo(db, vehiculo_id)
+    return service.get_vehiculo(db, vehiculo_id, filtro_mecanico(usuario))
 
 
 @router.get(
@@ -65,9 +68,9 @@ def obtener_vehiculo(
 def historial_vehiculo(
     vehiculo_id: int,
     db: DbSession,
-    _: CurrentUser,
+    usuario: PersonalUser,
 ) -> list[OrdenResponse]:
-    return service.historial_ordenes(db, vehiculo_id)
+    return service.historial_ordenes(db, vehiculo_id, filtro_mecanico(usuario))
 
 
 @router.put(

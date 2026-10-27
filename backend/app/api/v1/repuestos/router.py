@@ -3,9 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.v1.repuestos import service
-from app.core.dependencies import CurrentUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdate
+from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate
 from app.schemas.usuario import MessageResponse
 
 router = APIRouter(prefix="/repuestos", tags=["Repuestos"])
@@ -23,10 +23,11 @@ MostradorUser = Annotated[
 )
 def listar_repuestos(
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
     solo_activos: bool = Query(default=False),
+    q: str | None = Query(default=None),
 ) -> list[RepuestoResponse]:
-    return service.list_repuestos(db, solo_activos=solo_activos)
+    return service.list_repuestos(db, solo_activos=solo_activos, q=q)
 
 
 @router.get(
@@ -34,7 +35,7 @@ def listar_repuestos(
     response_model=list[RepuestoResponse],
     summary="Repuestos con stock menor o igual al mínimo",
 )
-def listar_stock_bajo(db: DbSession, _: CurrentUser) -> list[RepuestoResponse]:
+def listar_stock_bajo(db: DbSession, _: PersonalUser) -> list[RepuestoResponse]:
     return service.list_stock_bajo(db)
 
 
@@ -60,7 +61,7 @@ def crear_repuesto(
 def obtener_repuesto(
     repuesto_id: int,
     db: DbSession,
-    _: CurrentUser,
+    _: PersonalUser,
 ) -> RepuestoResponse:
     return service.get_repuesto(db, repuesto_id)
 
@@ -91,3 +92,17 @@ def eliminar_repuesto(
 ) -> MessageResponse:
     service.delete_repuesto(db, repuesto_id)
     return MessageResponse(detail="Repuesto eliminado")
+
+
+@router.post(
+    "/{repuesto_id}/ingresos",
+    response_model=RepuestoResponse,
+    summary="Ingresar stock de un repuesto",
+)
+def ingresar_stock(
+    repuesto_id: int,
+    datos: IngresoStockRequest,
+    db: DbSession,
+    _: MostradorUser,
+) -> RepuestoResponse:
+    return service.ingresar_stock(db, repuesto_id, datos)

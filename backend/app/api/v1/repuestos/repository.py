@@ -13,10 +13,15 @@ def get_by_codigo(db: Session, codigo: str) -> Repuesto | None:
     return db.scalar(select(Repuesto).where(Repuesto.codigo == codigo))
 
 
-def list_repuestos(db: Session, *, solo_activos: bool = False) -> list[Repuesto]:
+def list_repuestos(
+    db: Session, *, solo_activos: bool = False, q: str | None = None
+) -> list[Repuesto]:
     stmt = select(Repuesto).order_by(Repuesto.nombre)
     if solo_activos:
         stmt = stmt.where(Repuesto.activo.is_(True))
+    if q:
+        patron = f"%{q.strip()}%"
+        stmt = stmt.where(Repuesto.codigo.ilike(patron) | Repuesto.nombre.ilike(patron))
     return list(db.scalars(stmt).all())
 
 
@@ -58,3 +63,11 @@ def tiene_detalles(db: Session, repuesto_id: int) -> bool:
 def delete(db: Session, repuesto: Repuesto) -> None:
     db.delete(repuesto)
     db.commit()
+
+
+def agregar_stock(db: Session, repuesto: Repuesto, cantidad: int) -> Repuesto:
+    repuesto.stock += cantidad
+    db.add(repuesto)
+    db.commit()
+    db.refresh(repuesto)
+    return repuesto

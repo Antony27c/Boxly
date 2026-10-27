@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.users import repository
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.cliente import Cliente
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import (
     LoginRequest,
@@ -16,6 +17,38 @@ from app.schemas.usuario import (
 
 def _to_response(user: Usuario) -> UsuarioResponse:
     return UsuarioResponse.model_validate(user)
+
+
+def _validar_cliente(
+    db: Session,
+    rol: RolUsuario,
+    cliente_id: int | None,
+    user_id: int | None = None,
+) -> int | None:
+    if rol != RolUsuario.cliente:
+        if cliente_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solo los usuarios con rol cliente se vinculan a un cliente",
+            )
+        return None
+    if cliente_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Un usuario con rol cliente necesita el cliente_id",
+        )
+    if db.get(Cliente, cliente_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cliente no encontrado",
+        )
+    existente = repository.get_by_cliente_id(db, cliente_id)
+    if existente and existente.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ese cliente ya tiene un usuario de acceso",
+        )
+    return cliente_id
 
 
 def authenticate(db: Session, data: LoginRequest) -> TokenResponse:
@@ -44,6 +77,7 @@ def create_usuario(db: Session, data: UsuarioCreate) -> UsuarioResponse:
             status_code=status.HTTP_409_CONFLICT,
             detail="Ya existe un usuario con ese email",
         )
+    cliente_id = _validar_cliente(db, data.rol, data.cliente_id)
     user = repository.create(
         db,
         nombre=data.nombre,
@@ -51,6 +85,7 @@ def create_usuario(db: Session, data: UsuarioCreate) -> UsuarioResponse:
         email=data.email,
         password_hash=hash_password(data.password),
         rol=data.rol,
+        cliente_id=cliente_id,
     )
     return _to_response(user)
 
@@ -93,6 +128,13 @@ def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioRes
                 detail="Ya existe un usuario con ese email",
             )
         payload["email"] = email
+
+    if "rol" in payload or "cliente_id" in payload:
+        rol = payload.get("rol") or user.rol
+        actual = user.cliente_id if rol == RolUsuario.cliente else None
+        payload["cliente_id"] = _validar_cliente(
+            db, rol, payload.get("cliente_id", actual), user.id
+        )
 
     if "password" in payload:
         payload["password_hash"] = hash_password(payload.pop("password"))

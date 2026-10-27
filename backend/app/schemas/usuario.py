@@ -15,6 +15,7 @@ class UsuarioBase(BaseModel):
 
 class UsuarioCreate(UsuarioBase):
     password: str = Field(min_length=8, max_length=72)
+    cliente_id: Optional[int] = Field(default=None, gt=0)
 
     @field_validator("password")
     @classmethod
@@ -31,6 +32,7 @@ class UsuarioUpdate(BaseModel):
     rol: Optional[RolUsuario] = None
     activo: Optional[bool] = None
     password: Optional[str] = Field(default=None, min_length=8, max_length=72)
+    cliente_id: Optional[int] = Field(default=None, gt=0)
 
     @field_validator("password")
     @classmethod
@@ -47,6 +49,7 @@ class UsuarioResponse(UsuarioBase):
 
     id: int
     activo: bool
+    cliente_id: Optional[int] = None
     creado_en: datetime
     actualizado_en: datetime | None = None
 

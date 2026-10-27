@@ -62,3 +62,8 @@ class RepuestoResponse(RepuestoBase):
     id: int
     activo: bool
     stock_bajo: bool = False
+
+
+class IngresoStockRequest(BaseModel):
+    cantidad: int = Field(ge=1, description="Cantidad a agregar al stock")
+    nota: Optional[str] = Field(default=None, max_length=200)
