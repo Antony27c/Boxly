@@ -37,6 +37,12 @@ export const DESCRIPCION_ESTADOS = {
   Cancelado: 'La orden se canceló y no se va a hacer el trabajo.',
 }
 
+export const ESTADOS_COBRABLES = ['Listo', 'Entregado']
+
+export function faltaFijarCobro(orden) {
+  return ESTADOS_COBRABLES.includes(orden.estado) && !Number(orden.costo_final) && !orden.pagada
+}
+
 export function proximosEstados(estado) {
   return TRANSICIONES[estado] ?? []
 }
@@ -349,7 +355,7 @@ export const ordenesService = {
         })
       : api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),
 
-  cambiarEstado: (id, estado, comentario, token) =>
+  cambiarEstado: (id, estado, comentario, token, costoFinal = null) =>
     USAR_MOCK
       ? operar((datos) => {
           const actual = buscarOrden(datos, id)
@@ -359,11 +365,20 @@ export const ordenesService = {
           }
           validarTransicion(estadoAnterior, estado)
           actual.estado = estado
+          if (costoFinal != null) actual.total = Number(costoFinal)
           registrarHistorialMock(datos, actual, estadoAnterior, comentario)
           return actual
         })
       : api
-          .patch(`${RECURSO}/${id}`, { estado: CODIGOS[estado], comentario_cambio: comentario }, token)
+          .patch(
+            `${RECURSO}/${id}`,
+            {
+              estado: CODIGOS[estado],
+              comentario_cambio: comentario,
+              ...(costoFinal != null && { costo_final: Number(costoFinal) }),
+            },
+            token,
+          )
           .then(desdeApi),
 
   actualizar: (id, orden, token) =>
@@ -388,8 +403,7 @@ export const ordenesService = {
               estado: CODIGOS[orden.estado],
               mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
               descripcion_ingreso: orden.descripcion,
-              [orden.costo_final != null ? 'costo_final' : 'costo_estimado']:
-                Number(orden.total) || 0,
+              ...(orden.campoMonto && { [orden.campoMonto]: Number(orden.total) || 0 }),
             },
             token,
           )

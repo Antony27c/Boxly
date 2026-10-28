@@ -75,6 +75,11 @@ class OrdenService:
         self.obtener_detalle_orden(db, orden_id, mecanico_id)
         if datos.mecanico_id is not None and datos.mecanico_id != mecanico_id:
             raise HTTPException(status_code=403, detail="No podés reasignar la orden a otro mecánico")
+        if datos.costo_final is not None:
+            raise HTTPException(
+                status_code=403,
+                detail="El monto final a cobrar lo fija administración o recepción",
+            )
 
     def _validar_mecanico(self, db:Session, mecanico_id: int)-> None:
         mecanico = db.get(Usuario, mecanico_id)

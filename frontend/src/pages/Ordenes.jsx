@@ -19,7 +19,13 @@ import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
 import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { ESTADOS_ORDEN, ordenesService, proximosEstados, sePuedeEliminar } from '@/services/ordenes'
+import {
+  ESTADOS_ORDEN,
+  faltaFijarCobro,
+  ordenesService,
+  proximosEstados,
+  sePuedeEliminar,
+} from '@/services/ordenes'
 import { vehiculosService } from '@/services/vehiculos'
 
 const TONOS = {
@@ -278,10 +284,33 @@ export default function Ordenes() {
                     <dd className="text-right">{orden.mecanico || 'Sin asignar'}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-muted">Total</dt>
-                    <dd>{orden.total ? pesos(orden.total) : 'A presupuestar'}</dd>
+                    <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
+                    <dd className="flex items-center gap-2">
+                      {orden.total ? pesos(orden.total) : 'A presupuestar'}
+                      {orden.pagada && <Badge tono="ok">Pagada</Badge>}
+                    </dd>
                   </div>
                 </dl>
+
+                {faltaFijarCobro(orden) && (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-box border border-amber/50 bg-amber/10 px-3 py-2 text-sm">
+                    <span className="text-amber-deep">
+                      {esMostrador
+                        ? 'Falta fijar el monto final para que el cliente pueda pagar.'
+                        : 'Recepción tiene que fijar el monto final a cobrar.'}
+                    </span>
+                    {esMostrador && (
+                      <Button
+                        onClick={() => {
+                          setEnEdicion(orden)
+                          setFormularioAbierto(true)
+                        }}
+                      >
+                        Fijar cobro
+                      </Button>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-5 flex flex-wrap gap-2 pt-1">
                   {vehiculo && (
@@ -343,6 +372,7 @@ export default function Ordenes() {
           clientes={clientes ?? []}
           vehiculos={vehiculos ?? []}
           mecanicos={mecanicos}
+          puedeCobrar={esMostrador}
           onGuardar={guardar}
           onCancelar={() => setFormularioAbierto(false)}
         />
@@ -366,6 +396,7 @@ export default function Ordenes() {
         {aCambiar && (
           <CambioEstado
             orden={aCambiar}
+            puedeCobrar={esMostrador}
             onCancelar={() => setACambiar(null)}
             onListo={async (estado, fotosFallidas = []) => {
               setACambiar(null)

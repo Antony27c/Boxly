@@ -2,19 +2,24 @@ import { useState } from 'react'
 import { TAMANO_MAXIMO, TIPOS_IMAGEN } from '@/components/ordenes/ImagenesOrden'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
+import Field from '@/components/ui/Field'
 import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
 import { DESCRIPCION_ESTADOS, ordenesService, proximosEstados } from '@/services/ordenes'
 
-export default function CambioEstado({ orden, onListo, onCancelar }) {
+export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCancelar }) {
   const { token } = useAuth()
   const opciones = proximosEstados(orden.estado)
   const [nuevo, setNuevo] = useState(opciones.find((estado) => estado !== 'Cancelado') ?? opciones[0] ?? '')
   const [descripcion, setDescripcion] = useState('')
+  const [monto, setMonto] = useState(() => String(Number(orden.costo_final) || orden.total || ''))
+  const [errorMonto, setErrorMonto] = useState('')
   const [fotos, setFotos] = useState([])
   const [error, setError] = useState('')
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
+
+  const pideMonto = puedeCobrar && nuevo === 'Listo'
 
   async function enviar(evento) {
     evento.preventDefault()
@@ -23,11 +28,15 @@ export default function CambioEstado({ orden, onListo, onCancelar }) {
       setError('Contá qué se hizo en esta etapa (mínimo 5 caracteres).')
       return
     }
+    if (pideMonto && !(Number(monto) > 0)) {
+      setErrorMonto('Poné el monto final que va a pagar el cliente.')
+      return
+    }
 
     setGuardando(true)
     setErrorApi('')
     try {
-      await ordenesService.cambiarEstado(orden.id, nuevo, texto, token)
+      await ordenesService.cambiarEstado(orden.id, nuevo, texto, token, pideMonto ? monto : null)
     } catch (problema) {
       setErrorApi(problema.message)
       setGuardando(false)
@@ -102,6 +111,25 @@ export default function CambioEstado({ orden, onListo, onCancelar }) {
         placeholder="Se revisó el tren delantero: bujes gastados, hay que cambiarlos."
         ayuda="Queda guardada en el historial de la orden."
       />
+
+      {pideMonto && (
+        <Field
+          label="Monto final a cobrar"
+          inputMode="numeric"
+          value={monto}
+          onChange={(e) => {
+            setMonto(e.target.value)
+            if (errorMonto) setErrorMonto('')
+          }}
+          error={errorMonto}
+          disabled={guardando}
+          placeholder="185000"
+          ayuda="Con este monto el cliente puede pagar online desde su portal."
+        />
+      )}
+      {nuevo === 'Listo' && !puedeCobrar && (
+        <Alert tipo="info">Recepción va a fijar el monto final a cobrar antes de que el cliente pueda pagar.</Alert>
+      )}
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
