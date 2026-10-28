@@ -42,6 +42,10 @@ class OrdenUpdate(BaseModel):
     fecha_entrega: Optional[datetime]= None
     diagnostico: Optional[str]=None
 
+class CobroRequest(BaseModel):
+    monto: Optional[Decimal] = Field(default=None, gt=0)
+
+
 class OrdenResponse(OrdenBase):
     model_config=ConfigDict(from_attributes=True)
 
@@ -61,6 +65,11 @@ class OrdenResponse(OrdenBase):
     costo_estimado: Optional[Decimal] = None
     costo_final: Optional[Decimal]= None
     pagada: bool = False
+    cobro_estado: Optional[str] = None
+    monto_propuesto: Optional[Decimal] = None
+    cobro_propuesto_por_nombre: Optional[str] = None
+    cobro_aprobado_por_nombre: Optional[str] = None
+    cobro_aprobado_en: Optional[datetime] = None
     fecha_ingreso: datetime
     fecha_estimada_entrega: Optional[datetime]= None
     fecha_entrega: Optional[datetime]= None

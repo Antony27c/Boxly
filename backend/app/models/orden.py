@@ -43,6 +43,15 @@ class Orden(Base):
         Numeric(12, 2), nullable=True
     )
     costo_final: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    cobro_estado: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    monto_propuesto: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    cobro_propuesto_por_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("usuarios.id"), nullable=True
+    )
+    cobro_aprobado_por_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("usuarios.id"), nullable=True
+    )
+    cobro_aprobado_en: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     fecha_ingreso: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
@@ -58,6 +67,12 @@ class Orden(Base):
     )
     mecanico: Mapped[Optional["Usuario"]] = relationship(
         foreign_keys=[mecanico_id], back_populates="ordenes_asignadas"
+    )
+    cobro_propuesto_por: Mapped[Optional["Usuario"]] = relationship(
+        foreign_keys=[cobro_propuesto_por_id]
+    )
+    cobro_aprobado_por: Mapped[Optional["Usuario"]] = relationship(
+        foreign_keys=[cobro_aprobado_por_id]
     )
     detalles: Mapped[List["DetalleOrden"]] = relationship(back_populates="orden")
     historial_estados: Mapped[List["Historial_estado"]] = relationship(
@@ -93,6 +108,16 @@ class Orden(Base):
     @property
     def vehiculo_modelo(self) -> Optional[str]:
         return self.vehiculo.modelo if self.vehiculo else None
+
+    @property
+    def cobro_propuesto_por_nombre(self) -> Optional[str]:
+        u = self.cobro_propuesto_por
+        return f"{u.apellido}, {u.nombre}" if u else None
+
+    @property
+    def cobro_aprobado_por_nombre(self) -> Optional[str]:
+        u = self.cobro_aprobado_por
+        return f"{u.apellido}, {u.nombre}" if u else None
 
     @property
     def pagada(self) -> bool:

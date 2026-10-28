@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
-import { DESCRIPCION_ESTADOS, ESTADOS_COBRABLES } from '@/services/ordenes'
+import { DESCRIPCION_ESTADOS } from '@/services/ordenes'
 import { validarOrden } from '@/utils/validation'
 
 const HOY = new Date().toISOString().slice(0, 10)
@@ -33,14 +33,9 @@ export default function FormularioOrden({
   clientes = [],
   vehiculos = [],
   mecanicos,
-  puedeCobrar = false,
   onGuardar,
   onCancelar,
 }) {
-  const tieneFinal = Number(orden?.costo_final) > 0
-  const enCobro = Boolean(orden) && ESTADOS_COBRABLES.includes(orden.estado)
-  const campoMonto = puedeCobrar && (enCobro || tieneFinal) ? 'costo_final' : tieneFinal ? null : 'costo_estimado'
-
   const [datos, setDatos] = useState(() => {
     if (!orden) return VACIO
     const vehiculo = vehiculos.find((item) => item.id === orden.vehiculo_id)
@@ -49,7 +44,9 @@ export default function FormularioOrden({
       ...orden,
       cliente_id: vehiculo?.cliente_id ?? '',
       mecanico_id: orden.mecanico_id ?? '',
-      total: String(orden.total ?? 0),
+      total: String(
+        orden.costo_estimado != null ? Number(orden.costo_estimado) : orden.costo_final == null ? orden.total ?? 0 : 0,
+      ),
     }
   })
 
@@ -136,9 +133,6 @@ export default function FormularioOrden({
     evento.preventDefault()
 
     const encontrados = validarOrden(datos)
-    if (campoMonto === 'costo_final' && enCobro && !encontrados.total && !(Number(datos.total) > 0)) {
-      encontrados.total = 'Poné el monto final que va a pagar el cliente.'
-    }
     setErrores(encontrados)
     if (Object.keys(encontrados).length > 0) return
 
@@ -151,7 +145,6 @@ export default function FormularioOrden({
         mecanico_id: datos.mecanico_id,
         descripcion: datos.descripcion.trim(),
         total: datos.total,
-        campoMonto,
       })
     } catch (problema) {
       setErrorApi(problema.message)
@@ -210,19 +203,13 @@ export default function FormularioOrden({
           />
         )}
         <Field
-          label={campoMonto === 'costo_estimado' ? 'Presupuesto estimado' : 'Monto final a cobrar'}
+          label="Presupuesto estimado"
           inputMode="numeric"
           value={datos.total}
           onChange={(e) => cambiar('total', e.target.value)}
           error={errores.total}
-          ayuda={
-            campoMonto === 'costo_final'
-              ? 'Es lo que el cliente paga online desde su portal.'
-              : campoMonto
-                ? 'Poné 0 mientras no haya presupuesto.'
-                : 'Lo fija administración o recepción.'
-          }
-          disabled={guardando || !campoMonto}
+          ayuda="Poné 0 mientras no haya presupuesto. El monto a cobrar se emite desde «Cobro»."
+          disabled={guardando}
           placeholder="185000"
         />
       </div>

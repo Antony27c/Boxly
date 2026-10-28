@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import CambioEstado from '@/components/ordenes/CambioEstado'
+import CobroOrden from '@/components/ordenes/CobroOrden'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
 import FormularioOrden from '@/components/ordenes/FormularioOrden'
 import HistorialOrden from '@/components/ordenes/HistorialOrden'
@@ -21,7 +22,7 @@ import { clientesService } from '@/services/clientes'
 import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
 import {
   ESTADOS_ORDEN,
-  faltaFijarCobro,
+  estadoCobro,
   ordenesService,
   proximosEstados,
   sePuedeEliminar,
@@ -64,6 +65,7 @@ export default function Ordenes() {
   const [conDetalles, setConDetalles] = useState(null)
   const [conFotos, setConFotos] = useState(null)
   const [aCambiar, setACambiar] = useState(null)
+  const [conCobro, setConCobro] = useState(null)
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
@@ -292,25 +294,41 @@ export default function Ordenes() {
                   </div>
                 </dl>
 
-                {faltaFijarCobro(orden) && (
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-box border border-amber/50 bg-amber/10 px-3 py-2 text-sm">
-                    <span className="text-amber-deep">
-                      {esMostrador
-                        ? 'Falta fijar el monto final para que el cliente pueda pagar.'
-                        : 'Recepción tiene que fijar el monto final a cobrar.'}
-                    </span>
-                    {esMostrador && (
-                      <Button
-                        onClick={() => {
-                          setEnEdicion(orden)
-                          setFormularioAbierto(true)
-                        }}
-                      >
-                        Fijar cobro
+                {(() => {
+                  const cobro = estadoCobro(orden)
+                  if (!cobro || cobro === 'pagada') return null
+                  const textos = {
+                    sin_cobro: {
+                      mensaje: 'Todavía no se emitió el cobro.',
+                      boton: esMostrador ? 'Generar cobro' : 'Emitir cobro',
+                      destacado: true,
+                    },
+                    pendiente: {
+                      mensaje: `Cobro propuesto ${pesos(orden.monto_propuesto)}${
+                        orden.cobro_propuesto_por_nombre ? ` por ${orden.cobro_propuesto_por_nombre}` : ''
+                      } · falta aprobar.`,
+                      boton: esMostrador ? 'Revisar cobro' : 'Ver cobro',
+                      destacado: true,
+                    },
+                    aprobado: {
+                      mensaje: 'Cobro enviado al cliente, esperando el pago.',
+                      boton: esMostrador ? 'Editar monto' : 'Ver cobro',
+                      destacado: false,
+                    },
+                  }[cobro]
+                  return (
+                    <div
+                      className={`mt-4 flex flex-wrap items-center justify-between gap-2 rounded-box border px-3 py-2 text-sm ${
+                        textos.destacado ? 'border-amber/50 bg-amber/10' : 'border-ok/40 bg-ok/10'
+                      }`}
+                    >
+                      <span className={textos.destacado ? 'text-amber-deep' : 'text-ok'}>{textos.mensaje}</span>
+                      <Button variante={textos.destacado ? 'primario' : 'fantasma'} onClick={() => setConCobro(orden)}>
+                        {textos.boton}
                       </Button>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )
+                })()}
 
                 <div className="mt-5 flex flex-wrap gap-2 pt-1">
                   {vehiculo && (
@@ -372,7 +390,6 @@ export default function Ordenes() {
           clientes={clientes ?? []}
           vehiculos={vehiculos ?? []}
           mecanicos={mecanicos}
-          puedeCobrar={esMostrador}
           onGuardar={guardar}
           onCancelar={() => setFormularioAbierto(false)}
         />
@@ -398,14 +415,43 @@ export default function Ordenes() {
             orden={aCambiar}
             puedeCobrar={esMostrador}
             onCancelar={() => setACambiar(null)}
-            onListo={async (estado, fotosFallidas = []) => {
+            onListo={async (estado, fotosFallidas = [], errorCobro = '') => {
               setACambiar(null)
               setAviso(`La orden pasó a "${estado}".`)
               setErrorFotos(
-                fotosFallidas.length > 0
-                  ? `No se pudieron subir estas fotos: ${fotosFallidas.join(', ')}. Cargalas de nuevo desde "Fotos".`
-                  : '',
+                [
+                  fotosFallidas.length > 0 &&
+                    `No se pudieron subir estas fotos: ${fotosFallidas.join(', ')}. Cargalas de nuevo desde "Fotos".`,
+                  errorCobro && `No se pudo emitir el cobro: ${errorCobro} Emitilo de nuevo desde la orden.`,
+                ]
+                  .filter(Boolean)
+                  .join(' '),
               )
+              await recargar()
+            }}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        abierto={Boolean(conCobro)}
+        titulo={`Cobro de la orden ${conCobro?.codigo ?? `#${conCobro?.id ?? ''}`}`}
+        descripcion={
+          esMostrador
+            ? 'Revisá el monto y envialo al cliente para que lo pague online.'
+            : 'Proponé el monto a cobrar; administración o recepción lo aprueba.'
+        }
+        ancho="max-w-md"
+        onCerrar={() => setConCobro(null)}
+      >
+        {conCobro && (
+          <CobroOrden
+            orden={conCobro}
+            esMostrador={esMostrador}
+            onCancelar={() => setConCobro(null)}
+            onListo={async (mensaje) => {
+              setConCobro(null)
+              setAviso(mensaje)
               await recargar()
             }}
           />

@@ -45,7 +45,50 @@ TRANSICIONES_VALIDAS = {
     "cancelado": []
 }
 
+ESTADOS_COBRABLES = ("listo", "entregado")
+
+
 class OrdenService:
+
+    def _validar_cobrable(self, orden: Orden) -> None:
+        if orden.estado not in ESTADOS_COBRABLES:
+            raise HTTPException(status_code=400, detail="El cobro se emite cuando la orden está lista o entregada")
+        if orden.pagada:
+            raise HTTPException(status_code=409, detail="La orden ya está pagada")
+
+    def _aprobar_cobro(self, orden: Orden, monto, usuario_id: int) -> None:
+        orden.costo_final = monto
+        orden.cobro_estado = "aprobado"
+        orden.cobro_aprobado_por_id = usuario_id
+        orden.cobro_aprobado_en = datetime.now()
+
+    def emitir_cobro(self, db: Session, orden_id: int, monto, usuario: Usuario) -> Orden:
+        es_mecanico = usuario.rol == RolUsuario.mecanico
+        orden = self.obtener_detalle_orden(db, orden_id, usuario.id if es_mecanico else None)
+        self._validar_cobrable(orden)
+        if monto is None:
+            raise HTTPException(status_code=422, detail="Indicá el monto a cobrar")
+        if es_mecanico:
+            if orden.cobro_estado == "aprobado":
+                raise HTTPException(
+                    status_code=409,
+                    detail="El cobro ya fue aprobado. Si hay que cambiar el monto, pedíselo a recepción",
+                )
+            orden.monto_propuesto = monto
+            orden.cobro_estado = "pendiente"
+            orden.cobro_propuesto_por_id = usuario.id
+        else:
+            self._aprobar_cobro(orden, monto, usuario.id)
+        return orden_repository.guardar_cambios(db, orden)
+
+    def aprobar_cobro(self, db: Session, orden_id: int, monto, usuario_id: int) -> Orden:
+        orden = self.obtener_detalle_orden(db, orden_id)
+        self._validar_cobrable(orden)
+        monto = monto or orden.monto_propuesto
+        if not monto:
+            raise HTTPException(status_code=400, detail="No hay un cobro propuesto para aprobar")
+        self._aprobar_cobro(orden, monto, usuario_id)
+        return orden_repository.guardar_cambios(db, orden)
 
     def listar_estados(self) -> List[EstadoOrdenResponse]:
         return [
@@ -123,6 +166,8 @@ class OrdenService:
        
         orden = self.obtener_detalle_orden(db, orden_id)
 
+        if datos.costo_final is not None and orden.pagada:
+            raise HTTPException(status_code=409, detail="La orden ya está pagada; no se puede cambiar el monto")
         if datos.mecanico_id is not None:
             self._validar_mecanico(db,datos.mecanico_id)
        
@@ -166,6 +211,8 @@ class OrdenService:
             valor= getattr(datos, campo)
             if valor is not None:
                 setattr(orden, campo, valor)
+        if datos.costo_final is not None:
+            self._aprobar_cobro(orden, datos.costo_final, usuario_id)
         return orden_repository.guardar_cambios(db, orden)
 
     def obtener_historial_orden(self, db:Session, orden_id: int) -> List[HistorialResponse]:

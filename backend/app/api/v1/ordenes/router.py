@@ -4,7 +4,7 @@ from typing import List, Optional, Annotated
 
 from app.core.dependencies import CurrentUser, PersonalUser,DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.orden import EstadoOrdenResponse, HistorialResponse, OrdenCreate, OrdenUpdate, OrdenResponse
+from app.schemas.orden import CobroRequest, EstadoOrdenResponse, HistorialResponse, OrdenCreate, OrdenUpdate, OrdenResponse
 from .service import orden_service
 from app.schemas.usuario import MessageResponse
 from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
@@ -40,6 +40,18 @@ def detalle_orden(orden_id: int, db: DbSession, usuario:PersonalUser):
 def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:PersonalUser):
     orden_service.validar_edicion_mecanico(db, orden_id, datos, filtro_mecanico(usuario))
     return orden_service.editar_orden(db, orden_id, datos, usuario_id=usuario.id)
+
+
+@router.post("/{orden_id}/cobro", response_model=OrdenResponse)
+def emitir_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: PersonalUser):
+    return orden_service.emitir_cobro(db, orden_id, datos.monto, usuario)
+
+
+@router.post("/{orden_id}/cobro/aprobar", response_model=OrdenResponse)
+def aprobar_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: RecepcionUser):
+    return orden_service.aprobar_cobro(db, orden_id, datos.monto, usuario.id)
+
+
 @router.get("/{orden_id}/historial", response_model=List[HistorialResponse])
 def historial_orden(orden_id:int, db:DbSession, usuario: PersonalUser):
     orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))

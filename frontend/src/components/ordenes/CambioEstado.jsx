@@ -12,14 +12,14 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
   const opciones = proximosEstados(orden.estado)
   const [nuevo, setNuevo] = useState(opciones.find((estado) => estado !== 'Cancelado') ?? opciones[0] ?? '')
   const [descripcion, setDescripcion] = useState('')
-  const [monto, setMonto] = useState(() => String(Number(orden.costo_final) || orden.total || ''))
+  const [monto, setMonto] = useState(() => String(Number(orden.costo_estimado) || ''))
   const [errorMonto, setErrorMonto] = useState('')
   const [fotos, setFotos] = useState([])
   const [error, setError] = useState('')
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
 
-  const pideMonto = puedeCobrar && nuevo === 'Listo'
+  const pideMonto = nuevo === 'Listo' && !orden.cobro_estado && !orden.pagada
 
   async function enviar(evento) {
     evento.preventDefault()
@@ -28,19 +28,28 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
       setError('Contá qué se hizo en esta etapa (mínimo 5 caracteres).')
       return
     }
-    if (pideMonto && !(Number(monto) > 0)) {
-      setErrorMonto('Poné el monto final que va a pagar el cliente.')
+    if (pideMonto && String(monto).trim() !== '' && !(Number(monto) > 0)) {
+      setErrorMonto('El monto tiene que ser mayor a 0, o dejalo vacío para emitirlo después.')
       return
     }
 
     setGuardando(true)
     setErrorApi('')
     try {
-      await ordenesService.cambiarEstado(orden.id, nuevo, texto, token, pideMonto ? monto : null)
+      await ordenesService.cambiarEstado(orden.id, nuevo, texto, token)
     } catch (problema) {
       setErrorApi(problema.message)
       setGuardando(false)
       return
+    }
+
+    let errorCobro = ''
+    if (pideMonto && Number(monto) > 0) {
+      try {
+        await ordenesService.emitirCobro(orden.id, monto, token)
+      } catch (problema) {
+        errorCobro = problema.message
+      }
     }
 
     // El cambio de etapa ya quedó guardado: si alguna foto falla, reintentar todo duplicaría
@@ -55,7 +64,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
       }
     }
     setGuardando(false)
-    onListo(nuevo, fallidas)
+    onListo(nuevo, fallidas, errorCobro)
   }
 
   return (
@@ -114,7 +123,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
 
       {pideMonto && (
         <Field
-          label="Monto final a cobrar"
+          label={puedeCobrar ? 'Monto a cobrar (opcional)' : 'Monto a cobrar (opcional, lo aprueba recepción)'}
           inputMode="numeric"
           value={monto}
           onChange={(e) => {
@@ -124,11 +133,12 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
           error={errorMonto}
           disabled={guardando}
           placeholder="185000"
-          ayuda="Con este monto el cliente puede pagar online desde su portal."
+          ayuda={
+            puedeCobrar
+              ? 'Si lo completás, el cobro le llega al cliente y puede pagarlo online.'
+              : 'Queda pendiente hasta que administración o recepción lo apruebe.'
+          }
         />
-      )}
-      {nuevo === 'Listo' && !puedeCobrar && (
-        <Alert tipo="info">Recepción va a fijar el monto final a cobrar antes de que el cliente pueda pagar.</Alert>
       )}
 
       <div>
