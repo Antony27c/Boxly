@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -39,6 +40,10 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
         {orden.fecha_estimada_entrega && ` · Entrega estimada ${fecha(orden.fecha_estimada_entrega)}`}
       </p>
 
+      <Link to={`/portal/orden/${orden.id}`} className="mt-3 inline-block text-sm text-amber-deep hover:underline">
+        Ver seguimiento →
+      </Link>
+
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-graphite-700 pt-4">
         <div>
           <p className="text-xs text-muted">Total</p>
@@ -60,13 +65,50 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
   )
 }
 
+function TarjetaVehiculo({ vehiculo }) {
+  const activa = vehiculo.orden_activa
+  return (
+    <li className="rounded-box border border-graphite-700 bg-graphite-800 p-5">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-semibold">
+            {vehiculo.marca} {vehiculo.modelo}
+          </p>
+          <p className="text-sm text-muted">
+            <span className="font-mono">{vehiculo.patente}</span>
+            {vehiculo.anio && ` · ${vehiculo.anio}`}
+            {vehiculo.color && ` · ${vehiculo.color}`}
+          </p>
+        </div>
+        {activa ? (
+          <Badge tono={TONOS_ESTADO[activa.estado] ?? 'ambar'}>{nombreEstado(activa.estado)}</Badge>
+        ) : (
+          <Badge>Sin trabajos en curso</Badge>
+        )}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-graphite-700 pt-3 text-sm">
+        <span className="text-muted">
+          {vehiculo.ordenes_total} {vehiculo.ordenes_total === 1 ? 'orden' : 'órdenes'} en el taller
+        </span>
+        {activa && (
+          <Link to={`/portal/orden/${activa.id}`} className="text-amber-deep hover:underline">
+            Seguir {activa.codigo} →
+          </Link>
+        )}
+      </div>
+    </li>
+  )
+}
+
 export default function Portal() {
   const { token, usuario } = useAuth()
   const [pagandoId, setPagandoId] = useState(null)
   const [errorPago, setErrorPago] = useState('')
 
   const cargar = useCallback((t) => portalService.misOrdenes(t), [])
+  const cargarVehiculos = useCallback((t) => portalService.misVehiculos(t), [])
   const { datos: ordenes, cargando, error, recargar } = useRecurso(cargar)
+  const { datos: vehiculos, error: errorVehiculos } = useRecurso(cargarVehiculos)
 
   async function pagar(orden) {
     setPagandoId(orden.id)
@@ -94,6 +136,23 @@ export default function Portal() {
         <div className="mt-4">
           <Alert>{errorPago}</Alert>
         </div>
+      )}
+
+      {errorVehiculos ? (
+        <div className="mt-6">
+          <Alert>{errorVehiculos}</Alert>
+        </div>
+      ) : (
+        vehiculos?.length > 0 && (
+          <section className="mt-6">
+            <h2 className="font-semibold">Mis vehículos</h2>
+            <ul className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {vehiculos.map((vehiculo) => (
+                <TarjetaVehiculo key={vehiculo.id} vehiculo={vehiculo} />
+              ))}
+            </ul>
+          </section>
+        )
       )}
 
       {cargando ? (

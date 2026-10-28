@@ -6,7 +6,7 @@ const accesos = [
   {
     a: '/dashboard',
     titulo: 'Dashboard',
-    texto: 'Productividad de cada mecánico: órdenes cerradas, tiempos y facturación.',
+    texto: 'Productividad por mecánico, finanzas y mejor mecánico del trimestre.',
     roles: ROLES_ADMIN,
   },
   {

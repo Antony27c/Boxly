@@ -178,9 +178,11 @@ export default function Ordenes() {
             : 'Seguimiento de los trabajos del taller.'
         }
         acciones={
-          <Button onClick={abrirNueva} disabled={sinVehiculos}>
-            Nueva orden
-          </Button>
+          esMostrador && (
+            <Button onClick={abrirNueva} disabled={sinVehiculos}>
+              Nueva orden
+            </Button>
+          )
         }
       />
 
@@ -240,7 +242,7 @@ export default function Ordenes() {
           <Vacio
             titulo="Sin órdenes para mostrar"
             mensaje="Ajustá los filtros o abrí una orden nueva para empezar el seguimiento."
-            accion={!sinVehiculos && <Button onClick={abrirNueva}>Nueva orden</Button>}
+            accion={esMostrador && !sinVehiculos && <Button onClick={abrirNueva}>Nueva orden</Button>}
           />
         </div>
       ) : (
