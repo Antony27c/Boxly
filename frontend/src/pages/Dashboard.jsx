@@ -6,22 +6,11 @@ import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
 import Vacio from '@/components/ui/Vacio'
+import SeccionFinanzas from '@/components/metricas/SeccionFinanzas'
 import useRecurso from '@/hooks/useRecurso'
 import { metricasService } from '@/services/metricas'
 import { aISO, sumarDias } from '@/utils/fechas'
-
-function pesos(valor) {
-  return Number(valor ?? 0).toLocaleString('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-  })
-}
-
-function horas(valor) {
-  if (valor === null || valor === undefined) return '—'
-  return valor >= 48 ? `${(valor / 24).toFixed(1)} días` : `${valor.toFixed(1)} h`
-}
+import { horas, pesos } from '@/utils/formato'
 
 function inicioDeMes(fecha, mesesAtras = 0) {
   const d = new Date(`${fecha}T12:00:00`)
@@ -105,9 +94,14 @@ export default function Dashboard() {
   return (
     <div className="animate-bay-in">
       <EncabezadoPagina
-        titulo="Productividad por mecánico"
-        descripcion="Órdenes cerradas, tiempos y facturación de cada mecánico en el período elegido."
+        titulo="Dashboard"
+        descripcion="Productividad de cada mecánico, finanzas del taller y mejor mecánico del trimestre."
       />
+
+      <h2 className="mt-8 text-xl font-semibold tracking-tight">Productividad por mecánico</h2>
+      <p className="mt-1.5 text-sm text-muted">
+        Órdenes cerradas, tiempos y facturación de cada mecánico. El período de abajo aplica solo a esta sección.
+      </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         {presets.map((preset) => {
@@ -176,35 +170,6 @@ export default function Dashboard() {
               detalle={totales.cerradas ? `Ticket promedio ${pesos(totales.ticket)}` : 'Sin órdenes cerradas'}
             />
           </div>
-
-          {mejor && (
-            <section className="mt-6 flex flex-wrap items-center gap-4 rounded-box border border-amber/50 bg-amber/10 p-5">
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-amber text-xl font-bold text-white"
-                aria-hidden="true"
-              >
-                ★
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-deep">
-                  Mejor mecánico del trimestre · {mejor.trimestre}
-                </p>
-                {mejor.mecanico ? (
-                  <>
-                    <p className="mt-0.5 text-lg font-semibold">{mejor.mecanico.nombre}</p>
-                    <p className="text-sm text-muted">
-                      {mejor.mecanico.ordenes_cerradas} órdenes cerradas ·{' '}
-                      {pesos(mejor.mecanico.facturado)} facturado · {horas(mejor.mecanico.tiempo_promedio_horas)}{' '}
-                      promedio
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-0.5 text-sm text-muted">Todavía nadie cerró órdenes en este trimestre.</p>
-                )}
-              </div>
-              <p className="w-full text-xs text-muted sm:w-auto sm:max-w-xs">{mejor.criterio}</p>
-            </section>
-          )}
 
           <section className="mt-6 rounded-box border border-graphite-700 bg-graphite-800 p-5">
             <header className="flex flex-wrap items-center justify-between gap-3">
@@ -294,6 +259,8 @@ export default function Dashboard() {
           </section>
         </div>
       )}
+
+      <SeccionFinanzas />
     </div>
   )
 }

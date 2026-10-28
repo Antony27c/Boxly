@@ -1,22 +1,31 @@
+// Roles del sistema (los valores que devuelve el backend) agrupados por permiso.
 export const ROLES_ADMIN = ['admin', 'administrador']
 export const ROLES_MOSTRADOR = [...ROLES_ADMIN, 'recepcion', 'recepcionista']
-export const ROLES_TALLER = [...ROLES_MOSTRADOR, 'mecanico', 'mecánico']
+export const ROLES_MECANICO = ['mecanico', 'mecánico']
+export const ROLES_TALLER = [...ROLES_MOSTRADOR, ...ROLES_MECANICO]
 export const ROLES_CLIENTE = ['cliente']
 
+// Pantalla a la que se llega después de iniciar sesión, según el rol.
+// Las órdenes son lo que más se usa, así que administrador y mecánico
+// arrancan ahí; recepción empieza en el inicio; el cliente en su portal.
 export function inicioSegunRol(rol) {
-  return ROLES_CLIENTE.includes(rol) ? '/portal' : '/inicio'
+  if (ROLES_CLIENTE.includes(rol)) return '/portal'
+  if (ROLES_ADMIN.includes(rol) || ROLES_MECANICO.includes(rol)) return '/ordenes'
+  return '/inicio'
 }
 
+// Menú superior. `roles` indica quién lo ve; sin `roles` lo ven todos.
+// Órdenes va primero para el personal del taller.
 export const navegacion = [
+  { a: '/ordenes', texto: 'Órdenes', roles: ROLES_TALLER },
   { a: '/inicio', texto: 'Inicio', roles: ROLES_TALLER },
-  { a: '/dashboard', texto: 'Dashboard', roles: ROLES_ADMIN },
   { a: '/portal', texto: 'Mis órdenes', roles: ROLES_CLIENTE },
+  { a: '/horarios', texto: 'Horarios', roles: ROLES_TALLER },
+  { a: '/turnos', texto: 'Turnos', roles: ROLES_MOSTRADOR },
   { a: '/clientes', texto: 'Clientes', roles: ROLES_MOSTRADOR },
   { a: '/vehiculos', texto: 'Vehículos', roles: ROLES_TALLER },
-  { a: '/turnos', texto: 'Turnos', roles: ROLES_MOSTRADOR },
-  { a: '/ordenes', texto: 'Órdenes', roles: ROLES_TALLER },
   { a: '/inventario', texto: 'Inventario', roles: ROLES_TALLER },
-  { a: '/horarios', texto: 'Horarios', roles: ROLES_TALLER },
+  { a: '/dashboard', texto: 'Dashboard', roles: ROLES_ADMIN },
   { a: '/usuarios', texto: 'Usuarios', roles: ROLES_ADMIN },
 ]
 

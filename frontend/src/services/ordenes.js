@@ -56,7 +56,7 @@ export function desdeApi(orden) {
   }
 }
 
-function historialDesdeApi(item) {
+export function historialDesdeApi(item) {
   return {
     ...item,
     estado_anterior: item.estado_anterior ? nombreEstado(item.estado_anterior) : null,
@@ -123,7 +123,7 @@ function repuestoMock(datos, repuestoId, cantidad) {
   return repuesto
 }
 
-function imagenDesdeApi(imagen) {
+export function imagenDesdeApi(imagen) {
   return {
     ...imagen,
     etapa: imagen.etapa ? nombreEstado(imagen.etapa) : null,
