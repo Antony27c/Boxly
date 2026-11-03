@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.api.v1.clientes import service
 from app.core.dependencies import PersonalUser, DbSession, require_roles
@@ -39,8 +39,26 @@ def crear_cliente(
     data: ClienteCreate,
     db: DbSession,
     _: MostradorUser,
+    background_tasks: BackgroundTasks,
 ) -> ClienteResponse:
-    return service.create_cliente(db, data)
+    cliente = service.create_cliente(db, data)
+    if cliente.email:
+        background_tasks.add_task(service.invitar_en_segundo_plano, cliente.id)
+    return cliente
+
+
+@router.post(
+    "/{cliente_id}/invitacion",
+    response_model=MessageResponse,
+    summary="Invitar al cliente al portal",
+)
+def invitar_cliente(
+    cliente_id: int,
+    db: DbSession,
+    _: MostradorUser,
+) -> MessageResponse:
+    """Manda (o reenvía) el correo para que el cliente confirme sus datos y cree su contraseña."""
+    return service.invitar_al_portal(db, cliente_id)
 
 
 @router.get(

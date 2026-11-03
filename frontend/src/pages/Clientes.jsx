@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Alert from '@/components/ui/Alert'
+import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Confirmacion from '@/components/ui/Confirmacion'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
@@ -23,6 +24,8 @@ export default function Clientes() {
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
   const [aviso, setAviso] = useState('')
+  const [errorInvitacion, setErrorInvitacion] = useState('')
+  const [invitando, setInvitando] = useState(null)
 
   const cargarClientes = useCallback((t) => clientesService.listar(t), [])
   const cargarVehiculos = useCallback((t) => vehiculosService.listar(t), [])
@@ -65,11 +68,29 @@ export default function Clientes() {
       setAviso('Cliente actualizado.')
     } else {
       await clientesService.crear(datosCliente, token)
-      setAviso('Cliente dado de alta.')
+      setAviso(
+        datosCliente.email
+          ? 'Cliente dado de alta. Le enviamos un correo para que confirme sus datos y active su cuenta.'
+          : 'Cliente dado de alta.',
+      )
     }
     setFormularioAbierto(false)
     setEnEdicion(null)
     await recargar()
+  }
+
+  async function invitar(cliente) {
+    setInvitando(cliente.id)
+    setAviso('')
+    setErrorInvitacion('')
+    try {
+      await clientesService.invitar(cliente.id, token)
+      setAviso(`Invitación enviada a ${cliente.email}.`)
+    } catch (problema) {
+      setErrorInvitacion(problema.message)
+    } finally {
+      setInvitando(null)
+    }
   }
 
   async function confirmarEliminar() {
@@ -109,6 +130,11 @@ export default function Clientes() {
       {aviso && (
         <div className="mt-4">
           <Alert tipo="ok">{aviso}</Alert>
+        </div>
+      )}
+      {errorInvitacion && (
+        <div className="mt-4">
+          <Alert>{errorInvitacion}</Alert>
         </div>
       )}
 
@@ -161,6 +187,11 @@ export default function Clientes() {
                     <td className="px-4 py-3 text-muted">
                       <p>{cliente.telefono}</p>
                       {cliente.email && <p className="text-xs">{cliente.email}</p>}
+                      {cliente.tiene_cuenta && (
+                        <div className="mt-1">
+                          <Badge tono="ok">Con acceso al portal</Badge>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Link
@@ -172,6 +203,15 @@ export default function Clientes() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
+                        {cliente.email && !cliente.tiene_cuenta && (
+                          <Button
+                            variante="fantasma"
+                            cargando={invitando === cliente.id}
+                            onClick={() => invitar(cliente)}
+                          >
+                            Invitar al portal
+                          </Button>
+                        )}
                         <Button variante="fantasma" onClick={() => abrirEdicion(cliente)}>
                           Editar
                         </Button>
@@ -204,13 +244,27 @@ export default function Clientes() {
                 <p className="mt-1 text-sm text-muted">DNI/CUIT {cliente.dni}</p>
                 <p className="text-sm text-muted">{cliente.telefono}</p>
                 {cliente.email && <p className="text-sm text-muted">{cliente.email}</p>}
+                {cliente.tiene_cuenta && (
+                  <div className="mt-1">
+                    <Badge tono="ok">Con acceso al portal</Badge>
+                  </div>
+                )}
                 <Link
                   to={`/vehiculos?cliente=${cliente.id}`}
                   className="mt-2 inline-block text-sm text-amber hover:underline"
                 >
                   {vehiculosPorCliente.get(cliente.id) ?? 0} vehículo(s)
                 </Link>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {cliente.email && !cliente.tiene_cuenta && (
+                    <Button
+                      variante="secundario"
+                      cargando={invitando === cliente.id}
+                      onClick={() => invitar(cliente)}
+                    >
+                      Invitar al portal
+                    </Button>
+                  )}
                   <Button variante="secundario" onClick={() => abrirEdicion(cliente)}>
                     Editar
                   </Button>

@@ -82,4 +82,6 @@ export const api = {
 export const authApi = {
   login: ({ email, password }) => api.post('/api/v1/auth/login', { email, password }),
   perfil: (token) => api.get('/api/v1/auth/me', token),
+  activacionInfo: (token) => api.get(`/api/v1/auth/activacion?token=${encodeURIComponent(token)}`),
+  activar: (datos) => api.post('/api/v1/auth/activacion', datos),
 }

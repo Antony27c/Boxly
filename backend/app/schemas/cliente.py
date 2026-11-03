@@ -50,3 +50,4 @@ class ClienteResponse(ClienteBase):
 
     id: int
     creado_en: datetime
+    tiene_cuenta: bool = False

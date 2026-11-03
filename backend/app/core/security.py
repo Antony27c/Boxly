@@ -36,7 +36,7 @@ def create_access_token(
     )
 
 
-def decode_access_token(token: str) -> dict[str, Any]:
+def _decode(token: str) -> dict[str, Any]:
     settings = get_settings()
     try:
         return jwt.decode(
@@ -46,3 +46,35 @@ def decode_access_token(token: str) -> dict[str, Any]:
         )
     except JWTError as exc:
         raise ValueError("Token inválido o expirado") from exc
+
+
+def decode_access_token(token: str) -> dict[str, Any]:
+    payload = _decode(token)
+    # Los tokens con propósito (invitaciones) no sirven para iniciar sesión: su "sub" es
+    # un id de cliente y se confundiría con un id de usuario.
+    if "proposito" in payload:
+        raise ValueError("Token inválido o expirado")
+    return payload
+
+
+PROPOSITO_ACTIVACION = "activar_cuenta"
+INVITACION_HORAS = 72
+
+
+def create_invitation_token(cliente_id: int, email: str) -> str:
+    """Enlace de un solo propósito: permite al cliente activar su cuenta del portal."""
+    settings = get_settings()
+    payload = {
+        "sub": str(cliente_id),
+        "email": email.lower(),
+        "proposito": PROPOSITO_ACTIVACION,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=INVITACION_HORAS),
+    }
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def decode_invitation_token(token: str) -> dict[str, Any]:
+    payload = _decode(token)
+    if payload.get("proposito") != PROPOSITO_ACTIVACION:
+        raise ValueError("Token inválido o expirado")
+    return payload

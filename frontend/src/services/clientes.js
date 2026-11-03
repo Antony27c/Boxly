@@ -51,6 +51,11 @@ export const clientesService = {
         })
       : api.put(`${RECURSO}/${id}`, cliente, token),
 
+  invitar: (id, token) =>
+    USAR_MOCK
+      ? Promise.reject(new MockError('Las invitaciones necesitan el backend conectado.', 400))
+      : api.post(`${RECURSO}/${id}/invitacion`, {}, token),
+
   eliminar: (id, token) =>
     USAR_MOCK
       ? operar((datos) => {
