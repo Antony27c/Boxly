@@ -44,13 +44,13 @@ def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:Perso
 
 
 @router.post("/{orden_id}/cobro", response_model=OrdenResponse)
-def emitir_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: PersonalUser):
-    return orden_service.emitir_cobro(db, orden_id, datos.monto, usuario)
+def emitir_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: PersonalUser, background_tasks: BackgroundTasks):
+    return orden_service.emitir_cobro(db, orden_id, datos.monto, usuario, background_tasks)
 
 
 @router.post("/{orden_id}/cobro/aprobar", response_model=OrdenResponse)
-def aprobar_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: RecepcionUser):
-    return orden_service.aprobar_cobro(db, orden_id, datos.monto, usuario.id)
+def aprobar_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: RecepcionUser, background_tasks: BackgroundTasks):
+    return orden_service.aprobar_cobro(db, orden_id, datos.monto, usuario.id, background_tasks)
 
 
 @router.get("/{orden_id}/historial", response_model=List[HistorialResponse])

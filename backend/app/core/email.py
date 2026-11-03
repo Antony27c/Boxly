@@ -88,6 +88,37 @@ ESTADO_TEMPLATE = """
 </html>
 """
  
+COBRO_TEMPLATE = ESTADO_TEMPLATE.replace(
+    "<h2>Actualización de tu orden de trabajo</h2>", "<h2>Tu orden tiene un cobro emitido</h2>"
+).replace(
+    "ha cambiado de estado.", "ya tiene el monto a pagar definido."
+).replace(
+    """<p><strong>Nuevo estado:</strong> <span class="estado">{estado_nombre}</span></p>
+                <p><strong>Descripción:</strong> {comentario}</p>""",
+    """<p><strong>Monto a pagar:</strong> <span class="estado">{monto}</span></p>
+                <p><strong>Estado de la orden:</strong> {estado_nombre}</p>""",
+)
+
+
+async def _enviar(email: str, asunto: str, html: str, orden_codigo: str) -> ResultadoEnvio:
+    """Manda el correo. Nunca lanza: devuelve cómo salió."""
+    settings = get_settings()
+    if not settings.smtp_user or not settings.smtp_password or not _remitente():
+        logger.warning("SMTP sin configurar: no se envía el aviso de la orden %s", orden_codigo)
+        return ResultadoEnvio("omitido", asunto, "El servidor de correo no está configurado")
+    message = MessageSchema(subject=asunto, recipients=[email], body=html, subtype=MessageType.html)
+    try:
+        await _get_fastmail().send_message(message)
+    except Exception as problema:
+        logger.exception("No se pudo enviar el aviso de la orden %s a %s", orden_codigo, email)
+        return ResultadoEnvio("fallido", asunto, f"{type(problema).__name__}: {problema}"[:500])
+    return ResultadoEnvio("enviado", asunto)
+
+
+def _fecha() -> str:
+    return datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+
+
 async def enviar_notificacion_cambio_estado(
     email: str,
     cliente_nombre: str,
@@ -98,14 +129,8 @@ async def enviar_notificacion_cambio_estado(
     estado_nombre: str,
     comentario: str,
 ) -> ResultadoEnvio:
-    """Envía el aviso de cambio de estado. Nunca lanza: devuelve cómo salió."""
-    settings = get_settings()
-    asunto = f"Actualización de orden {orden_codigo} - {estado_nombre}"
-    if not settings.smtp_user or not settings.smtp_password or not _remitente():
-        logger.warning("SMTP sin configurar: no se envía el aviso de la orden %s", orden_codigo)
-        return ResultadoEnvio("omitido", asunto, "El servidor de correo no está configurado")
-
-    html_content = ESTADO_TEMPLATE.format(
+    """Aviso al cliente de que cambió el estado de su orden."""
+    html = ESTADO_TEMPLATE.format(
         cliente_nombre=escape(cliente_nombre),
         vehiculo_patente=escape(vehiculo_patente),
         vehiculo_marca=escape(vehiculo_marca),
@@ -113,17 +138,32 @@ async def enviar_notificacion_cambio_estado(
         orden_codigo=escape(orden_codigo),
         estado_nombre=escape(estado_nombre),
         comentario=escape(comentario),
-        fecha=datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
+        fecha=_fecha(),
     )
-    message = MessageSchema(
-        subject=asunto,
-        recipients=[email],
-        body=html_content,
-        subtype=MessageType.html,
+    return await _enviar(
+        email, f"Actualización de orden {orden_codigo} - {estado_nombre}", html, orden_codigo
     )
-    try:
-        await _get_fastmail().send_message(message)
-    except Exception as problema:
-        logger.exception("No se pudo enviar el aviso de la orden %s a %s", orden_codigo, email)
-        return ResultadoEnvio("fallido", asunto, f"{type(problema).__name__}: {problema}"[:500])
-    return ResultadoEnvio("enviado", asunto)
+
+
+async def enviar_notificacion_cobro(
+    email: str,
+    cliente_nombre: str,
+    vehiculo_patente: str,
+    vehiculo_marca: str,
+    vehiculo_modelo: str,
+    orden_codigo: str,
+    estado_nombre: str,
+    monto: str,
+) -> ResultadoEnvio:
+    """Aviso al cliente de que se emitió (aprobó) el cobro de su orden."""
+    html = COBRO_TEMPLATE.format(
+        cliente_nombre=escape(cliente_nombre),
+        vehiculo_patente=escape(vehiculo_patente),
+        vehiculo_marca=escape(vehiculo_marca),
+        vehiculo_modelo=escape(vehiculo_modelo),
+        orden_codigo=escape(orden_codigo),
+        estado_nombre=escape(estado_nombre),
+        monto=escape(monto),
+        fecha=_fecha(),
+    )
+    return await _enviar(email, f"Cobro emitido - orden {orden_codigo}", html, orden_codigo)

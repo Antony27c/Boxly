@@ -106,3 +106,45 @@ def test_eliminar_orden_borra_sus_comprobantes(api, datos, envio):
     assert api.delete(f"/api/v1/ordenes/{datos['orden']}", headers=datos["admin"]).status_code == 200
     with SessionLocal() as db:
         assert db.query(Notificacion).count() == 0
+
+
+@pytest.fixture
+def orden_lista(datos):
+    with SessionLocal() as db:
+        db.get(Orden, datos["orden"]).estado = "listo"
+        db.commit()
+    return datos
+
+
+@pytest.fixture
+def envio_cobro(monkeypatch):
+    mock = AsyncMock(return_value=ResultadoEnvio("enviado", "Cobro emitido - orden OT-1"))
+    monkeypatch.setattr("app.api.v1.ordenes.service.enviar_notificacion_cobro", mock)
+    return mock
+
+
+def _avisos(api, datos):
+    return api.get(f"/api/v1/ordenes/{datos['orden']}/notificaciones", headers=datos["admin"]).json()
+
+
+def test_emitir_cobro_avisa_al_cliente(api, orden_lista, envio_cobro):
+    r = api.post(f"/api/v1/ordenes/{orden_lista['orden']}/cobro", headers=orden_lista["admin"], json={"monto": 15000})
+    assert r.status_code == 200
+    avisos = _avisos(api, orden_lista)
+    assert [a["tipo"] for a in avisos] == ["cobro"] and avisos[0]["resultado"] == "enviado"
+    assert envio_cobro.await_args.args[-1] == "$ 15,000.00"
+
+
+def test_aprobar_cobro_avisa_al_cliente(api, orden_lista, envio_cobro):
+    r = api.post(f"/api/v1/ordenes/{orden_lista['orden']}/cobro/aprobar", headers=orden_lista["recepcion"], json={"monto": 9000})
+    assert r.status_code == 200
+    assert [a["tipo"] for a in _avisos(api, orden_lista)] == ["cobro"]
+
+
+def test_cobro_sin_email_no_avisa(api, datos, envio_cobro):
+    with SessionLocal() as db:
+        db.get(Orden, datos["orden_sin_mail"]).estado = "listo"
+        db.commit()
+    r = api.post(f"/api/v1/ordenes/{datos['orden_sin_mail']}/cobro", headers=datos["admin"], json={"monto": 100})
+    assert r.status_code == 200
+    envio_cobro.assert_not_awaited()

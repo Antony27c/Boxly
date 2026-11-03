@@ -66,7 +66,8 @@ export default function AvisosOrden({ ordenId, avisos, puedeEnviar, onEnviado })
                 </div>
                 <p className="mt-1">{aviso.asunto}</p>
                 <p className="text-xs text-muted">
-                  Para {aviso.destinatario} · estado {nombreEstado(aviso.estado_orden)} ·{' '}
+                  {aviso.tipo === 'cobro' ? 'Aviso de cobro' : 'Cambio de estado'} · para {aviso.destinatario} · estado{' '}
+                  {nombreEstado(aviso.estado_orden)} ·{' '}
                   {aviso.manual ? `reenviado por ${aviso.enviado_por_nombre ?? 'el administrador'}` : 'automático'}
                 </p>
                 {aviso.error && <p className="mt-1 text-xs text-danger">{aviso.error}</p>}
