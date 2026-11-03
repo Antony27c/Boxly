@@ -1,11 +1,14 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
-from fastapi import UploadFile
+from fastapi import BackgroundTasks, HTTPException, UploadFile
 from typing import List, Optional
 from datetime import datetime, timezone
 
 from app.core.config import UPLOADS_DIR
-from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, OrdenCreate, OrdenUpdate
+import anyio
+
+from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
+from app.db.session import SessionLocal
+from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate
 from app.models.orden import Orden
 from app.models.usuario import RolUsuario, Usuario
 from app.models.vehiculo import Vehiculo
@@ -62,7 +65,15 @@ class OrdenService:
         orden.cobro_aprobado_por_id = usuario_id
         orden.cobro_aprobado_en = datetime.now()
 
-    def emitir_cobro(self, db: Session, orden_id: int, monto, usuario: Usuario) -> Orden:
+    def _avisar_cobro(self, orden: Orden, background_tasks: BackgroundTasks | None) -> None:
+        if background_tasks is None or not orden.cliente or not orden.cliente.email:
+            return
+        background_tasks.add_task(self.enviar_y_registrar_aviso, orden.id, "", None, "cobro")
+
+    def emitir_cobro(
+        self, db: Session, orden_id: int, monto, usuario: Usuario,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Orden:
         es_mecanico = usuario.rol == RolUsuario.mecanico
         orden = self.obtener_detalle_orden(db, orden_id, usuario.id if es_mecanico else None)
         self._validar_cobrable(orden)
@@ -79,16 +90,24 @@ class OrdenService:
             orden.cobro_propuesto_por_id = usuario.id
         else:
             self._aprobar_cobro(orden, monto, usuario.id)
-        return orden_repository.guardar_cambios(db, orden)
+        orden = orden_repository.guardar_cambios(db, orden)
+        if orden.cobro_estado == "aprobado":
+            self._avisar_cobro(orden, background_tasks)
+        return orden
 
-    def aprobar_cobro(self, db: Session, orden_id: int, monto, usuario_id: int) -> Orden:
+    def aprobar_cobro(
+        self, db: Session, orden_id: int, monto, usuario_id: int,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Orden:
         orden = self.obtener_detalle_orden(db, orden_id)
         self._validar_cobrable(orden)
         monto = monto or orden.monto_propuesto
         if not monto:
             raise HTTPException(status_code=400, detail="No hay un cobro propuesto para aprobar")
         self._aprobar_cobro(orden, monto, usuario_id)
-        return orden_repository.guardar_cambios(db, orden)
+        orden = orden_repository.guardar_cambios(db, orden)
+        self._avisar_cobro(orden, background_tasks)
+        return orden
 
     def listar_estados(self) -> List[EstadoOrdenResponse]:
         return [
@@ -162,9 +181,13 @@ class OrdenService:
         )
         return orden_repository.guardar_cambios(db, orden)
     
-    def editar_orden(self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int) -> Orden:
+    def editar_orden(
+        self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Orden:
        
         orden = self.obtener_detalle_orden(db, orden_id)
+        notificar_estado = None
 
         if datos.costo_final is not None and orden.pagada:
             raise HTTPException(status_code=409, detail="La orden ya está pagada; no se puede cambiar el monto")
@@ -199,6 +222,8 @@ class OrdenService:
             orden.estado = datos.estado
             if datos.estado == "entregado" and orden.fecha_entrega is None:
                 orden.fecha_entrega= datetime.now(timezone.utc)
+                
+            notificar_estado = datos.estado
         for campo in (
             "mecanico_id",
             "descripcion_ingreso",
@@ -213,7 +238,69 @@ class OrdenService:
                 setattr(orden, campo, valor)
         if datos.costo_final is not None:
             self._aprobar_cobro(orden, datos.costo_final, usuario_id)
-        return orden_repository.guardar_cambios(db, orden)
+        orden = orden_repository.guardar_cambios(db, orden)
+        if datos.costo_final is not None:
+            self._avisar_cobro(orden, background_tasks)
+        if notificar_estado and background_tasks is not None and orden.cliente and orden.cliente.email:
+            background_tasks.add_task(
+                self.enviar_y_registrar_aviso, orden.id, datos.comentario_cambio.strip(), None
+            )
+        return orden
+
+    def enviar_y_registrar_aviso(
+        self, orden_id: int, comentario: str, enviado_por_id: Optional[int], tipo: str = "cambio_estado"
+    ) -> NotificacionResponse:
+        """Manda el aviso (de estado o de cobro) y deja el comprobante en la base.
+
+        Abre su propia sesión: corre en segundo plano, cuando la del request ya se cerró.
+        """
+        with SessionLocal() as db:
+            orden = self.obtener_detalle_orden(db, orden_id)
+            vehiculo = orden.vehiculo
+            datos_comunes = (
+                orden.cliente.email,
+                f"{orden.cliente.apellido}, {orden.cliente.nombre}",
+                vehiculo.patente if vehiculo else "N/A",
+                vehiculo.marca if vehiculo else "N/A",
+                vehiculo.modelo if vehiculo else "N/A",
+                orden.codigo,
+                ESTADOS_ORDEN[orden.estado][0],
+            )
+            if tipo == "cobro":
+                envio = anyio.from_thread.run(
+                    enviar_notificacion_cobro, *datos_comunes, f"$ {orden.costo_final:,.2f}"
+                )
+            else:
+                envio = anyio.from_thread.run(
+                    enviar_notificacion_cambio_estado, *datos_comunes, comentario, orden.estado
+                )
+            notificacion = orden_repository.guardar_notificacion(
+                db,
+                orden_id=orden.id,
+                tipo=tipo,
+                estado_orden=orden.estado,
+                destinatario=orden.cliente.email,
+                asunto=envio.asunto,
+                resultado=envio.resultado,
+                error=envio.error,
+                enviado_por_id=enviado_por_id,
+            )
+            return NotificacionResponse.model_validate(notificacion)
+
+    def reenviar_aviso(self, db: Session, orden_id: int, usuario_id: int) -> NotificacionResponse:
+        orden = self.obtener_detalle_orden(db, orden_id)
+        if not orden.cliente or not orden.cliente.email:
+            raise HTTPException(status_code=400, detail="El cliente no tiene un email cargado")
+        historial = orden_repository.obtener_historial(db, orden_id)
+        comentario = (historial[-1].comentario if historial else None) or "Aviso reenviado por el taller"
+        return self.enviar_y_registrar_aviso(orden_id, comentario, usuario_id)
+
+    def listar_notificaciones(self, db: Session, orden_id: int) -> List[NotificacionResponse]:
+        self.obtener_detalle_orden(db, orden_id)
+        return [
+            NotificacionResponse.model_validate(item)
+            for item in orden_repository.listar_notificaciones(db, orden_id)
+        ]
 
     def obtener_historial_orden(self, db:Session, orden_id: int) -> List[HistorialResponse]:
         self.obtener_detalle_orden(db, orden_id)

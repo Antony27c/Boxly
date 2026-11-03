@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     backend_public_url: str | None = None
 
+    # Email (Gmail SMTP)
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_name: str = "Boxly Taller Mecánico"
+    smtp_from_email: str = ""
+    smtp_tls: bool = True
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
