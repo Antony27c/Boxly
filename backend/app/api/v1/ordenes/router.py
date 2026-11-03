@@ -37,9 +37,9 @@ def detalle_orden(orden_id: int, db: DbSession, usuario:PersonalUser):
 
 
 @router.patch("/{orden_id}", response_model=OrdenResponse)
-def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:PersonalUser):
+async def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:PersonalUser):
     orden_service.validar_edicion_mecanico(db, orden_id, datos, filtro_mecanico(usuario))
-    return orden_service.editar_orden(db, orden_id, datos, usuario_id=usuario.id)
+    return await orden_service.editar_orden(db, orden_id, datos, usuario_id=usuario.id)
 
 
 @router.post("/{orden_id}/cobro", response_model=OrdenResponse)

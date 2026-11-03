@@ -5,6 +5,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 from app.core.config import UPLOADS_DIR
+from app.core.email import enviar_notificacion_cambio_estado
 from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, OrdenCreate, OrdenUpdate
 from app.models.orden import Orden
 from app.models.usuario import RolUsuario, Usuario
@@ -162,7 +163,7 @@ class OrdenService:
         )
         return orden_repository.guardar_cambios(db, orden)
     
-    def editar_orden(self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int) -> Orden:
+    async def editar_orden(self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int) -> Orden:
        
         orden = self.obtener_detalle_orden(db, orden_id)
 
@@ -199,6 +200,19 @@ class OrdenService:
             orden.estado = datos.estado
             if datos.estado == "entregado" and orden.fecha_entrega is None:
                 orden.fecha_entrega= datetime.now(timezone.utc)
+                
+            if orden.cliente and orden.cliente.email:
+                estado_nombre = ESTADOS_ORDEN[datos.estado][0]
+                await enviar_notificacion_cambio_estado(
+                    email=orden.cliente.email,
+                    cliente_nombre=f"{orden.cliente.apellido}, {orden.cliente.nombre}",
+                    vehiculo_patente=orden.vehiculo.patente if orden.vehiculo else "N/A",
+                    vehiculo_marca=orden.vehiculo.marca if orden.vehiculo else "N/A",
+                    vehiculo_modelo=orden.vehiculo.modelo if orden.vehiculo else "N/A",
+                    orden_codigo=orden.codigo,
+                    estado_nombre=estado_nombre,
+                    comentario=datos.comentario_cambio.strip(),
+            )
         for campo in (
             "mecanico_id",
             "descripcion_ingreso",
