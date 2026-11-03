@@ -85,7 +85,7 @@ export default function Clientes() {
     setErrorInvitacion('')
     try {
       await clientesService.invitar(cliente.id, token)
-      setAviso(`Invitación enviada a ${cliente.email}.`)
+      setAviso(`Correo de verificación enviado a ${cliente.email}.`)
     } catch (problema) {
       setErrorInvitacion(problema.message)
     } finally {
@@ -187,10 +187,16 @@ export default function Clientes() {
                     <td className="px-4 py-3 text-muted">
                       <p>{cliente.telefono}</p>
                       {cliente.email && <p className="text-xs">{cliente.email}</p>}
-                      {cliente.tiene_cuenta && (
+                      {cliente.tiene_cuenta ? (
                         <div className="mt-1">
                           <Badge tono="ok">Con acceso al portal</Badge>
                         </div>
+                      ) : (
+                        cliente.email && (
+                          <div className="mt-1">
+                            <Badge tono="ambar">Verificación pendiente</Badge>
+                          </div>
+                        )
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -209,7 +215,7 @@ export default function Clientes() {
                             cargando={invitando === cliente.id}
                             onClick={() => invitar(cliente)}
                           >
-                            Invitar al portal
+                            Reenviar correo de verificación
                           </Button>
                         )}
                         <Button variante="fantasma" onClick={() => abrirEdicion(cliente)}>
@@ -244,10 +250,16 @@ export default function Clientes() {
                 <p className="mt-1 text-sm text-muted">DNI/CUIT {cliente.dni}</p>
                 <p className="text-sm text-muted">{cliente.telefono}</p>
                 {cliente.email && <p className="text-sm text-muted">{cliente.email}</p>}
-                {cliente.tiene_cuenta && (
+                {cliente.tiene_cuenta ? (
                   <div className="mt-1">
                     <Badge tono="ok">Con acceso al portal</Badge>
                   </div>
+                ) : (
+                  cliente.email && (
+                    <div className="mt-1">
+                      <Badge tono="ambar">Verificación pendiente</Badge>
+                    </div>
+                  )
                 )}
                 <Link
                   to={`/vehiculos?cliente=${cliente.id}`}
@@ -262,7 +274,7 @@ export default function Clientes() {
                       cargando={invitando === cliente.id}
                       onClick={() => invitar(cliente)}
                     >
-                      Invitar al portal
+                      Reenviar correo de verificación
                     </Button>
                   )}
                   <Button variante="secundario" onClick={() => abrirEdicion(cliente)}>
