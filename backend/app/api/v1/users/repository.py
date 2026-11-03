@@ -1,6 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.cliente import Cliente
 from app.models.usuario import RolUsuario, Usuario
 
 
@@ -11,6 +12,11 @@ def get_by_id(db: Session, user_id: int) -> Usuario | None:
 def get_by_email(db: Session, email: str) -> Usuario | None:
     stmt = select(Usuario).where(Usuario.email == email.lower())
     return db.scalar(stmt)
+
+
+def get_cliente_by_email(db: Session, email: str) -> Cliente | None:
+    stmt = select(Cliente).where(func.lower(Cliente.email) == email.lower().strip())
+    return db.scalars(stmt).first()
 
 
 def get_by_cliente_id(db: Session, cliente_id: int) -> Usuario | None:

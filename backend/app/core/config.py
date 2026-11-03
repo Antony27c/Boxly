@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     smtp_from_email: str = ""
     smtp_tls: bool = True
 
+    # SOLO DEMO: la contraseña inicial de cada cliente es su DNI/CUIT y no hace falta el correo
+    # de verificación. Es insegura (el DNI no es secreto): apagarla antes de uso real.
+    cliente_password_dni: bool = False
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

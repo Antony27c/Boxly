@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.clientes import repository
 from app.api.v1.users import repository as users_repository
+from app.api.v1.users import service as users_service
 from app.core.config import get_settings
 from app.core.email import enviar_invitacion_portal
 from app.core.security import create_invitation_token
@@ -42,7 +43,11 @@ def create_cliente(db: Session, data: ClienteCreate) -> ClienteResponse:
             status_code=status.HTTP_409_CONFLICT,
             detail="Ya existe un cliente con ese DNI/CUIT.",
         )
-    return _to_response(repository.create(db, payload))
+    cliente = repository.create(db, payload)
+    if get_settings().cliente_password_dni:
+        users_service.crear_cuenta_con_dni(db, cliente)
+        db.refresh(cliente)
+    return _to_response(cliente)
 
 
 def update_cliente(db: Session, cliente_id: int, data: ClienteUpdate) -> ClienteResponse:

@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.users import repository
+from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     decode_invitation_token,
@@ -58,8 +59,30 @@ def _validar_cliente(
     return cliente_id
 
 
+def crear_cuenta_con_dni(db: Session, cliente: Cliente) -> Usuario | None:
+    """SOLO DEMO: cuenta del cliente con su DNI/CUIT como contraseña (ver cliente_password_dni)."""
+    if not cliente.email:
+        return None
+    if repository.get_by_cliente_id(db, cliente.id) or repository.get_by_email(db, cliente.email):
+        return None
+    return repository.create(
+        db,
+        nombre=cliente.nombre,
+        apellido=cliente.apellido,
+        email=cliente.email,
+        password_hash=hash_password(cliente.dni.strip()),
+        rol=RolUsuario.cliente,
+        cliente_id=cliente.id,
+    )
+
+
 def authenticate(db: Session, data: LoginRequest) -> TokenResponse:
     user = repository.get_by_email(db, data.email)
+    if user is None and get_settings().cliente_password_dni:
+        # Cliente que todavía no tiene cuenta: la primera vez entra con su correo y su DNI.
+        cliente = repository.get_cliente_by_email(db, data.email)
+        if cliente is not None and data.password == cliente.dni.strip():
+            user = crear_cuenta_con_dni(db, cliente)
     if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

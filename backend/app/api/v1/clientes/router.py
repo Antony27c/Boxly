@@ -42,7 +42,7 @@ def crear_cliente(
     background_tasks: BackgroundTasks,
 ) -> ClienteResponse:
     cliente = service.create_cliente(db, data)
-    if cliente.email:
+    if cliente.email and not cliente.tiene_cuenta:
         background_tasks.add_task(service.invitar_en_segundo_plano, cliente.id)
     return cliente
 

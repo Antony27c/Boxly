@@ -67,11 +67,13 @@ export default function Clientes() {
       await clientesService.actualizar(enEdicion.id, datosCliente, token)
       setAviso('Cliente actualizado.')
     } else {
-      await clientesService.crear(datosCliente, token)
+      const nuevo = await clientesService.crear(datosCliente, token)
       setAviso(
-        datosCliente.email
-          ? 'Cliente dado de alta. Le enviamos un correo para que confirme sus datos y active su cuenta.'
-          : 'Cliente dado de alta.',
+        nuevo?.tiene_cuenta
+          ? 'Cliente dado de alta. Ya puede entrar al portal con su correo y su DNI como contraseña.'
+          : datosCliente.email
+            ? 'Cliente dado de alta. Le enviamos un correo para que confirme sus datos y active su cuenta.'
+            : 'Cliente dado de alta.',
       )
     }
     setFormularioAbierto(false)
