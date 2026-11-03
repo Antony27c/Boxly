@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape
 
@@ -9,6 +10,13 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 _fastmail: FastMail | None = None
+
+
+@dataclass
+class ResultadoEnvio:
+    resultado: str  # "enviado" | "fallido" | "omitido"
+    asunto: str
+    error: str | None = None
 
 
 def _remitente() -> str:
@@ -89,12 +97,13 @@ async def enviar_notificacion_cambio_estado(
     orden_codigo: str,
     estado_nombre: str,
     comentario: str,
-) -> None:
-    """Envía el aviso de cambio de estado. Nunca lanza: un fallo del SMTP solo se registra."""
+) -> ResultadoEnvio:
+    """Envía el aviso de cambio de estado. Nunca lanza: devuelve cómo salió."""
     settings = get_settings()
+    asunto = f"Actualización de orden {orden_codigo} - {estado_nombre}"
     if not settings.smtp_user or not settings.smtp_password or not _remitente():
         logger.warning("SMTP sin configurar: no se envía el aviso de la orden %s", orden_codigo)
-        return
+        return ResultadoEnvio("omitido", asunto, "El servidor de correo no está configurado")
 
     html_content = ESTADO_TEMPLATE.format(
         cliente_nombre=escape(cliente_nombre),
@@ -107,12 +116,14 @@ async def enviar_notificacion_cambio_estado(
         fecha=datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
     )
     message = MessageSchema(
-        subject=f"Actualización de orden {orden_codigo} - {estado_nombre}",
+        subject=asunto,
         recipients=[email],
         body=html_content,
         subtype=MessageType.html,
     )
     try:
         await _get_fastmail().send_message(message)
-    except Exception:
+    except Exception as problema:
         logger.exception("No se pudo enviar el aviso de la orden %s a %s", orden_codigo, email)
+        return ResultadoEnvio("fallido", asunto, f"{type(problema).__name__}: {problema}"[:500])
+    return ResultadoEnvio("enviado", asunto)

@@ -4,8 +4,11 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 from app.core.config import UPLOADS_DIR
+import anyio
+
 from app.core.email import enviar_notificacion_cambio_estado
-from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, OrdenCreate, OrdenUpdate
+from app.db.session import SessionLocal
+from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate
 from app.models.orden import Orden
 from app.models.usuario import RolUsuario, Usuario
 from app.models.vehiculo import Vehiculo
@@ -221,19 +224,58 @@ class OrdenService:
             self._aprobar_cobro(orden, datos.costo_final, usuario_id)
         orden = orden_repository.guardar_cambios(db, orden)
         if notificar_estado and background_tasks is not None and orden.cliente and orden.cliente.email:
-            vehiculo = orden.vehiculo
             background_tasks.add_task(
-                enviar_notificacion_cambio_estado,
-                email=orden.cliente.email,
-                cliente_nombre=f"{orden.cliente.apellido}, {orden.cliente.nombre}",
-                vehiculo_patente=vehiculo.patente if vehiculo else "N/A",
-                vehiculo_marca=vehiculo.marca if vehiculo else "N/A",
-                vehiculo_modelo=vehiculo.modelo if vehiculo else "N/A",
-                orden_codigo=orden.codigo,
-                estado_nombre=ESTADOS_ORDEN[notificar_estado][0],
-                comentario=datos.comentario_cambio.strip(),
+                self.enviar_y_registrar_aviso, orden.id, datos.comentario_cambio.strip(), None
             )
         return orden
+
+    def enviar_y_registrar_aviso(
+        self, orden_id: int, comentario: str, enviado_por_id: Optional[int]
+    ) -> NotificacionResponse:
+        """Manda el aviso del estado actual y deja el comprobante en la base.
+
+        Abre su propia sesión: corre en segundo plano, cuando la del request ya se cerró.
+        """
+        with SessionLocal() as db:
+            orden = self.obtener_detalle_orden(db, orden_id)
+            vehiculo = orden.vehiculo
+            envio = anyio.from_thread.run(
+                enviar_notificacion_cambio_estado,
+                orden.cliente.email,
+                f"{orden.cliente.apellido}, {orden.cliente.nombre}",
+                vehiculo.patente if vehiculo else "N/A",
+                vehiculo.marca if vehiculo else "N/A",
+                vehiculo.modelo if vehiculo else "N/A",
+                orden.codigo,
+                ESTADOS_ORDEN[orden.estado][0],
+                comentario,
+            )
+            notificacion = orden_repository.guardar_notificacion(
+                db,
+                orden_id=orden.id,
+                estado_orden=orden.estado,
+                destinatario=orden.cliente.email,
+                asunto=envio.asunto,
+                resultado=envio.resultado,
+                error=envio.error,
+                enviado_por_id=enviado_por_id,
+            )
+            return NotificacionResponse.model_validate(notificacion)
+
+    def reenviar_aviso(self, db: Session, orden_id: int, usuario_id: int) -> NotificacionResponse:
+        orden = self.obtener_detalle_orden(db, orden_id)
+        if not orden.cliente or not orden.cliente.email:
+            raise HTTPException(status_code=400, detail="El cliente no tiene un email cargado")
+        historial = orden_repository.obtener_historial(db, orden_id)
+        comentario = (historial[-1].comentario if historial else None) or "Aviso reenviado por el taller"
+        return self.enviar_y_registrar_aviso(orden_id, comentario, usuario_id)
+
+    def listar_notificaciones(self, db: Session, orden_id: int) -> List[NotificacionResponse]:
+        self.obtener_detalle_orden(db, orden_id)
+        return [
+            NotificacionResponse.model_validate(item)
+            for item in orden_repository.listar_notificaciones(db, orden_id)
+        ]
 
     def obtener_historial_orden(self, db:Session, orden_id: int) -> List[HistorialResponse]:
         self.obtener_detalle_orden(db, orden_id)

@@ -4,7 +4,7 @@ from typing import List, Optional, Annotated
 
 from app.core.dependencies import CurrentUser, PersonalUser,DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.orden import CobroRequest, EstadoOrdenResponse, HistorialResponse, OrdenCreate, OrdenUpdate, OrdenResponse
+from app.schemas.orden import CobroRequest, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate, OrdenResponse
 from .service import orden_service
 from app.schemas.usuario import MessageResponse
 from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
@@ -15,6 +15,7 @@ router = APIRouter()
 RecepcionUser= Annotated[
     Usuario,
     Depends(require_roles(RolUsuario.administrador, RolUsuario.recepcion)),]
+AdminUser = Annotated[Usuario, Depends(require_roles(RolUsuario.administrador))]
 
 
 @router.get("", response_model=List[OrdenResponse])
@@ -56,6 +57,17 @@ def aprobar_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: Re
 def historial_orden(orden_id:int, db:DbSession, usuario: PersonalUser):
     orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
     return orden_service.obtener_historial_orden(db, orden_id)
+
+@router.get("/{orden_id}/notificaciones", response_model=List[NotificacionResponse])
+def listar_notificaciones(orden_id: int, db: DbSession, usuario: PersonalUser):
+    orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
+    return orden_service.listar_notificaciones(db, orden_id)
+
+
+@router.post("/{orden_id}/notificaciones", response_model=NotificacionResponse, status_code=status.HTTP_201_CREATED)
+def reenviar_aviso(orden_id: int, db: DbSession, usuario: AdminUser):
+    return orden_service.reenviar_aviso(db, orden_id, usuario.id)
+
 
 @router.delete("/{orden_id}", response_model=MessageResponse)
 def eliminar_orden(orden_id: int, db:DbSession,_:RecepcionUser):

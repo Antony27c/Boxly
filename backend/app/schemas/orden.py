@@ -85,3 +85,19 @@ class HistorialResponse(BaseModel):
     estado_nuevo: str
     comentario: Optional[str] = None
     fecha: datetime
+
+
+class NotificacionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    orden_id: int
+    tipo: str
+    estado_orden: str
+    destinatario: str
+    asunto: str
+    resultado: str
+    error: Optional[str] = None
+    manual: bool = False
+    enviado_por_nombre: Optional[str] = None
+    creado_en: datetime

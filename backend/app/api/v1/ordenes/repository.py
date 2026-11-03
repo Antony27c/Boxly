@@ -5,6 +5,8 @@ from typing import List, Optional
 from app.models.orden import Historial_estado, Orden
 from app.models.detalle_orden import DetalleOrden
 from app.models.imagen_orden import ImagenOrden
+from app.models.notificacion import Notificacion
+
 class OrdenRepository:
     
     def obtener_ordenes(self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None) -> List[Orden]:
@@ -40,6 +42,21 @@ class OrdenRepository:
         db.add(historial)
         
         return historial
+    def guardar_notificacion(self, db: Session, **campos) -> Notificacion:
+        notificacion = Notificacion(**campos)
+        db.add(notificacion)
+        db.commit()
+        db.refresh(notificacion)
+        return notificacion
+
+    def listar_notificaciones(self, db: Session, orden_id: int) -> List[Notificacion]:
+        stmt = (
+            select(Notificacion)
+            .where(Notificacion.orden_id == orden_id)
+            .order_by(Notificacion.creado_en.desc(), Notificacion.id.desc())
+        )
+        return list(db.scalars(stmt).all())
+
     def obtener_historial(self, db:Session, orden_id:int) -> List[Historial_estado]:
         stmt = (
             select(Historial_estado)
@@ -57,6 +74,10 @@ class OrdenRepository:
             select(Historial_estado).where(Historial_estado.orden_id == orden.id)
         ):
             db.delete(historial)
+        for notificacion in db.scalars(
+            select(Notificacion).where(Notificacion.orden_id == orden.id)
+        ):
+            db.delete(notificacion)
         for detalle in db.scalars(
             select(DetalleOrden).where(DetalleOrden.orden_id == orden.id)
         ):

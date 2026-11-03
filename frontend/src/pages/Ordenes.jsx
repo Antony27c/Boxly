@@ -19,7 +19,7 @@ import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
-import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
+import { ROLES_ADMIN, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
 import {
   ESTADOS_ORDEN,
   estadoCobro,
@@ -56,6 +56,7 @@ function fechaLegible(fecha) {
 export default function Ordenes() {
   const { token, usuario } = useAuth()
   const esMostrador = tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
+  const esAdmin = tieneAcceso(ROLES_ADMIN, usuario?.rol)
   const [parametros, setParametros] = useSearchParams()
   const estadoFiltro = parametros.get('estado') ?? ''
   const [busqueda, setBusqueda] = useState('')
@@ -476,7 +477,7 @@ export default function Ordenes() {
         descripcion="Seguimiento de la orden etapa por etapa, con descripción, responsable y fotos."
         onCerrar={() => setConHistorial(null)}
       >
-        {conHistorial && <HistorialOrden ordenId={conHistorial.id} />}
+        {conHistorial && <HistorialOrden ordenId={conHistorial.id} puedeEnviarAviso={esAdmin} />}
       </Modal>
 
       <Confirmacion

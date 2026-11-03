@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import AvisosOrden from '@/components/ordenes/AvisosOrden'
 import LineaDeTiempo from '@/components/ordenes/LineaDeTiempo'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
@@ -6,14 +7,15 @@ import Loader from '@/components/ui/Loader'
 import useRecurso from '@/hooks/useRecurso'
 import { ordenesService } from '@/services/ordenes'
 
-export default function HistorialOrden({ ordenId }) {
+export default function HistorialOrden({ ordenId, puedeEnviarAviso = false }) {
   const [foto, setFoto] = useState(null)
   const cargar = useCallback(
     (t) =>
       Promise.all([
         ordenesService.historial(ordenId, t),
         ordenesService.imagenes(ordenId, t).catch(() => []),
-      ]).then(([historial, imagenes]) => ({ historial, imagenes })),
+        ordenesService.avisos(ordenId, t).catch(() => []),
+      ]).then(([historial, imagenes, avisos]) => ({ historial, imagenes, avisos })),
     [ordenId],
   )
   const { datos, cargando, error, recargar } = useRecurso(cargar)
@@ -48,6 +50,12 @@ export default function HistorialOrden({ ordenId }) {
           </div>
         </div>
       )}
+      <AvisosOrden
+        ordenId={ordenId}
+        avisos={datos.avisos}
+        puedeEnviar={puedeEnviarAviso}
+        onEnviado={recargar}
+      />
     </div>
   )
 }

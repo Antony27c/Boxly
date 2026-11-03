@@ -375,6 +375,14 @@ export const ordenesService = {
           .patch(`${RECURSO}/${id}`, { estado: CODIGOS[estado], comentario_cambio: comentario }, token)
           .then(desdeApi),
 
+  avisos: (id, token) =>
+    USAR_MOCK ? Promise.resolve([]) : api.get(`${RECURSO}/${id}/notificaciones`, token),
+
+  enviarAviso: (id, token) =>
+    USAR_MOCK
+      ? Promise.reject(new MockError('El envío de avisos necesita el backend conectado.', 400))
+      : api.post(`${RECURSO}/${id}/notificaciones`, {}, token),
+
   emitirCobro: (id, monto, token) =>
     api.post(`${RECURSO}/${id}/cobro`, { monto: Number(monto) }, token).then(desdeApi),
 
