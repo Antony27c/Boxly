@@ -7,24 +7,8 @@ const USAR_MOCK = usaMock('turnos')
 
 export const ESTADOS_TURNO = ['pendiente', 'confirmado', 'en_taller', 'completado', 'cancelado']
 
-export const HORARIOS = [
-  '08:00',
-  '08:30',
-  '09:00',
-  '09:30',
-  '10:00',
-  '10:30',
-  '11:00',
-  '11:30',
-  '12:00',
-  '14:00',
-  '14:30',
-  '15:00',
-  '15:30',
-  '16:00',
-  '16:30',
-  '17:00',
-]
+// Un turno cada 2 horas (el taller para al mediodía). El backend valida la misma grilla.
+export const HORARIOS = ['08:00', '10:00', '12:00', '14:00', '16:00']
 
 function buscarTurno(datos, id) {
   const turno = datos.turnos.find((item) => item.id === Number(id))

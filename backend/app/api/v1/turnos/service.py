@@ -13,6 +13,19 @@ from app.schemas.turno import (
 )
 
 
+HORAS_TURNO = (8, 10, 12, 14, 16)
+
+
+def _validar_horario(fecha_hora) -> None:
+    """Los turnos se dan cada 2 horas, en punto (misma grilla que el formulario)."""
+    if fecha_hora.hour not in HORAS_TURNO or fecha_hora.minute or fecha_hora.second:
+        horarios = ", ".join(f"{hora:02d}:00" for hora in HORAS_TURNO)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Los turnos se dan cada 2 horas. Horarios disponibles: {horarios}.",
+        )
+
+
 def _to_response(turno) -> TurnoResponse:
     return TurnoResponse.model_validate(turno)
 
@@ -90,6 +103,7 @@ def create_turno(
     payload = data.model_dump()
     _validar_relaciones(db, payload["cliente_id"], payload.get("vehiculo_id"))
     _validar_mecanico(db, payload.get("mecanico_id"))
+    _validar_horario(payload["fecha_hora"])
     _validar_disponibilidad(db, payload["fecha_hora"])
 
     turno = repository.create(
@@ -110,6 +124,9 @@ def update_turno(db: Session, turno_id: int, data: TurnoUpdate) -> TurnoResponse
     _validar_relaciones(db, cliente_id, vehiculo_id)
     if payload.get("mecanico_id") is not None and payload["mecanico_id"] != turno.mecanico_id:
         _validar_mecanico(db, payload["mecanico_id"])
+    # Un turno viejo (fuera de la grilla) se puede seguir editando mientras no se le cambie la hora.
+    if "fecha_hora" in payload and payload["fecha_hora"].replace(tzinfo=None) != turno.fecha_hora.replace(tzinfo=None):
+        _validar_horario(fecha_hora)
     reactivado = turno.estado == "cancelado" and nuevo_estado != "cancelado"
     if nuevo_estado != "cancelado" and ("fecha_hora" in payload or reactivado):
         _validar_disponibilidad(db, fecha_hora, excluir_id=turno.id)
