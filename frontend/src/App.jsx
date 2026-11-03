@@ -4,6 +4,7 @@ import ProtectedRoute from '@/routes/ProtectedRoute'
 import { ROLES_ADMIN, ROLES_CLIENTE, ROLES_MOSTRADOR, ROLES_TALLER } from '@/routes/navegacion'
 import AppLayout from '@/layouts/AppLayout'
 import Login from '@/pages/Login'
+import ActivarCuenta from '@/pages/ActivarCuenta'
 import Inicio from '@/pages/Inicio'
 import Clientes from '@/pages/Clientes'
 import Vehiculos from '@/pages/Vehiculos'
@@ -26,6 +27,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/activar" element={<ActivarCuenta />} />
 
           <Route element={<ProtectedRoute roles={ROLES_TALLER} />}>
             <Route element={<AppLayout />}>

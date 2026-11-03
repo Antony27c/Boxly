@@ -2,10 +2,17 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.users import repository
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_invitation_token,
+    hash_password,
+    verify_password,
+)
 from app.models.cliente import Cliente
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import (
+    ActivacionInfo,
+    ActivacionRequest,
     LoginRequest,
     MecanicoResponse,
     TokenResponse,
@@ -64,6 +71,66 @@ def authenticate(db: Session, data: LoginRequest) -> TokenResponse:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuario deshabilitado",
         )
+    token = create_access_token(
+        subject=user.id,
+        extra_claims={"rol": user.rol.value, "email": user.email},
+    )
+    return TokenResponse(access_token=token, usuario=_to_response(user))
+
+
+def _cliente_de_invitacion(db: Session, token: str) -> Cliente:
+    enlace_invalido = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="El enlace venció o no es válido. Pedile al taller que te envíe otra invitación.",
+    )
+    try:
+        payload = decode_invitation_token(token)
+        cliente = db.get(Cliente, int(payload["sub"]))
+    except (ValueError, KeyError):
+        raise enlace_invalido from None
+    # El correo del enlace tiene que seguir siendo el del cliente (si el taller lo cambió, vale el nuevo).
+    if cliente is None or not cliente.email or cliente.email.lower() != payload.get("email"):
+        raise enlace_invalido
+    if repository.get_by_cliente_id(db, cliente.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta cuenta ya fue activada. Iniciá sesión con tu correo y contraseña.",
+        )
+    if repository.get_by_email(db, cliente.email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ese correo ya está en uso por otra cuenta. Contactá al taller.",
+        )
+    return cliente
+
+
+def info_activacion(db: Session, token: str) -> ActivacionInfo:
+    cliente = _cliente_de_invitacion(db, token)
+    return ActivacionInfo(
+        nombre=cliente.nombre,
+        apellido=cliente.apellido,
+        email=cliente.email,
+        dni=f"{'•' * max(len(cliente.dni) - 3, 0)}{cliente.dni[-3:]}",
+    )
+
+
+def activar_cuenta(db: Session, data: ActivacionRequest) -> TokenResponse:
+    """El cliente confirma sus datos, elige su contraseña y queda con la sesión iniciada."""
+    if not data.confirmo_datos:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Tenés que confirmar que tus datos son correctos.",
+        )
+    cliente = _cliente_de_invitacion(db, data.token)
+    user = repository.create(
+        db,
+        nombre=cliente.nombre,
+        apellido=cliente.apellido,
+        email=cliente.email,
+        password_hash=hash_password(data.password),
+        rol=RolUsuario.cliente,
+        cliente_id=cliente.id,
+    )
     token = create_access_token(
         subject=user.id,
         extra_claims={"rol": user.rol.value, "email": user.email},

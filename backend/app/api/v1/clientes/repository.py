@@ -1,5 +1,5 @@
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.cliente import Cliente
 from app.models.orden import Orden
@@ -18,7 +18,11 @@ def get_by_dni(db: Session, dni: str) -> Cliente | None:
 
 
 def list_clientes(db: Session, *, q: str | None = None) -> list[Cliente]:
-    stmt = select(Cliente).order_by(Cliente.apellido, Cliente.nombre)
+    stmt = (
+        select(Cliente)
+        .options(selectinload(Cliente.usuarios))
+        .order_by(Cliente.apellido, Cliente.nombre)
+    )
     if q:
         patron = f"%{q.strip()}%"
         stmt = stmt.where(

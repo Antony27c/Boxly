@@ -5,6 +5,7 @@ import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
+import { SERVICIOS_SUGERIDOS } from '@/services/serviciosTurno'
 import { ESTADOS_TURNO, HORARIOS } from '@/services/turnos'
 import { validarTurno } from '@/utils/validation'
 
@@ -163,20 +164,23 @@ export default function FormularioTurno({
           ayuda="Los horarios ocupados no se pueden elegir."
           opciones={[
             { valor: '', texto: 'Elegí un horario…' },
-            ...HORARIOS.filter((hora) => !ocupados.has(hora) || hora === datos.hora).map(
-              (hora) => ({ valor: hora, texto: hora }),
-            ),
+            ...[...HORARIOS, ...(datos.hora && !HORARIOS.includes(datos.hora) ? [datos.hora] : [])]
+              .filter((hora) => !ocupados.has(hora) || hora === datos.hora)
+              .map((hora) => ({ valor: hora, texto: hora })),
           ]}
         />
       </div>
 
-      <Field
+      <Autocomplete
         label="Servicio"
         value={datos.servicio}
-        onChange={(e) => cambiar('servicio', e.target.value)}
+        onChange={(texto) => cambiar('servicio', texto)}
+        opciones={SERVICIOS_SUGERIDOS}
         error={errores.servicio}
         disabled={guardando}
         placeholder="Service de 60.000 km"
+        ayuda="Elegí una sugerencia o escribí el servicio."
+        sinResultados="Sin sugerencias: se guarda lo que escribas."
       />
 
       {esEdicion && (

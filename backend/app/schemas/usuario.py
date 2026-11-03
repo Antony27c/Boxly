@@ -74,3 +74,25 @@ class MecanicoResponse(BaseModel):
     id: int
     nombre:str
     apellido:str
+
+
+class ActivacionInfo(BaseModel):
+    """Datos que ve el cliente para confirmarlos antes de crear su contraseña."""
+
+    nombre: str
+    apellido: str
+    email: str
+    dni: str
+
+
+class ActivacionRequest(BaseModel):
+    token: str = Field(min_length=10)
+    password: str = Field(min_length=8, max_length=72)
+    confirmo_datos: bool
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, value: str) -> str:
+        if value.isdigit() or value.isalpha():
+            raise ValueError("La contraseña debe combinar letras y números")
+        return value

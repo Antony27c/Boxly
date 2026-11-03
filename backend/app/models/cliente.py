@@ -9,6 +9,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.orden import Orden
     from app.models.turno import Turno
+    from app.models.usuario import Usuario
     from app.models.vehiculo import Vehiculo
 
 
@@ -31,3 +32,9 @@ class Cliente(Base):
     vehiculos: Mapped[List["Vehiculo"]] = relationship(back_populates="cliente")
     ordenes: Mapped[List["Orden"]] = relationship(back_populates="cliente")
     turnos: Mapped[List["Turno"]] = relationship(back_populates="cliente")
+    # Cuenta de acceso al portal (usuarios.cliente_id es único: a lo sumo una).
+    usuarios: Mapped[List["Usuario"]] = relationship(viewonly=True)
+
+    @property
+    def tiene_cuenta(self) -> bool:
+        return bool(self.usuarios)
