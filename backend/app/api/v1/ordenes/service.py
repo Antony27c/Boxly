@@ -272,7 +272,7 @@ class OrdenService:
                 )
             else:
                 envio = anyio.from_thread.run(
-                    enviar_notificacion_cambio_estado, *datos_comunes, comentario
+                    enviar_notificacion_cambio_estado, *datos_comunes, comentario, orden.estado
                 )
             notificacion = orden_repository.guardar_notificacion(
                 db,

@@ -6,6 +6,7 @@ from html import escape
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 
 from app.core.config import get_settings
+from app.schemas.orden import ESTADOS_ORDEN
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,8 @@ ESTADO_TEMPLATE = """
                 <p><strong>Descripción:</strong> {comentario}</p>
             </div>
             
+            {progreso}
+
             <p>Si tenés alguna consulta, no dudes en contactarnos.</p>
             
             <div class="footer">
@@ -88,7 +91,7 @@ ESTADO_TEMPLATE = """
 </html>
 """
  
-COBRO_TEMPLATE = ESTADO_TEMPLATE.replace(
+COBRO_TEMPLATE = ESTADO_TEMPLATE.replace("{progreso}", "").replace(
     "<h2>Actualización de tu orden de trabajo</h2>", "<h2>Tu orden tiene un cobro emitido</h2>"
 ).replace(
     "ha cambiado de estado.", "ya tiene el monto a pagar definido."
@@ -98,6 +101,40 @@ COBRO_TEMPLATE = ESTADO_TEMPLATE.replace(
     """<p><strong>Monto a pagar:</strong> <span class="estado">{monto}</span></p>
                 <p><strong>Estado de la orden:</strong> {estado_nombre}</p>""",
 )
+
+
+def _barra_progreso(estado_codigo: str) -> str:
+    """Etapas de la orden con las superadas y la actual marcadas (estilos en línea: es para email)."""
+    if estado_codigo == "cancelado":
+        return (
+            '<p style="color:#b91c1c;font-weight:bold;margin:20px 0;">'
+            "Esta orden fue cancelada.</p>"
+        )
+    etapas = [codigo for codigo in ESTADOS_ORDEN if codigo != "cancelado"]
+    if estado_codigo not in etapas:
+        return ""
+    actual = etapas.index(estado_codigo)
+    celdas = []
+    for indice, codigo in enumerate(etapas):
+        if indice < actual:
+            fondo, color, peso = "#16a34a", "#16a34a", "normal"
+        elif indice == actual:
+            fondo, color, peso = "#2563eb", "#2563eb", "bold"
+        else:
+            fondo, color, peso = "#d1d5db", "#6b7280", "normal"
+        celdas.append(
+            '<td align="center" valign="top" style="padding:0 2px;">'
+            f'<div style="height:6px;background:{fondo};border-radius:3px;"></div>'
+            f'<div style="font-size:11px;color:{color};font-weight:{peso};margin-top:6px;">'
+            f"{escape(ESTADOS_ORDEN[codigo][0])}</div></td>"
+        )
+    return (
+        '<p style="margin:20px 0 6px;"><strong>Avance de tu orden</strong> '
+        f"(etapa {actual + 1} de {len(etapas)})</p>"
+        '<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>'
+        + "".join(celdas)
+        + "</tr></table>"
+    )
 
 
 async def _enviar(email: str, asunto: str, html: str, orden_codigo: str) -> ResultadoEnvio:
@@ -128,6 +165,7 @@ async def enviar_notificacion_cambio_estado(
     orden_codigo: str,
     estado_nombre: str,
     comentario: str,
+    estado_codigo: str = "",
 ) -> ResultadoEnvio:
     """Aviso al cliente de que cambió el estado de su orden."""
     html = ESTADO_TEMPLATE.format(
@@ -138,6 +176,7 @@ async def enviar_notificacion_cambio_estado(
         orden_codigo=escape(orden_codigo),
         estado_nombre=escape(estado_nombre),
         comentario=escape(comentario),
+        progreso=_barra_progreso(estado_codigo),
         fecha=_fecha(),
     )
     return await _enviar(

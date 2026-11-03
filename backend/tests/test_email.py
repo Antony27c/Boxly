@@ -41,3 +41,20 @@ def test_sin_config_no_envia(monkeypatch):
     monkeypatch.setattr(mail, "_get_fastmail", lambda: fake)
     _enviar()
     fake.send_message.assert_not_called()
+
+
+def test_barra_de_progreso_marca_etapa_actual(smtp):
+    asyncio.run(mail.enviar_notificacion_cambio_estado(
+        "c@x.com", "Perez, Juan", "ABC123", "VW", "Gol", "OT-1", "En diagnóstico", "ok", "en_diagnostico"))
+    body = smtp.send_message.call_args[0][0].body
+    assert "etapa 3 de 6" in body and body.count("#16a34a") == 4  # 2 superadas: barra + texto cada una
+    assert "Entregado" in body
+
+
+def test_cancelada_no_muestra_barra_y_cobro_no_la_lleva(smtp):
+    asyncio.run(mail.enviar_notificacion_cambio_estado(
+        "c@x.com", "P", "A", "V", "G", "OT-1", "Cancelado", "ok", "cancelado"))
+    body = smtp.send_message.call_args[0][0].body
+    assert "fue cancelada" in body and "Avance de tu orden" not in body
+    asyncio.run(mail.enviar_notificacion_cobro("c@x.com", "P", "A", "V", "G", "OT-1", "Listo", "$ 1.00"))
+    assert "Avance de tu orden" not in smtp.send_message.call_args[0][0].body
