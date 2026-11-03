@@ -1,25 +1,42 @@
-from fastapi_mail import FastMail, MessageSchema, MessageType
-from pydantic import EmailStr
-from typing import List
+import logging
+from datetime import datetime, timezone
+from html import escape
+
+from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
+
 from app.core.config import get_settings
- 
-settings = get_settings()
- 
-fastmail = FastMail(
-    {
-        "MAIL_FROM": f"{settings.smtp_from_name} <{settings.smtp_from_email}>",
-        "MAIL_USERNAME": settings.smtp_user,
-        "MAIL_PASSWORD": settings.smtp_password,
-        "MAIL_FROM_NAME": settings.smtp_from_name,
-        "MAIL_PORT": settings.smtp_port,
-        "MAIL_SERVER": settings.smtp_host,
-        "MAIL_STARTTLS": settings.smtp_tls,
-        "MAIL_SSL_TLS": False,
-        "USE_CREDENTIALS": True,
-        "VALIDATE_CERTS": True,
-    }
-)
- 
+
+logger = logging.getLogger(__name__)
+
+_fastmail: FastMail | None = None
+
+
+def _remitente() -> str:
+    settings = get_settings()
+    return settings.smtp_from_email or settings.smtp_user
+
+
+def _get_fastmail() -> FastMail:
+    global _fastmail
+    if _fastmail is None:
+        settings = get_settings()
+        _fastmail = FastMail(
+            ConnectionConfig(
+                MAIL_FROM=_remitente(),
+                MAIL_USERNAME=settings.smtp_user,
+                MAIL_PASSWORD=settings.smtp_password,
+                MAIL_FROM_NAME=settings.smtp_from_name,
+                MAIL_PORT=settings.smtp_port,
+                MAIL_SERVER=settings.smtp_host,
+                MAIL_STARTTLS=settings.smtp_tls,
+                MAIL_SSL_TLS=False,
+                USE_CREDENTIALS=True,
+                VALIDATE_CERTS=True,
+            )
+        )
+    return _fastmail
+
+
 # Plantilla HTML para notificación de cambio de estado
 ESTADO_TEMPLATE = """
 <!DOCTYPE html>
@@ -73,30 +90,29 @@ async def enviar_notificacion_cambio_estado(
     estado_nombre: str,
     comentario: str,
 ) -> None:
-    """Envía email de notificación cuando cambia el estado de una orden."""
-    
-    if not settings.smtp_user or not settings.smtp_password:
-        # Si no hay configuración SMTP, no enviar email (modo desarrollo)
+    """Envía el aviso de cambio de estado. Nunca lanza: un fallo del SMTP solo se registra."""
+    settings = get_settings()
+    if not settings.smtp_user or not settings.smtp_password or not _remitente():
+        logger.warning("SMTP sin configurar: no se envía el aviso de la orden %s", orden_codigo)
         return
-    
-    from datetime import datetime
-    
+
     html_content = ESTADO_TEMPLATE.format(
-        cliente_nombre=cliente_nombre,
-        vehiculo_patente=vehiculo_patente,
-        vehiculo_marca=vehiculo_marca,
-        vehiculo_modelo=vehiculo_modelo,
-        orden_codigo=orden_codigo,
-        estado_nombre=estado_nombre,
-        comentario=comentario,
-        fecha=datetime.now().strftime("%d/%m/%Y %H:%M"),
+        cliente_nombre=escape(cliente_nombre),
+        vehiculo_patente=escape(vehiculo_patente),
+        vehiculo_marca=escape(vehiculo_marca),
+        vehiculo_modelo=escape(vehiculo_modelo),
+        orden_codigo=escape(orden_codigo),
+        estado_nombre=escape(estado_nombre),
+        comentario=escape(comentario),
+        fecha=datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
     )
-    
     message = MessageSchema(
         subject=f"Actualización de orden {orden_codigo} - {estado_nombre}",
         recipients=[email],
         body=html_content,
         subtype=MessageType.html,
     )
-    
-    await fastmail.send_message(message)
+    try:
+        await _get_fastmail().send_message(message)
+    except Exception:
+        logger.exception("No se pudo enviar el aviso de la orden %s a %s", orden_codigo, email)

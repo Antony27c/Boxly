@@ -22,7 +22,7 @@ class Cliente(Base):
     apellido: Mapped[str] = mapped_column(String(80), nullable=False)
     dni: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     telefono: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    email: Mapped[Optional[str]] = mapped_column(String(120), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     direccion: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

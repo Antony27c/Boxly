@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
-from fastapi import UploadFile
+from fastapi import BackgroundTasks, HTTPException, UploadFile
 from typing import List, Optional
 from datetime import datetime, timezone
 
@@ -163,9 +162,13 @@ class OrdenService:
         )
         return orden_repository.guardar_cambios(db, orden)
     
-    async def editar_orden(self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int) -> Orden:
+    def editar_orden(
+        self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Orden:
        
         orden = self.obtener_detalle_orden(db, orden_id)
+        notificar_estado = None
 
         if datos.costo_final is not None and orden.pagada:
             raise HTTPException(status_code=409, detail="La orden ya está pagada; no se puede cambiar el monto")
@@ -201,18 +204,7 @@ class OrdenService:
             if datos.estado == "entregado" and orden.fecha_entrega is None:
                 orden.fecha_entrega= datetime.now(timezone.utc)
                 
-            if orden.cliente and orden.cliente.email:
-                estado_nombre = ESTADOS_ORDEN[datos.estado][0]
-                await enviar_notificacion_cambio_estado(
-                    email=orden.cliente.email,
-                    cliente_nombre=f"{orden.cliente.apellido}, {orden.cliente.nombre}",
-                    vehiculo_patente=orden.vehiculo.patente if orden.vehiculo else "N/A",
-                    vehiculo_marca=orden.vehiculo.marca if orden.vehiculo else "N/A",
-                    vehiculo_modelo=orden.vehiculo.modelo if orden.vehiculo else "N/A",
-                    orden_codigo=orden.codigo,
-                    estado_nombre=estado_nombre,
-                    comentario=datos.comentario_cambio.strip(),
-            )
+            notificar_estado = datos.estado
         for campo in (
             "mecanico_id",
             "descripcion_ingreso",
@@ -227,7 +219,21 @@ class OrdenService:
                 setattr(orden, campo, valor)
         if datos.costo_final is not None:
             self._aprobar_cobro(orden, datos.costo_final, usuario_id)
-        return orden_repository.guardar_cambios(db, orden)
+        orden = orden_repository.guardar_cambios(db, orden)
+        if notificar_estado and background_tasks is not None and orden.cliente and orden.cliente.email:
+            vehiculo = orden.vehiculo
+            background_tasks.add_task(
+                enviar_notificacion_cambio_estado,
+                email=orden.cliente.email,
+                cliente_nombre=f"{orden.cliente.apellido}, {orden.cliente.nombre}",
+                vehiculo_patente=vehiculo.patente if vehiculo else "N/A",
+                vehiculo_marca=vehiculo.marca if vehiculo else "N/A",
+                vehiculo_modelo=vehiculo.modelo if vehiculo else "N/A",
+                orden_codigo=orden.codigo,
+                estado_nombre=ESTADOS_ORDEN[notificar_estado][0],
+                comentario=datos.comentario_cambio.strip(),
+            )
+        return orden
 
     def obtener_historial_orden(self, db:Session, orden_id: int) -> List[HistorialResponse]:
         self.obtener_detalle_orden(db, orden_id)

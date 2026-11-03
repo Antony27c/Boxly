@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, status, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, status, UploadFile, File
 from typing import List, Optional, Annotated
 
 
@@ -37,9 +37,9 @@ def detalle_orden(orden_id: int, db: DbSession, usuario:PersonalUser):
 
 
 @router.patch("/{orden_id}", response_model=OrdenResponse)
-async def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:PersonalUser):
+def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:PersonalUser, background_tasks: BackgroundTasks):
     orden_service.validar_edicion_mecanico(db, orden_id, datos, filtro_mecanico(usuario))
-    return await orden_service.editar_orden(db, orden_id, datos, usuario_id=usuario.id)
+    return orden_service.editar_orden(db, orden_id, datos, usuario_id=usuario.id, background_tasks=background_tasks)
 
 
 @router.post("/{orden_id}/cobro", response_model=OrdenResponse)
