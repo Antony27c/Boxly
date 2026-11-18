@@ -103,7 +103,7 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
         sinResultados="No hay clientes con ese nombre o DNI."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label="Patente"
           value={datos.patente}
@@ -111,7 +111,7 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
           error={errores.patente}
           ayuda="Formato AAA123 o AA123AA"
           disabled={guardando}
-          placeholder="AC482KL"
+          placeholder="Ej.: AC482KL"
         />
         <Autocomplete
           label="Marca"
@@ -120,7 +120,7 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
           buscar={buscarMarcas}
           error={errores.marca}
           disabled={guardando}
-          placeholder="Volkswagen"
+          placeholder="Ej.: Volkswagen"
           sinResultados="No está en el catálogo, podés escribirla igual."
         />
         <Autocomplete
@@ -130,7 +130,7 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
           buscar={buscarModelos}
           error={errores.modelo}
           disabled={guardando}
-          placeholder="Gol Trend"
+          placeholder="Ej.: Gol Trend"
           sinResultados="No está en el catálogo, podés escribirlo igual."
         />
         <Field
@@ -140,14 +140,14 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
           onChange={(e) => cambiar('anio', e.target.value)}
           error={errores.anio}
           disabled={guardando}
-          placeholder="2017"
+          placeholder="Ej.: 2017"
         />
         <Field
           label="Color (opcional)"
           value={datos.color}
           onChange={(e) => cambiar('color', e.target.value)}
           disabled={guardando}
-          placeholder="Gris"
+          placeholder="Ej.: Gris"
         />
         <Field
           label="VIN / chasis (opcional)"
@@ -155,7 +155,7 @@ export default function FormularioVehiculo({ vehiculo, clientes = [], onGuardar,
           value={datos.vin}
           onChange={(e) => cambiar('vin', e.target.value.toUpperCase())}
           disabled={guardando}
-          placeholder="9BWZZZ377VT004251"
+          placeholder="Ej.: 9BWZZZ377VT004251"
         />
       </div>
 

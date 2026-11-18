@@ -57,14 +57,14 @@ export default function FormularioCliente({ cliente, onGuardar, onCancelar }) {
     <form onSubmit={enviar} noValidate className="space-y-4">
       {errorApi && <Alert>{errorApi}</Alert>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label="Nombre"
           value={datos.nombre}
           onChange={(e) => cambiar('nombre', e.target.value)}
           error={errores.nombre}
           disabled={guardando}
-          placeholder="Marina"
+          placeholder="Ej.: Marina"
         />
         <Field
           label="Apellido o razón social"
@@ -72,7 +72,7 @@ export default function FormularioCliente({ cliente, onGuardar, onCancelar }) {
           onChange={(e) => cambiar('apellido', e.target.value)}
           error={errores.apellido}
           disabled={guardando}
-          placeholder="Villagra"
+          placeholder="Ej.: Villagra"
         />
         <Field
           label="DNI / CUIT"
@@ -81,7 +81,7 @@ export default function FormularioCliente({ cliente, onGuardar, onCancelar }) {
           onChange={(e) => cambiar('dni', e.target.value)}
           error={errores.dni}
           disabled={guardando}
-          placeholder="32458711"
+          placeholder="Ej.: 32458711"
         />
         <Field
           label="Teléfono"
@@ -90,7 +90,7 @@ export default function FormularioCliente({ cliente, onGuardar, onCancelar }) {
           onChange={(e) => cambiar('telefono', e.target.value)}
           error={errores.telefono}
           disabled={guardando}
-          placeholder="3874112233"
+          placeholder="Ej.: 3874112233"
         />
         <Field
           label="Correo (opcional)"
@@ -109,7 +109,7 @@ export default function FormularioCliente({ cliente, onGuardar, onCancelar }) {
         value={datos.direccion}
         onChange={(e) => cambiar('direccion', e.target.value)}
         disabled={guardando}
-        placeholder="Av. Belgrano 1450, Salta"
+        placeholder="Ej.: Av. Belgrano 1450, Salta"
       />
 
       <div className="flex justify-end gap-2 pt-2">

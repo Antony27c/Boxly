@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.detalle_orden import DetalleOrden
 from app.models.repuesto import Repuesto
+from app.schemas.paginacion import ParametrosPagina, aplicar, contar
 
 
 def get_by_id(db: Session, repuesto_id: int) -> Repuesto | None:
@@ -13,16 +14,35 @@ def get_by_codigo(db: Session, codigo: str) -> Repuesto | None:
     return db.scalar(select(Repuesto).where(Repuesto.codigo == codigo))
 
 
-def list_repuestos(
-    db: Session, *, solo_activos: bool = False, q: str | None = None
-) -> list[Repuesto]:
-    stmt = select(Repuesto).order_by(Repuesto.nombre)
+def _stmt_filtrado(*, solo_activos: bool, q: str | None):
+    stmt = select(Repuesto)
     if solo_activos:
         stmt = stmt.where(Repuesto.activo.is_(True))
     if q:
         patron = f"%{q.strip()}%"
         stmt = stmt.where(Repuesto.codigo.ilike(patron) | Repuesto.nombre.ilike(patron))
+    return stmt
+
+
+def list_repuestos(
+    db: Session,
+    *,
+    solo_activos: bool = False,
+    q: str | None = None,
+    pagina: ParametrosPagina | None = None,
+) -> list[Repuesto]:
+    stmt = _stmt_filtrado(solo_activos=solo_activos, q=q).order_by(
+        Repuesto.nombre, Repuesto.id
+    )
+    if pagina is not None:
+        stmt = aplicar(stmt, pagina)
     return list(db.scalars(stmt).all())
+
+
+def contar_repuestos(
+    db: Session, *, solo_activos: bool = False, q: str | None = None
+) -> int:
+    return contar(db, _stmt_filtrado(solo_activos=solo_activos, q=q))
 
 
 def list_stock_bajo(db: Session) -> list[Repuesto]:

@@ -5,7 +5,7 @@ export default function MejorMecanico({ mejor }) {
   return (
     <section className="flex flex-wrap items-center gap-4 rounded-box border border-amber/50 bg-amber/10 p-5">
       <div
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-amber text-xl font-bold text-white"
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-amber text-xl font-bold text-sobre-amber"
         aria-hidden="true"
       >
         ★

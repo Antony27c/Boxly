@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -17,8 +17,24 @@ class Turno(Base):
 
     __tablename__ = "turnos"
 
+    __table_args__ = (
+        CheckConstraint(
+            "estado IN ('pendiente', 'confirmado', 'en_taller', "
+            "'completado', 'cancelado', 'asistio')",
+            name="ck_turnos_estado_valido",
+        ),
+        Index(
+            "uq_turnos_mecanico_fecha_hora",
+            "fecha_hora",
+            "mecanico_id",
+            unique=True,
+            sqlite_where=text("estado <> 'cancelado' AND mecanico_id IS NOT NULL"),
+            postgresql_where=text("estado <> 'cancelado' AND mecanico_id IS NOT NULL"),
+        ),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False, index=True)
     vehiculo_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("vehiculos.id"), nullable=True
     )
@@ -27,9 +43,9 @@ class Turno(Base):
     )
     # Mecánico que va a atender el turno (opcional, contrato S7 D8)
     mecanico_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("usuarios.id", name="fk_turnos_mecanico_id_usuarios"), nullable=True
+        ForeignKey("usuarios.id", name="fk_turnos_mecanico_id_usuarios"), nullable=True, index=True
     )
-    fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     # DER §3.7: pendiente | confirmado | cancelado | asistio
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="pendiente")
     motivo: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

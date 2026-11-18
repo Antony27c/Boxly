@@ -1,76 +1,45 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import CambioEstado from '@/components/ordenes/CambioEstado'
-import CobroOrden from '@/components/ordenes/CobroOrden'
-import DetallesOrden from '@/components/ordenes/DetallesOrden'
-import FormularioOrden from '@/components/ordenes/FormularioOrden'
-import HistorialOrden from '@/components/ordenes/HistorialOrden'
-import ImagenesOrden from '@/components/ordenes/ImagenesOrden'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import IngresoRapido from '@/components/ordenes/IngresoRapido'
+import ModalesOrden from '@/components/ordenes/ModalesOrden'
+import TableroOrdenes from '@/components/ordenes/TableroOrdenes'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import Confirmacion from '@/components/ui/Confirmacion'
-import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
-import Field from '@/components/ui/Field'
+import Icono from '@/components/ui/Icono'
 import Loader from '@/components/ui/Loader'
-import Modal from '@/components/ui/Modal'
-import Select from '@/components/ui/Select'
-import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
+import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
-import { ROLES_ADMIN, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import {
-  ESTADOS_ORDEN,
-  estadoCobro,
-  ordenesService,
-  proximosEstados,
-  sePuedeEliminar,
-} from '@/services/ordenes'
+import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
+import { ESTADOS_ORDEN, ordenesService } from '@/services/ordenes'
 import { vehiculosService } from '@/services/vehiculos'
-
-const TONOS = {
-  Pendiente: 'neutro',
-  Ingresado: 'neutro',
-  'En diagnóstico': 'ambar',
-  'Esperando repuestos': 'ambar',
-  Listo: 'ok',
-  Entregado: 'ok',
-  Cancelado: 'peligro',
-}
 
 const ABIERTOS = ESTADOS_ORDEN.filter((estado) => estado !== 'Entregado' && estado !== 'Cancelado')
 
-function pesos(valor) {
-  return `$ ${Number(valor ?? 0).toLocaleString('es-AR')}`
-}
-
-function fechaLegible(fecha) {
-  return new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
 export default function Ordenes() {
   const { token, usuario } = useAuth()
+  const { avisar } = useToast()
+  const navigate = useNavigate()
   const esMostrador = tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
-  const esAdmin = tieneAcceso(ROLES_ADMIN, usuario?.rol)
   const [parametros, setParametros] = useSearchParams()
-  const estadoFiltro = parametros.get('estado') ?? ''
-  const [busqueda, setBusqueda] = useState('')
+  const estadoUrl = parametros.get('estado') ?? ''
+  const filtroUrl = parametros.get('filtro') ?? ''
+  const filtroVehiculo = parametros.get('vehiculo')
+  const quiereNueva = parametros.get('nuevo') === '1'
+  const quiereIngreso = parametros.get('ingreso') === '1'
+  // Ingreso rápido por patente: null cerrado, {} abierto vacío o {vehiculoId} precargado.
+  const [ingreso, setIngreso] = useState(null)
   const [enEdicion, setEnEdicion] = useState(null)
+  const [borrador, setBorrador] = useState(null)
   const [formularioAbierto, setFormularioAbierto] = useState(false)
-  const [conHistorial, setConHistorial] = useState(null)
-  const [conDetalles, setConDetalles] = useState(null)
-  const [conFotos, setConFotos] = useState(null)
   const [aCambiar, setACambiar] = useState(null)
+  const [aAsignar, setAAsignar] = useState(null)
   const [conCobro, setConCobro] = useState(null)
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
-  const [aviso, setAviso] = useState('')
   const [errorFotos, setErrorFotos] = useState('')
 
   const cargarOrdenes = useCallback((t) => ordenesService.listar(t), [])
@@ -82,73 +51,102 @@ export default function Ordenes() {
   )
 
   const { datos: ordenes, cargando, error, recargar } = useRecurso(cargarOrdenes)
-  const { datos: vehiculos } = useRecurso(cargarVehiculos)
-  const { datos: clientes } = useRecurso(cargarClientes)
-  const { datos: mecanicos } = useRecurso(cargarMecanicos)
+  const { datos: vehiculos, error: errorVehiculos, recargar: recargarVehiculos } = useRecurso(cargarVehiculos)
+  const { datos: clientes, error: errorClientes, recargar: recargarClientes } = useRecurso(cargarClientes)
+  const { datos: mecanicos, error: errorMecanicos } = useRecurso(cargarMecanicos)
 
-  const vehiculosPorId = useMemo(() => {
-    const mapa = new Map()
-    for (const vehiculo of vehiculos ?? []) mapa.set(vehiculo.id, vehiculo)
-    return mapa
-  }, [vehiculos])
+  // ?nuevo=1&vehiculo=<id> (desde la ficha): abre el formulario con el
+  // vehículo precargado una vez que cargaron los vehículos.
+  if (quiereNueva && filtroVehiculo && vehiculos && !formularioAbierto) {
+    const vehiculo = vehiculos.find((v) => String(v.id) === String(filtroVehiculo))
+    if (vehiculo) {
+      setEnEdicion(null)
+      setBorrador({ vehiculo_id: vehiculo.id })
+      setFormularioAbierto(true)
+    }
+  }
 
-  const clientesPorId = useMemo(() => {
-    const mapa = new Map()
-    for (const cliente of clientes ?? []) mapa.set(cliente.id, cliente)
-    return mapa
-  }, [clientes])
+  // Limpia "nuevo" de la URL para no reabrir; ?vehiculo= queda como filtro.
+  useEffect(() => {
+    if (!quiereNueva || !vehiculos) return
+    const proximos = new URLSearchParams(parametros)
+    proximos.delete('nuevo')
+    setParametros(proximos, { replace: true })
+  }, [quiereNueva, vehiculos, parametros, setParametros])
 
-  const filtradas = useMemo(() => {
-    const termino = busqueda.trim().toLowerCase()
-    return (ordenes ?? [])
-      .filter((orden) => {
-        if (estadoFiltro === 'abiertas' && !ABIERTOS.includes(orden.estado)) return false
-        if (estadoFiltro && estadoFiltro !== 'abiertas' && orden.estado !== estadoFiltro) return false
-        if (!termino) return true
-        const vehiculo = vehiculosPorId.get(orden.vehiculo_id)
-        const cliente = vehiculo ? clientesPorId.get(vehiculo.cliente_id) : null
-        const texto = [
-          orden.descripcion,
-          orden.mecanico,
-          vehiculo?.patente,
-          vehiculo && `${vehiculo.marca} ${vehiculo.modelo}`,
-          cliente && `${cliente.nombre} ${cliente.apellido}`,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        return texto.includes(termino)
-      })
-      .sort((a, b) => b.fecha.localeCompare(a.fecha))
-  }, [ordenes, estadoFiltro, busqueda, vehiculosPorId, clientesPorId])
+  // ?ingreso=1[&vehiculo=<id>] (desde Hoy, el asistente de cliente o Primeros pasos):
+  // abre el ingreso rápido y limpia los parámetros para no reabrirlo.
+  // Mismo patrón "ajustar estado durante el render" que ?nuevo=1.
+  if (quiereIngreso && !ingreso) {
+    setIngreso(filtroVehiculo ? { vehiculoId: Number(filtroVehiculo) } : {})
+  }
+  useEffect(() => {
+    if (!quiereIngreso) return
+    const proximos = new URLSearchParams(parametros)
+    proximos.delete('ingreso')
+    proximos.delete('vehiculo')
+    setParametros(proximos, { replace: true })
+  }, [quiereIngreso, filtroVehiculo, parametros, setParametros])
+
+  const vehiculosPorId = useMemo(() => new Map((vehiculos ?? []).map((v) => [v.id, v])), [vehiculos])
+  const clientesPorId = useMemo(() => new Map((clientes ?? []).map((c) => [c.id, c])), [clientes])
+  const vehiculoFiltro = vehiculosPorId.get(Number(filtroVehiculo)) ?? null
+
+  const ordenesVisibles = useMemo(
+    () =>
+      (ordenes ?? []).filter(
+        (orden) => !filtroVehiculo || String(orden.vehiculo_id) === String(filtroVehiculo),
+      ),
+    [ordenes, filtroVehiculo],
+  )
 
   const abiertas = useMemo(
-    () => (ordenes ?? []).filter((orden) => ABIERTOS.includes(orden.estado)).length,
+    () => (ordenes ?? []).filter((o) => ABIERTOS.includes(o.estado)).length,
     [ordenes],
   )
 
-  function cambiarEstado(valor) {
+  function cambiarParametro(clave, valor) {
     const proximos = new URLSearchParams(parametros)
-    if (valor) proximos.set('estado', valor)
-    else proximos.delete('estado')
+    if (valor) proximos.set(clave, valor)
+    else proximos.delete(clave)
     setParametros(proximos, { replace: true })
   }
 
+  function quitarFiltroVehiculo() {
+    const proximos = new URLSearchParams(parametros)
+    proximos.delete('vehiculo')
+    setParametros(proximos, { replace: true })
+  }
+
+  // "Nueva orden" = recibir un auto: busca por patente y, si es nuevo, da de alta
+  // cliente y vehículo en el mismo paso. El formulario completo queda para editar.
   function abrirNueva() {
-    setEnEdicion(null)
+    setIngreso({})
+  }
+
+  function abrirEdicion(orden) {
+    setBorrador(null)
+    setEnEdicion(orden)
     setFormularioAbierto(true)
   }
 
+  // La acción principal de la tarjeta llega ya resuelta por accionPrincipal;
+  // acá se traduce a abrir el modal o navegar que corresponde.
+  function manejarAccion(orden, accion) {
+    if (!accion) return
+    if (accion.tipo === 'etapa') setACambiar({ orden, destino: accion.destino ?? null })
+    else if (accion.tipo === 'asignar') setAAsignar(orden)
+    else if (accion.tipo === 'cobro') setConCobro(orden)
+    else if (accion.tipo === 'abrir') navigate(`/ordenes/${orden.id}`)
+  }
+
   async function guardar(datosOrden) {
-    if (enEdicion) {
-      await ordenesService.actualizar(enEdicion.id, datosOrden, token)
-      setAviso('Orden actualizada.')
-    } else {
-      await ordenesService.crear(datosOrden, token)
-      setAviso('Orden de trabajo creada.')
-    }
+    if (enEdicion) await ordenesService.actualizar(enEdicion.id, datosOrden, token)
+    else await ordenesService.crear(datosOrden, token)
+    avisar(enEdicion ? 'Orden actualizada.' : 'Orden de trabajo creada.')
     setFormularioAbierto(false)
     setEnEdicion(null)
+    setBorrador(null)
     await recargar()
   }
 
@@ -158,7 +156,7 @@ export default function Ordenes() {
     try {
       await ordenesService.eliminar(aEliminar.id, token)
       setAEliminar(null)
-      setAviso('Orden eliminada.')
+      avisar('Orden eliminada.')
       await recargar()
     } catch (problema) {
       setErrorEliminar(problema.message)
@@ -167,69 +165,65 @@ export default function Ordenes() {
     }
   }
 
-  const sinVehiculos = (vehiculos ?? []).length === 0
+  const descripcionCabecera = abiertas > 0
+    ? `${abiertas} ${abiertas === 1 ? 'auto' : 'autos'} en el taller.`
+    : 'Seguimiento de los trabajos del taller.'
 
   return (
     <div className="animate-bay-in">
-      <EncabezadoPagina
-        titulo="Órdenes de trabajo"
-        descripcion={
-          abiertas > 0
-            ? `${abiertas} ${abiertas === 1 ? 'orden abierta' : 'órdenes abiertas'} en el taller.`
-            : 'Seguimiento de los trabajos del taller.'
-        }
-        acciones={
-          esMostrador && (
-            <Button onClick={abrirNueva} disabled={sinVehiculos}>
-              Nueva orden
-            </Button>
-          )
-        }
-      />
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5">
+        <h1 className="min-w-0 text-2xl font-semibold tracking-tight">Órdenes de trabajo</h1>
+        {esMostrador && (
+          <Button
+            variante="primario"
+            onClick={abrirNueva}
+            aria-label="Recibir un auto"
+            className="max-sm:gap-1.5 max-sm:px-3.5"
+          >
+            <Icono nombre="vehiculos" className="hidden h-4 w-4 max-sm:block" />
+            <span aria-hidden="true" className="max-sm:hidden">
+              Recibir un auto
+            </span>
+            <span aria-hidden="true" className="hidden max-sm:inline">
+              Recibir
+            </span>
+          </Button>
+        )}
+        <p className="basis-full text-sm text-muted">{descripcionCabecera}</p>
+      </div>
 
-      {sinVehiculos && (
-        <div className="mt-4">
-          <Alert tipo="info">
-            Para abrir una orden primero necesitás un vehículo cargado.{' '}
-            <Link to="/vehiculos" className="text-amber hover:underline">
-              Ir a Vehículos
-            </Link>
+      {filtroVehiculo && vehiculoFiltro && (
+        <div className="mt-3">
+          <Badge tono="ambar">
+            Filtrado por vehículo: {vehiculoFiltro.patente}{' '}
+            <button
+              type="button"
+              onClick={quitarFiltroVehiculo}
+              className="font-bold hover:text-ink"
+              aria-label="Quitar filtro de vehículo"
+            >
+              ×
+            </button>
+          </Badge>
+        </div>
+      )}
+      {filtroVehiculo && !vehiculoFiltro && vehiculos && (
+        <div className="mt-3">
+          <Alert>
+            El vehículo del filtro ya no existe.{' '}
+            <button type="button" onClick={quitarFiltroVehiculo} className="underline">
+              Quitar filtro
+            </button>
           </Alert>
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 sm:max-w-2xl sm:grid-cols-2">
-        <Field
-          label="Buscar por patente, cliente o trabajo"
-          type="search"
-          placeholder="AC482KL"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-        <Select
-          label="Estado"
-          value={estadoFiltro}
-          onChange={(e) => cambiarEstado(e.target.value)}
-          opciones={[
-            { valor: '', texto: 'Todos los estados' },
-            { valor: 'abiertas', texto: 'Sólo abiertas' },
-            ...ESTADOS_ORDEN.map((estado) => ({ valor: estado, texto: estado })),
-          ]}
-        />
-      </div>
+      {errorVehiculos && <div className="mt-4"><Alert>{errorVehiculos}</Alert></div>}
+      {errorClientes && <div className="mt-4"><Alert>{errorClientes}</Alert></div>}
+      {errorMecanicos && <div className="mt-4"><Alert>{errorMecanicos}</Alert></div>}
+      {errorFotos && <div className="mt-4"><Alert>{errorFotos}</Alert></div>}
 
-      {aviso && (
-        <div className="mt-4">
-          <Alert tipo="ok">{aviso}</Alert>
-        </div>
-      )}
-      {errorFotos && (
-        <div className="mt-4">
-          <Alert>{errorFotos}</Alert>
-        </div>
-      )}
-
-      {cargando ? (
+      {cargando && !ordenes ? (
         <Loader texto="Cargando órdenes…" />
       ) : error ? (
         <div className="mt-6 space-y-4">
@@ -238,256 +232,87 @@ export default function Ordenes() {
             Reintentar
           </Button>
         </div>
-      ) : filtradas.length === 0 ? (
-        <div className="mt-6">
-          <Vacio
-            titulo="Sin órdenes para mostrar"
-            mensaje="Ajustá los filtros o abrí una orden nueva para empezar el seguimiento."
-            accion={esMostrador && !sinVehiculos && <Button onClick={abrirNueva}>Nueva orden</Button>}
+      ) : (
+        <div className={`mt-2 transition-opacity ${cargando ? 'opacity-60' : ''}`}>
+          <TableroOrdenes
+            busquedaInicial={parametros.get('q') ?? ''}
+            ordenes={ordenesVisibles}
+            vehiculosPorId={vehiculosPorId}
+            clientesPorId={clientesPorId}
+            usuario={usuario}
+            estadoUrl={estadoUrl}
+            onEstadoUrl={(valor) => cambiarParametro('estado', valor)}
+            filtroUrl={filtroUrl}
+            onFiltroUrl={(valor) => cambiarParametro('filtro', valor)}
+            onNuevaOrden={esMostrador ? abrirNueva : null}
+            onAccion={manejarAccion}
+            onEditar={abrirEdicion}
+            onEliminar={(orden) => {
+              setErrorEliminar('')
+              setAEliminar(orden)
+            }}
           />
         </div>
-      ) : (
-        <ul className="mt-6 grid gap-4 lg:grid-cols-2">
-          {filtradas.map((orden) => {
-            const vehiculo = vehiculosPorId.get(orden.vehiculo_id)
-            const cliente = vehiculo ? clientesPorId.get(vehiculo.cliente_id) : null
-            return (
-              <li
-                key={orden.id}
-                className="flex flex-col rounded-box border border-graphite-700 bg-graphite-800 p-5"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-muted">Orden {orden.codigo ?? `#${orden.id}`}</p>
-                    <p className="mt-0.5 font-mono text-lg font-semibold tracking-wider text-amber">
-                      {vehiculo?.patente ?? 'Vehículo eliminado'}
-                    </p>
-                    <p className="text-sm text-muted">
-                      {vehiculo ? (
-                        <>
-                          {vehiculo.marca}{' '}
-                          <span className="text-base font-bold text-ink">{vehiculo.modelo}</span>
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                      {cliente ? ` · ${cliente.apellido}, ${cliente.nombre}` : ''}
-                    </p>
-                  </div>
-                  <Badge tono={TONOS[orden.estado] ?? 'neutro'}>{orden.estado}</Badge>
-                </div>
-
-                <p className="mt-4 text-sm">{orden.descripcion}</p>
-
-                <dl className="mt-4 space-y-1 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted">Ingreso</dt>
-                    <dd>{fechaLegible(orden.fecha)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted">Mecánico</dt>
-                    <dd className="text-right">{orden.mecanico || 'Sin asignar'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
-                    <dd className="flex items-center gap-2">
-                      {orden.total ? pesos(orden.total) : 'A presupuestar'}
-                      {orden.pagada && <Badge tono="ok">Pagada</Badge>}
-                    </dd>
-                  </div>
-                </dl>
-
-                {(() => {
-                  const cobro = estadoCobro(orden)
-                  if (!cobro || cobro === 'pagada') return null
-                  const textos = {
-                    sin_cobro: {
-                      mensaje: 'Todavía no se emitió el cobro.',
-                      boton: esMostrador ? 'Generar cobro' : 'Emitir cobro',
-                      destacado: true,
-                    },
-                    pendiente: {
-                      mensaje: `Cobro propuesto ${pesos(orden.monto_propuesto)}${
-                        orden.cobro_propuesto_por_nombre ? ` por ${orden.cobro_propuesto_por_nombre}` : ''
-                      } · falta aprobar.`,
-                      boton: esMostrador ? 'Revisar cobro' : 'Ver cobro',
-                      destacado: true,
-                    },
-                    aprobado: {
-                      mensaje: 'Cobro enviado al cliente, esperando el pago.',
-                      boton: esMostrador ? 'Editar monto' : 'Ver cobro',
-                      destacado: false,
-                    },
-                  }[cobro]
-                  return (
-                    <div
-                      className={`mt-4 flex flex-wrap items-center justify-between gap-2 rounded-box border px-3 py-2 text-sm ${
-                        textos.destacado ? 'border-amber/50 bg-amber/10' : 'border-ok/40 bg-ok/10'
-                      }`}
-                    >
-                      <span className={textos.destacado ? 'text-amber-deep' : 'text-ok'}>{textos.mensaje}</span>
-                      <Button variante={textos.destacado ? 'primario' : 'fantasma'} onClick={() => setConCobro(orden)}>
-                        {textos.boton}
-                      </Button>
-                    </div>
-                  )
-                })()}
-
-                <div className="mt-5 flex flex-wrap gap-2 pt-1">
-                  {vehiculo && (
-                    <Link to={`/vehiculos/${vehiculo.id}`}>
-                      <Button variante="secundario">Ver vehículo</Button>
-                    </Link>
-                  )}
-                  {proximosEstados(orden.estado).length > 0 && (
-                    <Button variante="secundario" onClick={() => setACambiar(orden)}>
-                      Cambiar etapa
-                    </Button>
-                  )}
-                  <Button
-                    variante="fantasma"
-                    onClick={() => {
-                      setEnEdicion(orden)
-                      setFormularioAbierto(true)
-                    }}
-                  >
-                    Editar
-                  </Button>
-                  <Button variante="fantasma" onClick={() => setConDetalles(orden)}>
-                    Detalles
-                  </Button>
-                  <Button variante="fantasma" onClick={() => setConFotos(orden)}>
-                    Fotos
-                  </Button>
-                  <Button variante="fantasma" onClick={() => setConHistorial(orden)}>
-                    Historial
-                  </Button>
-                  {esMostrador && sePuedeEliminar(orden) && (
-                    <Button
-                      variante="fantasma"
-                      onClick={() => {
-                        setErrorEliminar('')
-                        setAEliminar(orden)
-                      }}
-                    >
-                      Eliminar
-                    </Button>
-                  )}
-                </div>
-              </li>
-            )
-          })}
-        </ul>
       )}
 
-      <Modal
-        abierto={formularioAbierto}
-        titulo={
-          enEdicion ? `Editar orden ${enEdicion.codigo ?? `#${enEdicion.id}`}` : 'Nueva orden de trabajo'
-        }
-        descripcion="Cada orden registra el trabajo realizado sobre un vehículo del taller."
-        onCerrar={() => setFormularioAbierto(false)}
-      >
-        <FormularioOrden
-          orden={enEdicion}
-          clientes={clientes ?? []}
-          vehiculos={vehiculos ?? []}
-          mecanicos={mecanicos}
-          onGuardar={guardar}
-          onCancelar={() => setFormularioAbierto(false)}
+      {esMostrador && (
+        <IngresoRapido
+          abierto={Boolean(ingreso)}
+          inicial={ingreso ?? undefined}
+          onCerrar={() => setIngreso(null)}
+          onListo={async () => {
+            setIngreso(null)
+            // El ingreso pudo crear cliente y vehículo: recargar los tres.
+            await Promise.all([recargar(), recargarVehiculos(), recargarClientes()])
+          }}
         />
-      </Modal>
+      )}
 
-      <Modal
-        abierto={Boolean(conDetalles)}
-        titulo={`Detalle de la orden ${conDetalles?.codigo ?? `#${conDetalles?.id ?? ''}`}`}
-        descripcion="Trabajos y repuestos cargados a la orden."
-        onCerrar={() => setConDetalles(null)}
-      >
-        {conDetalles && <DetallesOrden orden={conDetalles} />}
-      </Modal>
-
-      <Modal
-        abierto={Boolean(aCambiar)}
-        titulo={`Cambiar etapa de la orden ${aCambiar?.codigo ?? `#${aCambiar?.id ?? ''}`}`}
-        descripcion="Cada cambio de etapa necesita una descripción de lo que se hizo."
-        onCerrar={() => setACambiar(null)}
-      >
-        {aCambiar && (
-          <CambioEstado
-            orden={aCambiar}
-            puedeCobrar={esMostrador}
-            onCancelar={() => setACambiar(null)}
-            onListo={async (estado, fotosFallidas = [], errorCobro = '') => {
-              setACambiar(null)
-              setAviso(`La orden pasó a "${estado}".`)
-              setErrorFotos(
-                [
-                  fotosFallidas.length > 0 &&
-                    `No se pudieron subir estas fotos: ${fotosFallidas.join(', ')}. Cargalas de nuevo desde "Fotos".`,
-                  errorCobro && `No se pudo emitir el cobro: ${errorCobro} Emitilo de nuevo desde la orden.`,
-                ]
-                  .filter(Boolean)
-                  .join(' '),
-              )
-              await recargar()
-            }}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        abierto={Boolean(conCobro)}
-        titulo={`Cobro de la orden ${conCobro?.codigo ?? `#${conCobro?.id ?? ''}`}`}
-        descripcion={
-          esMostrador
-            ? 'Revisá el monto y envialo al cliente para que lo pague online.'
-            : 'Proponé el monto a cobrar; administración o recepción lo aprueba.'
-        }
-        ancho="max-w-md"
-        onCerrar={() => setConCobro(null)}
-      >
-        {conCobro && (
-          <CobroOrden
-            orden={conCobro}
-            esMostrador={esMostrador}
-            onCancelar={() => setConCobro(null)}
-            onListo={async (mensaje) => {
-              setConCobro(null)
-              setAviso(mensaje)
-              await recargar()
-            }}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        abierto={Boolean(conFotos)}
-        titulo={`Fotos de la orden ${conFotos?.codigo ?? `#${conFotos?.id ?? ''}`}`}
-        descripcion="Fotos del vehículo en cada etapa del trabajo."
-        ancho="max-w-2xl"
-        onCerrar={() => setConFotos(null)}
-      >
-        {conFotos && <ImagenesOrden orden={conFotos} />}
-      </Modal>
-
-      <Modal
-        abierto={Boolean(conHistorial)}
-        titulo={`Historial de la orden ${conHistorial?.codigo ?? `#${conHistorial?.id ?? ''}`}`}
-        descripcion="Seguimiento de la orden etapa por etapa, con descripción, responsable y fotos."
-        onCerrar={() => setConHistorial(null)}
-      >
-        {conHistorial && <HistorialOrden ordenId={conHistorial.id} puedeEnviarAviso={esAdmin} />}
-      </Modal>
-
-      <Confirmacion
-        abierto={Boolean(aEliminar)}
-        titulo="Eliminar orden"
-        mensaje={`¿Eliminar la orden ${aEliminar?.codigo ?? `#${aEliminar?.id ?? ''}`}? Solo se pueden borrar órdenes pendientes; las demás se cancelan.`}
-        error={errorEliminar}
-        procesando={eliminando}
-        onConfirmar={confirmarEliminar}
-        onCerrar={() => setAEliminar(null)}
+      <ModalesOrden
+        formularioAbierto={formularioAbierto}
+        enEdicion={enEdicion}
+        borrador={borrador}
+        clientes={clientes ?? []}
+        vehiculos={vehiculos ?? []}
+        mecanicos={mecanicos}
+        onCerrarFormulario={() => setFormularioAbierto(false)}
+        onGuardar={guardar}
+        aCambiar={aCambiar}
+        esMostrador={esMostrador}
+        onCerrarCambio={() => setACambiar(null)}
+        onListoCambio={async (estado, fotosFallidas = [], errorCobro = '') => {
+          setACambiar(null)
+          avisar(`La orden pasó a "${estado}".`)
+          setErrorFotos(
+            [
+              fotosFallidas.length > 0 &&
+                `No se pudieron subir estas fotos: ${fotosFallidas.join(', ')}. Cargalas de nuevo desde la orden.`,
+              errorCobro && `No se pudo emitir el cobro: ${errorCobro} Emitilo de nuevo desde la orden.`,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          )
+          await recargar()
+        }}
+        aAsignar={aAsignar}
+        onCerrarAsignar={() => setAAsignar(null)}
+        onListoAsignar={async () => {
+          setAAsignar(null)
+          avisar('Mecánico asignado.')
+          await recargar()
+        }}
+        conCobro={conCobro}
+        onCerrarCobro={() => setConCobro(null)}
+        onListoCobro={async (mensaje) => {
+          setConCobro(null)
+          avisar(mensaje)
+          await recargar()
+        }}
+        aEliminar={aEliminar}
+        errorEliminar={errorEliminar}
+        eliminando={eliminando}
+        onConfirmarEliminar={confirmarEliminar}
+        onCerrarEliminar={() => setAEliminar(null)}
       />
     </div>
   )

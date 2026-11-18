@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -17,6 +17,27 @@ class Pago(Base):
     """Pago online de una orden (Mercado Pago)."""
 
     __tablename__ = "pagos"
+
+    __table_args__ = (
+        CheckConstraint(
+            "estado IN ('pendiente', 'aprobado', 'rechazado', 'reembolsado')",
+            name="ck_pagos_estado_valido",
+        ),
+        Index(
+            "uq_pagos_payment_id",
+            "payment_id",
+            unique=True,
+            sqlite_where=text("payment_id IS NOT NULL"),
+            postgresql_where=text("payment_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_pagos_orden_pendiente",
+            "orden_id",
+            unique=True,
+            sqlite_where=text("estado = 'pendiente'"),
+            postgresql_where=text("estado = 'pendiente'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     orden_id: Mapped[int] = mapped_column(ForeignKey("ordenes.id"), nullable=False, index=True)

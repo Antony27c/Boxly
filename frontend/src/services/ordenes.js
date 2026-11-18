@@ -1,9 +1,6 @@
 import { api, urlArchivo } from '@/lib/api'
-import { MockError, operar, proximoId } from '@/mocks/db'
-import { usaMock } from '@/services/config'
 
 const RECURSO = '/api/v1/ordenes'
-const USAR_MOCK = usaMock('ordenes')
 
 const CODIGOS = {
   Pendiente: 'pendiente',
@@ -50,6 +47,63 @@ export function proximosEstados(estado) {
   return TRANSICIONES[estado] ?? []
 }
 
+const ROL_ADMIN = ['admin', 'administrador']
+const ROL_MOSTRADOR = [...ROL_ADMIN, 'recepcion', 'recepcionista']
+const ROL_MECANICO = ['mecanico', 'mecánico']
+
+/**
+ * Acción destacada de una orden según su etapa y el rol del usuario: lo que "hay que hacer ahora".
+ * Devuelve null cuando a ese rol no le toca hacer nada (la tarjeta solo se puede abrir).
+ *
+ * tipo:
+ *  - 'etapa'   → abrir el cambio de etapa con `destino` preseleccionado
+ *  - 'asignar' → elegir mecánico
+ *  - 'cobro'   → abrir el cobro (emitir, proponer, revisar o aprobar)
+ *  - 'abrir'   → ir a la página de la orden (/ordenes/:id) a cargar trabajo
+ * `secundaria` (opcional) es una segunda acción del mismo formato.
+ */
+export function accionPrincipal(orden, rol) {
+  if (!orden) return null
+  const esAdmin = ROL_ADMIN.includes(rol)
+  const esMostrador = ROL_MOSTRADOR.includes(rol)
+  const esMecanico = ROL_MECANICO.includes(rol)
+  const tieneMecanico = Boolean(orden.mecanico_id || orden.mecanico)
+
+  switch (orden.estado) {
+    case 'Pendiente':
+      return esMostrador ? { tipo: 'etapa', destino: 'Ingresado', texto: 'Recibir auto' } : null
+    case 'Ingresado':
+      if (!tieneMecanico) return esMostrador ? { tipo: 'asignar', texto: 'Asignar mecánico' } : null
+      return esMecanico ? { tipo: 'etapa', destino: 'En diagnóstico', texto: 'Empezar diagnóstico' } : null
+    case 'En diagnóstico':
+      return esMecanico
+        ? {
+            tipo: 'etapa',
+            destino: 'Listo',
+            texto: 'Marcar listo',
+            secundaria: { tipo: 'etapa', destino: 'Esperando repuestos', texto: 'Esperando repuestos' },
+            trabajo: { tipo: 'abrir', texto: 'Cargar trabajo' },
+          }
+        : null
+    case 'Esperando repuestos':
+      return esMecanico ? { tipo: 'etapa', destino: 'Listo', texto: 'Marcar listo' } : null
+    case 'Listo': {
+      const cobro = estadoCobro(orden)
+      if (cobro === 'sin_cobro') {
+        if (esMostrador) return { tipo: 'cobro', texto: 'Emitir cobro' }
+        return esMecanico ? { tipo: 'cobro', texto: 'Proponer cobro' } : null
+      }
+      if (cobro === 'pendiente') {
+        if (esAdmin) return { tipo: 'cobro', texto: 'Aprobar cobro' }
+        return esMostrador ? { tipo: 'cobro', texto: 'Revisar cobro' } : null
+      }
+      return esMostrador ? { tipo: 'etapa', destino: 'Entregado', texto: 'Entregar' } : null
+    }
+    default:
+      return null
+  }
+}
+
 export function nombreEstado(codigo) {
   return ESTADOS_ORDEN.find((estado) => CODIGOS[estado] === codigo) ?? codigo
 }
@@ -73,63 +127,12 @@ export function historialDesdeApi(item) {
   }
 }
 
-function buscarOrden(datos, id) {
-  const orden = datos.ordenes.find((item) => item.id === Number(id))
-  if (!orden) throw new MockError('No encontramos esa orden de trabajo.', 404)
-  return orden
-}
-
-function validarTransicion(actual, nuevo) {
-  if (nuevo !== actual && !(TRANSICIONES[actual] ?? []).includes(nuevo)) {
-    throw new MockError(`No se puede pasar de "${actual}" a "${nuevo}".`, 400)
-  }
-}
-
-function mecanicoMock(datos, mecanicoId) {
-  if (!mecanicoId) return {}
-  const mecanico = datos.usuarios.find((u) => u.id === Number(mecanicoId))
-  if (!mecanico || mecanico.rol !== 'mecanico' || !mecanico.activo) {
-    throw new MockError('El usuario asignado no es un mecánico activo.', 400)
-  }
-  return { mecanico_id: mecanico.id, mecanico: `${mecanico.apellido}, ${mecanico.nombre}` }
-}
-
-function registrarHistorialMock(datos, orden, estadoAnterior, comentario) {
-  datos.historial_estados.push({
-    id: proximoId(datos.historial_estados),
-    orden_id: orden.id,
-    usuario_nombre: null,
-    estado_anterior: estadoAnterior,
-    estado_nuevo: orden.estado,
-    comentario,
-    fecha: new Date().toISOString(),
-  })
-}
-
 export function sePuedeEliminar(orden) {
   return orden?.estado === 'Pendiente'
 }
 
 export function sePuedeEditarDetalle(orden) {
   return orden?.estado !== 'Entregado' && orden?.estado !== 'Cancelado'
-}
-
-function detalleConSubtotal(detalle) {
-  return {
-    ...detalle,
-    subtotal: Number(detalle.cantidad ?? 0) * Number(detalle.precio_unitario ?? 0),
-  }
-}
-
-function repuestoMock(datos, repuestoId, cantidad) {
-  const repuesto = datos.repuestos.find((item) => item.id === Number(repuestoId))
-  if (!repuesto || repuesto.activo === false) {
-    throw new MockError('Repuesto no encontrado o inactivo.', 404)
-  }
-  if (repuesto.stock < cantidad) {
-    throw new MockError(`Stock insuficiente: quedan ${repuesto.stock} de ${repuesto.nombre}.`, 409)
-  }
-  return repuesto
 }
 
 export function imagenDesdeApi(imagen) {
@@ -140,54 +143,11 @@ export function imagenDesdeApi(imagen) {
   }
 }
 
-function achicarImagen(archivo, ladoMaximo = 1280) {
-  return new Promise((resolve, reject) => {
-    const lector = new FileReader()
-    lector.onerror = () => reject(new MockError('No pudimos leer la imagen.', 400))
-    lector.onload = () => {
-      const imagen = new Image()
-      imagen.onerror = () => reject(new MockError('El archivo no es una imagen válida.', 400))
-      imagen.onload = () => {
-        const escala = Math.min(1, ladoMaximo / Math.max(imagen.width, imagen.height))
-        const lienzo = document.createElement('canvas')
-        lienzo.width = Math.round(imagen.width * escala)
-        lienzo.height = Math.round(imagen.height * escala)
-        lienzo.getContext('2d').drawImage(imagen, 0, 0, lienzo.width, lienzo.height)
-        resolve(lienzo.toDataURL('image/jpeg', 0.8))
-      }
-      imagen.src = lector.result
-    }
-    lector.readAsDataURL(archivo)
-  })
-}
-
 export const ordenesService = {
   imagenes: (ordenId, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          buscarOrden(datos, ordenId)
-          return (datos.imagenes_orden ?? []).filter((item) => item.orden_id === Number(ordenId))
-        })
-      : api.get(`${RECURSO}/${ordenId}/imagenes`, token).then((lista) => lista.map(imagenDesdeApi)),
+    api.get(`${RECURSO}/${ordenId}/imagenes`, token).then((lista) => lista.map(imagenDesdeApi)),
 
-  subirImagen: async (ordenId, archivo, etapa, token) => {
-    if (USAR_MOCK) {
-      const url = await achicarImagen(archivo)
-      return operar((datos) => {
-        buscarOrden(datos, ordenId)
-        datos.imagenes_orden = datos.imagenes_orden ?? []
-        const nueva = {
-          id: proximoId(datos.imagenes_orden),
-          orden_id: Number(ordenId),
-          etapa,
-          url,
-          usuario_nombre: null,
-          fecha: new Date().toISOString(),
-        }
-        datos.imagenes_orden.push(nueva)
-        return nueva
-      })
-    }
+  subirImagen: (ordenId, archivo, etapa, token) => {
     const formulario = new FormData()
     formulario.append('archivo', archivo)
     if (etapa) formulario.append('etapa', CODIGOS[etapa] ?? etapa)
@@ -195,193 +155,62 @@ export const ordenesService = {
   },
 
   quitarImagen: (ordenId, imagenId, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          datos.imagenes_orden = (datos.imagenes_orden ?? []).filter(
-            (item) => !(item.id === Number(imagenId) && item.orden_id === Number(ordenId)),
-          )
-          return null
-        })
-      : api.del(`${RECURSO}/${ordenId}/imagenes/${imagenId}`, token),
+    api.del(`${RECURSO}/${ordenId}/imagenes/${imagenId}`, token),
 
-  mecanicos: (token) =>
-    USAR_MOCK
-      ? operar((datos) =>
-          datos.usuarios
-            .filter((u) => u.rol === 'mecanico' && u.activo)
-            .map(({ id, nombre, apellido }) => ({ id, nombre, apellido })),
-        )
-      : api.get('/api/v1/users/mecanicos', token),
+  mecanicos: (token) => api.get('/api/v1/users/mecanicos', token),
 
   historial: (id, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          buscarOrden(datos, id)
-          return datos.historial_estados.filter((item) => item.orden_id === Number(id))
-        })
-      : api.get(`${RECURSO}/${id}/historial`, token).then((lista) => lista.map(historialDesdeApi)),
+    api.get(`${RECURSO}/${id}/historial`, token).then((lista) => lista.map(historialDesdeApi)),
 
-  eliminar: (id, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const orden = buscarOrden(datos, id)
-          if (!sePuedeEliminar(orden)) {
-            throw new MockError('Solo se pueden eliminar órdenes pendientes. Para las demás, pasala a "Cancelado".', 400)
-          }
-          datos.ordenes = datos.ordenes.filter((item) => item.id !== orden.id)
-          datos.historial_estados = datos.historial_estados.filter((item) => item.orden_id !== orden.id)
-          return null
-        })
-      : api.del(`${RECURSO}/${id}`, token),
+  eliminar: (id, token) => api.del(`${RECURSO}/${id}`, token),
 
   listar: (token) =>
-    USAR_MOCK
-      ? operar((datos) => datos.ordenes)
-      : api.get(RECURSO, token).then((ordenes) => ordenes.map(desdeApi)),
+    api.get(RECURSO, token).then((ordenes) => ordenes.map(desdeApi)),
 
-  obtener: (id, token) =>
-    USAR_MOCK
-      ? operar((datos) => buscarOrden(datos, id))
-      : api.get(`${RECURSO}/${id}`, token).then(desdeApi),
+  obtener: (id, token) => api.get(`${RECURSO}/${id}`, token).then(desdeApi),
 
   crear: (orden, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const vehiculoId = Number(orden.vehiculo_id)
-          if (!datos.vehiculos.some((v) => v.id === vehiculoId)) {
-            throw new MockError('El vehículo elegido ya no existe.', 400)
-          }
-          const nueva = {
-            id: proximoId(datos.ordenes),
-            vehiculo_id: vehiculoId,
-            fecha: new Date().toISOString().slice(0, 10),
-            estado: 'Pendiente',
-            descripcion: orden.descripcion,
-            mecanico: '',
-            ...mecanicoMock(datos, orden.mecanico_id),
-            total: Number(orden.total) || 0,
-          }
-          datos.ordenes.push(nueva)
-          registrarHistorialMock(datos, nueva, null, 'Orden creada')
-          return nueva
-        })
-      : api
-          .post(
-            RECURSO,
-            {
-              vehiculo_id: Number(orden.vehiculo_id),
-              mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
-              descripcion_ingreso: orden.descripcion,
-              costo_estimado: Number(orden.total) || null,
-            },
-            token,
-          )
-          .then(desdeApi),
+    api
+      .post(
+        RECURSO,
+        {
+          vehiculo_id: Number(orden.vehiculo_id),
+          mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
+          descripcion_ingreso: orden.descripcion,
+          costo_estimado: Number(orden.total) || null,
+        },
+        token,
+      )
+      .then(desdeApi),
 
-  detalles: (ordenId, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          buscarOrden(datos, ordenId)
-          return datos.detalles_orden
-            .filter((item) => item.orden_id === Number(ordenId))
-            .map(detalleConSubtotal)
-        })
-      : api.get(`${RECURSO}/${ordenId}/detalles`, token),
+  detalles: (ordenId, token) => api.get(`${RECURSO}/${ordenId}/detalles`, token),
 
   agregarDetalle: (ordenId, linea, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const orden = buscarOrden(datos, ordenId)
-          if (!sePuedeEditarDetalle(orden)) {
-            throw new MockError('No se puede modificar líneas de una orden cerrada.', 400)
-          }
-          const cantidad = Number(linea.cantidad) || 1
-          const repuesto = linea.repuesto_id
-            ? repuestoMock(datos, linea.repuesto_id, cantidad)
-            : null
-          const descripcion =
-            linea.descripcion?.trim() || repuesto?.nombre || ''
-          if (!descripcion) {
-            throw new MockError('Las líneas de mano de obra necesitan descripción.', 422)
-          }
-          const precio =
-            linea.precio_unitario !== '' && linea.precio_unitario != null
-              ? Number(linea.precio_unitario)
-              : repuesto?.precio
-          if (precio == null) {
-            throw new MockError('Las líneas de mano de obra necesitan precio unitario.', 422)
-          }
-          if (repuesto) repuesto.stock -= cantidad
-          const nuevo = {
-            id: proximoId(datos.detalles_orden),
-            orden_id: orden.id,
-            repuesto_id: repuesto?.id ?? null,
-            repuesto_nombre: repuesto?.nombre ?? null,
-            descripcion,
-            cantidad,
-            precio_unitario: precio,
-          }
-          datos.detalles_orden.push(nuevo)
-          return detalleConSubtotal(nuevo)
-        })
-      : api.post(
-          `${RECURSO}/${ordenId}/detalles`,
-          {
-            repuesto_id: linea.repuesto_id ? Number(linea.repuesto_id) : null,
-            descripcion: linea.descripcion?.trim() || null,
-            cantidad: Number(linea.cantidad) || 1,
-            precio_unitario:
-              linea.precio_unitario !== '' && linea.precio_unitario != null
-                ? Number(linea.precio_unitario)
-                : null,
-          },
-          token,
-        ),
+    api.post(
+      `${RECURSO}/${ordenId}/detalles`,
+      {
+        repuesto_id: linea.repuesto_id ? Number(linea.repuesto_id) : null,
+        descripcion: linea.descripcion?.trim() || null,
+        cantidad: Number(linea.cantidad) || 1,
+        precio_unitario:
+          linea.precio_unitario !== '' && linea.precio_unitario != null
+            ? Number(linea.precio_unitario)
+            : null,
+      },
+      token,
+    ),
 
   quitarDetalle: (ordenId, detalleId, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const orden = buscarOrden(datos, ordenId)
-          if (!sePuedeEditarDetalle(orden)) {
-            throw new MockError('No se puede modificar líneas de una orden cerrada.', 400)
-          }
-          const detalle = datos.detalles_orden.find(
-            (item) => item.id === Number(detalleId) && item.orden_id === Number(ordenId),
-          )
-          if (!detalle) throw new MockError('Línea no encontrada en esta orden.', 404)
-          if (detalle.repuesto_id != null) {
-            const repuesto = datos.repuestos.find((item) => item.id === detalle.repuesto_id)
-            if (repuesto) repuesto.stock += detalle.cantidad
-          }
-          datos.detalles_orden = datos.detalles_orden.filter((item) => item.id !== detalle.id)
-          return null
-        })
-      : api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),
+    api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),
 
   cambiarEstado: (id, estado, comentario, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const actual = buscarOrden(datos, id)
-          const estadoAnterior = actual.estado
-          if (estado === estadoAnterior) {
-            throw new MockError('La orden ya está en esa etapa.', 400)
-          }
-          validarTransicion(estadoAnterior, estado)
-          actual.estado = estado
-          registrarHistorialMock(datos, actual, estadoAnterior, comentario)
-          return actual
-        })
-      : api
-          .patch(`${RECURSO}/${id}`, { estado: CODIGOS[estado], comentario_cambio: comentario }, token)
-          .then(desdeApi),
+    api
+      .patch(`${RECURSO}/${id}`, { estado: CODIGOS[estado], comentario_cambio: comentario }, token)
+      .then(desdeApi),
 
-  avisos: (id, token) =>
-    USAR_MOCK ? Promise.resolve([]) : api.get(`${RECURSO}/${id}/notificaciones`, token),
+  avisos: (id, token) => api.get(`${RECURSO}/${id}/notificaciones`, token),
 
-  enviarAviso: (id, token) =>
-    USAR_MOCK
-      ? Promise.reject(new MockError('El envío de avisos necesita el backend conectado.', 400))
-      : api.post(`${RECURSO}/${id}/notificaciones`, {}, token),
+  enviarAviso: (id, token) => api.post(`${RECURSO}/${id}/notificaciones`, {}, token),
 
   emitirCobro: (id, monto, token) =>
     api.post(`${RECURSO}/${id}/cobro`, { monto: Number(monto) }, token).then(desdeApi),
@@ -392,30 +221,16 @@ export const ordenesService = {
       .then(desdeApi),
 
   actualizar: (id, orden, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const actual = buscarOrden(datos, id)
-          const estadoAnterior = actual.estado
-          validarTransicion(estadoAnterior, orden.estado)
-          Object.assign(actual, {
-            estado: orden.estado,
-            descripcion: orden.descripcion,
-            ...mecanicoMock(datos, orden.mecanico_id),
-            total: Number(orden.total) || 0,
-          })
-          if (estadoAnterior !== actual.estado) registrarHistorialMock(datos, actual, estadoAnterior, null)
-          return actual
-        })
-      : api
-          .patch(
-            `${RECURSO}/${id}`,
-            {
-              estado: CODIGOS[orden.estado],
-              mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
-              descripcion_ingreso: orden.descripcion,
-              costo_estimado: Number(orden.total) || 0,
-            },
-            token,
-          )
-          .then(desdeApi),
+    api
+      .patch(
+        `${RECURSO}/${id}`,
+        {
+          estado: CODIGOS[orden.estado],
+          mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
+          descripcion_ingreso: orden.descripcion,
+          costo_estimado: Number(orden.total) || 0,
+        },
+        token,
+      )
+      .then(desdeApi),
 }

@@ -7,6 +7,8 @@ import Field from '@/components/ui/Field'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
 import Logo from '@/components/ui/Logo'
+import LlaveContacto from '@/components/ilustraciones/LlaveContacto'
+import TallerLogin from '@/components/ilustraciones/TallerLogin'
 
 export default function Login() {
   const [datos, setDatos] = useState({ email: '', password: '' })
@@ -54,6 +56,7 @@ export default function Login() {
           <p className="mt-4 text-muted">
             Clientes, vehículos, órdenes de trabajo, repuestos y turnos en un solo lugar.
           </p>
+          <TallerLogin className="mt-10 w-full max-w-sm" />
         </div>
         <dl className="grid grid-cols-3 gap-6 border-t border-graphite-600 pt-6 text-sm">
           <div>
@@ -92,6 +95,7 @@ export default function Login() {
               type="email"
               autoComplete="username"
               placeholder="usuario@gmail.com"
+              icono="correo"
               value={datos.email}
               onChange={(e) => cambiar('email', e.target.value)}
               error={errores.email}
@@ -104,14 +108,17 @@ export default function Login() {
               type="password"
               autoComplete="current-password"
               placeholder="••••••••"
+              icono="llave"
               value={datos.password}
               onChange={(e) => cambiar('password', e.target.value)}
               error={errores.password}
               disabled={enviando}
             />
 
-            <Button type="submit" cargando={enviando} className="w-full">
-              {enviando ? 'Ingresando…' : 'Ingresar'}
+            {/* La llave girada reemplaza al spinner mientras se envía. */}
+            <Button type="submit" disabled={enviando} aria-busy={enviando || undefined} className="group w-full">
+              <LlaveContacto girada={enviando} />
+              {enviando ? 'Arrancando…' : 'Arrancar'}
             </Button>
           </form>
 

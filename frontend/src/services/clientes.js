@@ -1,75 +1,34 @@
 import { api } from '@/lib/api'
-import { MockError, operar, proximoId } from '@/mocks/db'
-import { usaMock } from '@/services/config'
 
 const RECURSO = '/api/v1/clientes'
-const USAR_MOCK = usaMock('clientes')
 
-function buscarCliente(datos, id) {
-  const cliente = datos.clientes.find((item) => item.id === Number(id))
-  if (!cliente) throw new MockError('No encontramos ese cliente.', 404)
-  return cliente
-}
-
-function validarDniUnico(datos, dni, idActual) {
-  const repetido = datos.clientes.some(
-    (item) => item.dni === dni && item.id !== Number(idActual),
-  )
-  if (repetido) throw new MockError('Ya existe un cliente con ese DNI/CUIT.', 409)
+/* Arma la query de un listado paginado: limit/offset más filtros extra.
+   Devuelve { items, total } gracias a api.getConTotal. */
+function aParamsPaginacion({ limit, offset, ...filtros }) {
+  const params = new URLSearchParams()
+  if (limit != null) params.set('limit', limit)
+  if (offset != null) params.set('offset', offset)
+  for (const [clave, valor] of Object.entries(filtros)) {
+    if (valor !== undefined && valor !== null && valor !== '') params.set(clave, valor)
+  }
+  return params
 }
 
 export const clientesService = {
-  listar: (token) =>
-    USAR_MOCK ? operar((datos) => datos.clientes) : api.get(RECURSO, token),
+  listar: (token) => api.get(RECURSO, token),
 
-  obtener: (id, token) =>
-    USAR_MOCK
-      ? operar((datos) => buscarCliente(datos, id))
-      : api.get(`${RECURSO}/${id}`, token),
+  listarPaginado: (params = {}, token) => {
+    const consulta = aParamsPaginacion(params).toString()
+    return api.getConTotal(`${RECURSO}${consulta ? `?${consulta}` : ''}`, token)
+  },
 
-  crear: (cliente, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          validarDniUnico(datos, cliente.dni)
-          const nuevo = {
-            ...cliente,
-            id: proximoId(datos.clientes),
-            creado_en: new Date().toISOString(),
-          }
-          datos.clientes.push(nuevo)
-          return nuevo
-        })
-      : api.post(RECURSO, cliente, token),
+  obtener: (id, token) => api.get(`${RECURSO}/${id}`, token),
 
-  actualizar: (id, cliente, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const actual = buscarCliente(datos, id)
-          validarDniUnico(datos, cliente.dni, id)
-          Object.assign(actual, cliente)
-          return actual
-        })
-      : api.put(`${RECURSO}/${id}`, cliente, token),
+  crear: (cliente, token) => api.post(RECURSO, cliente, token),
 
-  invitar: (id, token) =>
-    USAR_MOCK
-      ? Promise.reject(new MockError('Las invitaciones necesitan el backend conectado.', 400))
-      : api.post(`${RECURSO}/${id}/invitacion`, {}, token),
+  actualizar: (id, cliente, token) => api.put(`${RECURSO}/${id}`, cliente, token),
 
-  eliminar: (id, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const cliente = buscarCliente(datos, id)
-          const conVehiculos = datos.vehiculos.some((v) => v.cliente_id === cliente.id)
-          const conTurnos = datos.turnos.some((t) => t.cliente_id === cliente.id)
-          if (conVehiculos || conTurnos) {
-            throw new MockError(
-              'No se puede eliminar: el cliente tiene vehículos, órdenes o turnos asociados.',
-              409,
-            )
-          }
-          datos.clientes = datos.clientes.filter((item) => item.id !== cliente.id)
-          return null
-        })
-      : api.del(`${RECURSO}/${id}`, token),
+  invitar: (id, token) => api.post(`${RECURSO}/${id}/invitacion`, {}, token),
+
+  eliminar: (id, token) => api.del(`${RECURSO}/${id}`, token),
 }

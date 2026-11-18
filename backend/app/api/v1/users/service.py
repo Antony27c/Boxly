@@ -11,6 +11,7 @@ from app.core.security import (
 )
 from app.models.cliente import Cliente
 from app.models.usuario import RolUsuario, Usuario
+from app.schemas.paginacion import ParametrosPagina
 from app.schemas.usuario import (
     ActivacionInfo,
     ActivacionRequest,
@@ -21,6 +22,10 @@ from app.schemas.usuario import (
     UsuarioResponse,
     UsuarioUpdate,
 )
+
+# Hash bcrypt de una contraseña cualquiera: cuando el email no existe se verifica
+# contra este para que la respuesta tarde lo mismo y no se pueda enumerar usuarios.
+_HASH_DUMMY = "$2b$12$D5nmqropdACIU8iLQjEjGewyaEd1qk.04sX1PfmTKXgcR0AwcpDzC"
 
 
 def _to_response(user: Usuario) -> UsuarioResponse:
@@ -83,7 +88,12 @@ def authenticate(db: Session, data: LoginRequest) -> TokenResponse:
         cliente = repository.get_cliente_by_email(db, data.email)
         if cliente is not None and data.password == cliente.dni.strip():
             user = crear_cuenta_con_dni(db, cliente)
-    if user is None or not verify_password(data.password, user.password_hash):
+    # verify_password corre siempre (contra el hash real o el dummy): si el email
+    # no existe la demora es la misma y no se puede saber qué correos están dados
+    # de alta. El error es idéntico en ambos casos.
+    hash_a_verificar = user.password_hash if user is not None else _HASH_DUMMY
+    password_ok = verify_password(data.password, hash_a_verificar)
+    if user is None or not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email o contraseña incorrectos",
@@ -97,6 +107,7 @@ def authenticate(db: Session, data: LoginRequest) -> TokenResponse:
     token = create_access_token(
         subject=user.id,
         extra_claims={"rol": user.rol.value, "email": user.email},
+        token_version=user.token_version,
     )
     return TokenResponse(access_token=token, usuario=_to_response(user))
 
@@ -157,6 +168,7 @@ def activar_cuenta(db: Session, data: ActivacionRequest) -> TokenResponse:
     token = create_access_token(
         subject=user.id,
         extra_claims={"rol": user.rol.value, "email": user.email},
+        token_version=user.token_version,
     )
     return TokenResponse(access_token=token, usuario=_to_response(user))
 
@@ -185,9 +197,13 @@ def list_usuarios(
     *,
     solo_activos: bool | None = None,
     rol: RolUsuario | None = None,
-) -> list[UsuarioResponse]:
-    users = repository.list_usuarios(db, solo_activos=solo_activos, rol=rol)
-    return [_to_response(u) for u in users]
+    pagina: ParametrosPagina | None = None,
+) -> tuple[list[UsuarioResponse], int]:
+    users = repository.list_usuarios(
+        db, solo_activos=solo_activos, rol=rol, pagina=pagina
+    )
+    total = repository.contar_usuarios(db, solo_activos=solo_activos, rol=rol)
+    return [_to_response(u) for u in users], total
 
 
 def get_usuario(db: Session, user_id: int) -> UsuarioResponse:
@@ -228,6 +244,8 @@ def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioRes
 
     if "password" in payload:
         payload["password_hash"] = hash_password(payload.pop("password"))
+        # Invalida los tokens emitidos antes del cambio de contraseña.
+        payload["token_version"] = user.token_version + 1
 
     if "nombre" in payload and isinstance(payload["nombre"], str):
         payload["nombre"] = payload["nombre"].strip()

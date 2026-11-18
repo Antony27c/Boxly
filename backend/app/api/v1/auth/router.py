@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.api.v1.users import service
 from app.core.dependencies import CurrentUser, DbSession
+from app.core.rate_limit import limiter
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
     ActivacionInfo,
@@ -19,7 +20,8 @@ router = APIRouter(prefix="/auth", tags=["Autenticación"])
     response_model=TokenResponse,
     summary="Iniciar sesión",
 )
-def login(data: LoginRequest, db: DbSession) -> TokenResponse:
+@limiter.limit("5/minute")
+def login(request: Request, data: LoginRequest, db: DbSession) -> TokenResponse:
     """Autentica con email y contraseña. Devuelve JWT + datos del usuario."""
     return service.authenticate(db, data)
 
@@ -49,6 +51,9 @@ def info_activacion(token: str, db: DbSession) -> ActivacionInfo:
     status_code=201,
     summary="Activar la cuenta del cliente",
 )
-def activar_cuenta(data: ActivacionRequest, db: DbSession) -> TokenResponse:
+@limiter.limit("10/minute")
+def activar_cuenta(
+    request: Request, data: ActivacionRequest, db: DbSession
+) -> TokenResponse:
     """El cliente confirma sus datos y crea su contraseña. Devuelve la sesión iniciada."""
     return service.activar_cuenta(db, data)

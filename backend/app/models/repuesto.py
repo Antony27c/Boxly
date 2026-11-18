@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, Numeric, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -14,6 +14,10 @@ class Repuesto(Base):
     """Repuesto/pieza que se puede usar en las reparaciones (con control de stock)."""
 
     __tablename__ = "repuestos"
+
+    __table_args__ = (
+        CheckConstraint("stock >= 0", name="ck_repuestos_stock_no_negativo"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     codigo: Mapped[str] = mapped_column(String(40), unique=True, nullable=False, index=True)

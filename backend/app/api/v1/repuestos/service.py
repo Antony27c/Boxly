@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.repuestos import repository
+from app.schemas.paginacion import ParametrosPagina
 from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate
 
 
@@ -31,12 +32,17 @@ def _validar_codigo_unico(db: Session, codigo: str, excluir_id: int | None) -> N
 
 
 def list_repuestos(
-    db: Session, *, solo_activos: bool = False, q: str | None = None
-) -> list[RepuestoResponse]:
-    return [
-        _to_response(r)
-        for r in repository.list_repuestos(db, solo_activos=solo_activos, q=q)
-    ]
+    db: Session,
+    *,
+    solo_activos: bool = False,
+    q: str | None = None,
+    pagina: ParametrosPagina | None = None,
+) -> tuple[list[RepuestoResponse], int]:
+    items = repository.list_repuestos(
+        db, solo_activos=solo_activos, q=q, pagina=pagina
+    )
+    total = repository.contar_repuestos(db, solo_activos=solo_activos, q=q)
+    return [_to_response(r) for r in items], total
 
 
 def list_stock_bajo(db: Session) -> list[RepuestoResponse]:

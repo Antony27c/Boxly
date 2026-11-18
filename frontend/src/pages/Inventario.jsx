@@ -1,30 +1,41 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import FormularioRepuesto from '@/components/inventario/FormularioRepuesto'
+import VarillaStock from '@/components/inventario/VarillaStock'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Confirmacion from '@/components/ui/Confirmacion'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
+import { BOTON_PIE, Chip, Chips, Ficha, FichaCabecera, FichaPie } from '@/components/ui/Ficha'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
 import Modal from '@/components/ui/Modal'
+import Paginacion from '@/components/ui/Paginacion'
 import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
+import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
 import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
 import { repuestosService, tieneStockBajo } from '@/services/repuestos'
+import { pesos } from '@/utils/formato'
 import { STOCK_MAXIMO } from '@/utils/validation'
 
-function pesos(valor) {
-  const numero = Number(valor ?? 0)
-  // Con centavos se muestran siempre 2 decimales ($ 45.999,50); sin centavos, ninguno ($ 50.000)
-  const decimales = Number.isInteger(numero) ? 0 : 2
-  return `$ ${numero.toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}`
+// Mismo criterio de niveles que la varilla (VarillaStock), que no lo exporta:
+// rojo bajo el mínimo o sin stock, ámbar hasta 1,5 veces el mínimo, verde arriba.
+function nivelDeStock({ stock, stock_minimo: minimo }) {
+  const s = Number(stock) || 0
+  const m = Number(minimo) || 0
+  if (s <= 0 || s < m) return 'danger'
+  return s <= m * 1.5 ? 'amber' : 'ok'
 }
+
+const TONO_CHIP_STOCK = { danger: 'peligro', amber: 'ambar', ok: 'ok', neutro: 'neutro' }
 
 export default function Inventario() {
   const { token, usuario } = useAuth()
   const puedeEditar = tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
+  const [parametros, setParametros] = useSearchParams()
 
   // ---------- Filtros ----------
   const [busqueda, setBusqueda] = useState('')
@@ -51,17 +62,41 @@ export default function Inventario() {
   const [aviso, setAviso] = useState('')
   const [errorAccion, setErrorAccion] = useState('')
 
+  // Con búsqueda o el filtro de stock bajo se trabaja con la lista completa
+  // (los filtros son del lado del cliente); si no, se pagina en el servidor.
+  const modoCompleto = busqueda.trim() !== '' || soloBajo
+  const { pagina, setPagina, offset, limite, paginas, desde, hasta, total, setTotal } =
+    usePaginacion()
+
   // Al tildar "Mostrar inactivos" cambia la función de carga y useRecurso vuelve a pedir los datos
   const cargar = useCallback(
-    (t) => (verInactivos ? repuestosService.listarTodos(t) : repuestosService.listar(t)),
-    [verInactivos],
+    (t) => {
+      if (modoCompleto) {
+        return verInactivos ? repuestosService.listarTodos(t) : repuestosService.listar(t)
+      }
+      return repuestosService
+        .listarPaginado({ limit: limite, offset, ...(verInactivos ? {} : { solo_activos: true }) }, t)
+        .then(({ items, total: cantidad }) => {
+          setTotal(cantidad)
+          return items
+        })
+    },
+    [modoCompleto, verInactivos, limite, offset, setTotal],
   )
   const { datos: repuestos, cargando, error, recargar } = useRecurso(cargar)
 
+  // El aviso de stock bajo usa el endpoint dedicado: con paginación la página
+  // actual no alcanza para contar todos los repuestos bajos.
+  const cargarStockBajo = useCallback((t) => repuestosService.stockBajo(t), [])
+  const { datos: stockBajo, recargar: recargarStockBajo } = useRecurso(cargarStockBajo)
+  const recargarTodo = useCallback(async () => {
+    await Promise.all([recargar(), recargarStockBajo()])
+  }, [recargar, recargarStockBajo])
+
   // La alerta de stock bajo solo cuenta repuestos activos
   const conStockBajo = useMemo(
-    () => (repuestos ?? []).filter((r) => r.activo !== false && tieneStockBajo(r)),
-    [repuestos],
+    () => (stockBajo ?? []).filter((r) => r.activo !== false && tieneStockBajo(r)),
+    [stockBajo],
   )
 
   const filtrados = useMemo(() => {
@@ -114,7 +149,7 @@ export default function Inventario() {
     }
     setFormularioAbierto(false)
     setEnEdicion(null)
-    await recargar()
+    await recargarTodo()
   }
 
   // Mientras se guarda no se cierra el modal (Escape, ✕ o clic afuera): si la API
@@ -130,7 +165,7 @@ export default function Inventario() {
     try {
       await repuestosService.cambiarEstado(repuesto.id, true, token)
       setAviso(`"${repuesto.nombre}" volvió a estar activo.`)
-      await recargar()
+      await recargarTodo()
     } catch (problema) {
       setErrorAccion(problema.message)
     }
@@ -143,7 +178,7 @@ export default function Inventario() {
       await repuestosService.cambiarEstado(aDesactivar.id, false, token)
       setAviso(`"${aDesactivar.nombre}" se desactivó. Ya no aparece al armar órdenes.`)
       setADesactivar(null)
-      await recargar()
+      await recargarTodo()
     } catch (problema) {
       setErrorDesactivar(problema.message)
     } finally {
@@ -176,13 +211,27 @@ export default function Inventario() {
       await repuestosService.ingresarStock(aIngresar, numero, token)
       setAviso(`Ingresaron ${numero} unidades de ${aIngresar.nombre}.`)
       setAIngresar(null)
-      await recargar()
+      await recargarTodo()
     } catch (problema) {
       setErrorIngreso(problema.message)
     } finally {
       setGuardando(false)
     }
   }
+
+  // ?nuevo=1 (por ejemplo desde la checklist de primeros pasos) abre el
+  // formulario de alta una vez; el efecto de abajo limpia el parámetro.
+  const quiereNuevo = parametros.get('nuevo') === '1'
+  if (quiereNuevo && puedeEditar && !formularioAbierto) {
+    setEnEdicion(null)
+    setFormularioAbierto(true)
+  }
+  useEffect(() => {
+    if (!quiereNuevo) return
+    const proximos = new URLSearchParams(parametros)
+    proximos.delete('nuevo')
+    setParametros(proximos, { replace: true })
+  }, [quiereNuevo, parametros, setParametros])
 
   return (
     <div className="animate-bay-in">
@@ -214,7 +263,7 @@ export default function Inventario() {
           label="Buscar por nombre o código"
           type="search"
           className="w-full sm:max-w-sm"
-          placeholder="Filtro de aceite"
+          placeholder="Ej.: Filtro de aceite"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
         />
@@ -251,25 +300,100 @@ export default function Inventario() {
         </div>
       )}
 
-      {cargando ? (
+      {cargando && !repuestos ? (
         <Loader texto="Cargando inventario…" />
       ) : error ? (
         <div className="mt-6 space-y-4">
           <Alert>{error}</Alert>
-          <Button variante="secundario" onClick={recargar}>
+          <Button variante="secundario" onClick={recargarTodo}>
             Reintentar
           </Button>
         </div>
       ) : filtrados.length === 0 ? (
         <div className="mt-6">
           <Vacio
-            titulo="Sin repuestos para mostrar"
-            mensaje="Probá con otra búsqueda, sacá el filtro o cargá un repuesto nuevo."
-            accion={puedeEditar ? <Button onClick={abrirNuevo}>Nuevo repuesto</Button> : undefined}
+            titulo={
+              busqueda || soloBajo ? 'Sin resultados' : 'El inventario está vacío'
+            }
+            mensaje={
+              busqueda || soloBajo
+                ? 'Probá con otro nombre o código, o sacá el filtro de stock bajo.'
+                : 'Acá cargás los repuestos que más usa el taller: al armar una orden los buscás por nombre y descuentan stock solos.'
+            }
+            accion={
+              puedeEditar ? (
+                <Button onClick={abrirNuevo}>
+                  {busqueda || soloBajo ? 'Nuevo repuesto' : 'Cargar el primer repuesto'}
+                </Button>
+              ) : undefined
+            }
           />
         </div>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-box border border-graphite-700 bg-graphite-800">
+        <>
+        {/* Celular: una tarjeta por repuesto, sin tabla que obligue a deslizar de costado. */}
+        <ul className={`mt-6 space-y-3 sm:hidden ${cargando ? 'opacity-60' : ''}`}>
+          {filtrados.map((repuesto) => {
+            const inactivo = repuesto.activo === false
+            const bajo = !inactivo && tieneStockBajo(repuesto)
+            const nivel = inactivo ? 'neutro' : nivelDeStock(repuesto)
+            return (
+              <Ficha key={repuesto.id} acento={nivel} className={inactivo ? 'opacity-60' : ''}>
+                <FichaCabecera
+                  antetitulo={repuesto.codigo}
+                  titulo={repuesto.nombre}
+                  className="px-4 pb-3 pt-4 [&_h3]:whitespace-normal [&_h3]:text-xl"
+                  aside={<VarillaStock stock={repuesto.stock} minimo={repuesto.stock_minimo} className="h-auto w-20" />}
+                >
+                  {repuesto.descripcion && <p className="mt-1 text-sm text-muted">{repuesto.descripcion}</p>}
+                  <Chips>
+                    <Chip mono>{pesos(repuesto.precio)}</Chip>
+                    <Chip tono={TONO_CHIP_STOCK[nivel]}>
+                      Stock <span className="font-mono font-semibold">{repuesto.stock}</span> · mín. {repuesto.stock_minimo}
+                    </Chip>
+                    {inactivo && <Chip>Inactivo</Chip>}
+                    {bajo && <Chip tono="peligro">{repuesto.stock === 0 ? 'Sin stock' : 'Stock bajo'}</Chip>}
+                  </Chips>
+                </FichaCabecera>
+                {puedeEditar && (
+                  <FichaPie>
+                    {!inactivo && (
+                      <Button variante="secundario" className={BOTON_PIE} onClick={() => abrirIngreso(repuesto)}>
+                        Ingresar stock
+                      </Button>
+                    )}
+                    <span className="ml-auto flex gap-1">
+                      <Button variante="fantasma" className={BOTON_PIE} onClick={() => abrirEdicion(repuesto)}>
+                        Editar
+                      </Button>
+                      {inactivo ? (
+                        <Button variante="fantasma" className={BOTON_PIE} onClick={() => activar(repuesto)}>
+                          Activar
+                        </Button>
+                      ) : (
+                        <Button
+                          variante="fantasma"
+                          className={`${BOTON_PIE} hover:!text-danger`}
+                          onClick={() => {
+                            setErrorDesactivar('')
+                            setADesactivar(repuesto)
+                          }}
+                        >
+                          Desactivar
+                        </Button>
+                      )}
+                    </span>
+                  </FichaPie>
+                )}
+              </Ficha>
+            )
+          })}
+        </ul>
+        <div
+          className={`mt-6 hidden overflow-x-auto rounded-box border border-graphite-700 bg-graphite-800 transition-opacity sm:block ${
+            cargando ? 'opacity-60' : ''
+          }`}
+        >
           <table className="w-full text-left text-sm">
             <thead className="border-b border-graphite-700 text-muted">
               <tr>
@@ -292,7 +416,7 @@ export default function Inventario() {
                   >
                     <td className="px-4 py-3 font-mono text-xs">{repuesto.codigo}</td>
                     <td className="px-4 py-3">
-                      <p className="font-medium">
+                      <p className="font-semibold text-ink">
                         {repuesto.nombre}
                         {inactivo && (
                           <span className="ml-2">
@@ -304,14 +428,13 @@ export default function Inventario() {
                     </td>
                     <td className="px-4 py-3 text-right">{pesos(repuesto.precio)}</td>
                     <td className="px-4 py-3 text-right">
-                      <span className={bajo ? 'font-semibold text-danger' : 'font-semibold'}>
-                        {repuesto.stock}
-                      </span>
-                      {bajo && (
-                        <span className="ml-2">
-                          <Badge tono="peligro">{repuesto.stock === 0 ? 'Sin stock' : 'Stock bajo'}</Badge>
+                      <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+                        <VarillaStock stock={repuesto.stock} minimo={repuesto.stock_minimo} />
+                        <span className={bajo ? 'font-semibold text-danger' : 'font-semibold'}>
+                          {repuesto.stock}
                         </span>
-                      )}
+                        {bajo && <Badge tono="peligro">{repuesto.stock === 0 ? 'Sin stock' : 'Stock bajo'}</Badge>}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right text-muted">{repuesto.stock_minimo}</td>
                     <td className="px-4 py-3 text-right">
@@ -349,6 +472,19 @@ export default function Inventario() {
             </tbody>
           </table>
         </div>
+        </>
+      )}
+
+      {!modoCompleto && paginas > 1 && !error && filtrados.length > 0 && (
+        <Paginacion
+          className="mt-4"
+          pagina={pagina}
+          paginas={paginas}
+          desde={desde}
+          hasta={hasta}
+          total={total}
+          onPagina={setPagina}
+        />
       )}
 
       {/* Alta y edición */}

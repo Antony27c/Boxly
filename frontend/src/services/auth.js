@@ -1,42 +1,6 @@
-import { authApi, ApiError } from '@/lib/api'
-import { usaMock } from '@/services/config'
-
-const USAR_MOCK = usaMock('auth')
-
-const USUARIO_DEMO = {
-  id: 1,
-  nombre: 'Admin',
-  apellido: 'Boxly',
-  email: 'demo@boxly.com',
-  rol: 'administrador',
-  activo: true,
-}
-
-const TOKEN_DEMO = 'token-demo'
-
-function esperar(ms = 400) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function loginMock({ email, password }) {
-  await esperar()
-  if (password.length < 6) {
-    throw new ApiError('Usuario o contraseña incorrectos.', 401)
-  }
-  return {
-    access_token: TOKEN_DEMO,
-    token_type: 'bearer',
-    usuario: { ...USUARIO_DEMO, email },
-  }
-}
-
-async function perfilMock(token) {
-  await esperar(150)
-  if (token !== TOKEN_DEMO) throw new ApiError('Sesión vencida.', 401)
-  return USUARIO_DEMO
-}
+import { authApi } from '@/lib/api'
 
 export const authService = {
-  login: USAR_MOCK ? loginMock : authApi.login,
-  perfil: USAR_MOCK ? perfilMock : authApi.perfil,
+  login: authApi.login,
+  perfil: authApi.perfil,
 }

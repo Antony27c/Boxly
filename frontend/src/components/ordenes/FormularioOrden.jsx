@@ -157,14 +157,14 @@ export default function FormularioOrden({
     <form onSubmit={enviar} noValidate className="space-y-4">
       {errorApi && <Alert>{errorApi}</Alert>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Autocomplete
           label="Cliente"
           value={textoCliente}
           onChange={escribirCliente}
           onElegir={elegirCliente}
           opciones={opcionesCliente}
-          disabled={guardando || Boolean(orden)}
+          disabled={guardando || Boolean(orden?.id)}
           placeholder="Buscá por apellido o DNI"
           sinResultados="No hay clientes con ese nombre."
         />
@@ -175,11 +175,11 @@ export default function FormularioOrden({
           onElegir={elegirVehiculo}
           opciones={opcionesVehiculo}
           error={errores.vehiculo_id}
-          disabled={guardando || Boolean(orden)}
+          disabled={guardando || Boolean(orden?.id)}
           placeholder="Buscá por patente o modelo"
           sinResultados="No hay vehículos que coincidan."
         />
-        {orden && (
+        {orden?.id && (
           <>
             <Field label="Fecha de ingreso" type="date" value={datos.fecha} disabled />
             <Field
@@ -210,7 +210,7 @@ export default function FormularioOrden({
           error={errores.total}
           ayuda="Poné 0 mientras no haya presupuesto. El monto a cobrar se emite desde «Cobro»."
           disabled={guardando}
-          placeholder="185000"
+          placeholder="Ej.: 185000"
         />
       </div>
 

@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.v1.repuestos import service
 from app.core.dependencies import PersonalUser, DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
+from app.schemas.paginacion import PaginaParams
 from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate
 from app.schemas.usuario import MessageResponse
 
@@ -24,10 +25,16 @@ MostradorUser = Annotated[
 def listar_repuestos(
     db: DbSession,
     _: PersonalUser,
+    pagina: PaginaParams,
+    response: Response,
     solo_activos: bool = Query(default=False),
     q: str | None = Query(default=None),
 ) -> list[RepuestoResponse]:
-    return service.list_repuestos(db, solo_activos=solo_activos, q=q)
+    items, total = service.list_repuestos(
+        db, solo_activos=solo_activos, q=q, pagina=pagina
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return items
 
 
 @router.get(

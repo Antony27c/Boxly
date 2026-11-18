@@ -1,0 +1,13 @@
+/* Ruta de seguimiento del portal: el autito entra desde la largada hasta su
+   etapa y el tramo recorrido se pinta con él. Se usan con motion-safe:. */
+@keyframes ruta-auto-entra {
+  from {
+    left: 0%;
+  }
+}
+
+@keyframes ruta-avance-entra {
+  from {
+    width: 0%;
+  }
+}

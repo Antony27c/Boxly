@@ -20,7 +20,7 @@ function fechaHora(fecha) {
   })
 }
 
-export function armarEtapas(historial = [], imagenes = []) {
+function armarEtapas(historial = [], imagenes = []) {
   const ordenado = [...historial].sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
   const etapas = []
   for (const item of ordenado) {

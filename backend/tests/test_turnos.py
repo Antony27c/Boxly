@@ -6,7 +6,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models import Cliente, Turno, Usuario
 from app.models.usuario import RolUsuario
-from main import app
+from app.main import app
 
 
 @pytest.fixture

@@ -1,34 +1,40 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import IngresoRapido from '@/components/ordenes/IngresoRapido'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Confirmacion from '@/components/ui/Confirmacion'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
+import { BOTON_PIE, Ficha, FichaCabecera, FichaPersona, FichaPie, FichaSeccion } from '@/components/ui/Ficha'
 import Loader from '@/components/ui/Loader'
 import Modal from '@/components/ui/Modal'
+import Patente from '@/components/ui/Patente'
 import Select from '@/components/ui/Select'
-import FormularioTurno, { ETIQUETAS_ESTADO } from '@/components/turnos/FormularioTurno'
+import FormularioTurno from '@/components/turnos/FormularioTurno'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
 import { ESTADOS_TURNO, HORARIOS, turnosService } from '@/services/turnos'
 import { vehiculosService } from '@/services/vehiculos'
 import { aISO, etiquetaDia, lunesDe, sumarDias } from '@/utils/fechas'
+import { ETIQUETAS_ESTADO } from '@/utils/etiquetas'
 
-const TONOS_ESTADO = {
+// Barra de color de la ficha de cada turno según su estado.
+const ACENTOS_ESTADO = {
   pendiente: 'neutro',
-  confirmado: 'ambar',
-  en_taller: 'ambar',
+  confirmado: 'amber',
+  en_taller: 'azul',
   completado: 'ok',
-  cancelado: 'peligro',
+  cancelado: 'danger',
 }
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 export default function Turnos() {
   const { token } = useAuth()
-  const [parametros] = useSearchParams()
+  const [parametros, setParametros] = useSearchParams()
+  const navigate = useNavigate()
   const hoy = aISO(new Date())
 
   const [inicioSemana, setInicioSemana] = useState(() => lunesDe(hoy))
@@ -40,16 +46,25 @@ export default function Turnos() {
   const [errorCancelar, setErrorCancelar] = useState('')
   const [procesando, setProcesando] = useState(false)
   const [aviso, setAviso] = useState('')
+  const [turnoARecibir, setTurnoARecibir] = useState(null)
 
-  const cargarTurnos = useCallback((t) => turnosService.listar(t), [])
+  // Pide solo la semana visible; al cambiar de semana cambia el callback y
+  // useRecurso vuelve a pedir. El filtro por fecha en `visibles` cubre el
+  // caso de que el backend ignore los parámetros.
+  const cargarTurnos = useCallback(
+    (t) => turnosService.listar({ desde: inicioSemana, hasta: sumarDias(inicioSemana, 5) }, t),
+    [inicioSemana],
+  )
   const cargarClientes = useCallback((t) => clientesService.listar(t), [])
   const cargarVehiculos = useCallback((t) => vehiculosService.listar(t), [])
 
   const { datos: turnos, cargando, error, recargar } = useRecurso(cargarTurnos)
-  const { datos: clientes } = useRecurso(cargarClientes)
-  const { datos: vehiculos } = useRecurso(cargarVehiculos)
+  const { datos: clientes, error: errorClientes } = useRecurso(cargarClientes)
+  const { datos: vehiculos, error: errorVehiculos } = useRecurso(cargarVehiculos)
 
   const vehiculoPreseleccionado = parametros.get('vehiculo')
+  const recibirId = parametros.get('recibir')
+  const quiereNuevo = parametros.get('nuevo') === '1'
 
   const dias = useMemo(
     () => Array.from({ length: 6 }, (_, indice) => sumarDias(inicioSemana, indice)),
@@ -57,8 +72,12 @@ export default function Turnos() {
   )
 
   const visibles = useMemo(
-    () => (turnos ?? []).filter((turno) => !estadoFiltro || turno.estado === estadoFiltro),
-    [turnos, estadoFiltro],
+    () =>
+      (turnos ?? []).filter(
+        (turno) =>
+          dias.includes(turno.fecha) && (!estadoFiltro || turno.estado === estadoFiltro),
+      ),
+    [turnos, estadoFiltro, dias],
   )
 
   const porDia = useMemo(() => {
@@ -78,6 +97,88 @@ export default function Turnos() {
     () => new Map((vehiculos ?? []).map((vehiculo) => [vehiculo.id, vehiculo])),
     [vehiculos],
   )
+
+  // "Recibir auto" aparece en turnos de hoy o anteriores que todavía se
+  // pueden atender (no cancelados, en taller ni completados).
+  function puedeRecibirse(turno) {
+    return (
+      turno.fecha <= hoy &&
+      !['cancelado', 'en_taller', 'completado'].includes(turno.estado)
+    )
+  }
+
+  // ?vehiculo=<id> (por ejemplo desde la ficha del vehículo): además de
+  // precargar el formulario en turnoInicial, se abre una sola vez por
+  // visita. Mismo patrón "ajustar estado durante el render" que Ordenes.
+  const [yaAbierto, setYaAbierto] = useState(false)
+  if (
+    !yaAbierto &&
+    vehiculoPreseleccionado &&
+    !formularioAbierto &&
+    vehiculosPorId.has(Number(vehiculoPreseleccionado))
+  ) {
+    setYaAbierto(true)
+    setEnEdicion(null)
+    setFechaSugerida(hoy)
+    setFormularioAbierto(true)
+  }
+
+  // ?nuevo=1 (por ejemplo desde el asistente de cliente nuevo): abre el
+  // formulario de turno una vez. Si viene ?vehiculo=<id> se respeta la
+  // precarga del flujo de arriba (espera a que carguen los vehículos).
+  if (quiereNuevo && !vehiculoPreseleccionado && !formularioAbierto && !turnoARecibir) {
+    setEnEdicion(null)
+    setFechaSugerida(hoy)
+    setFormularioAbierto(true)
+  }
+  useEffect(() => {
+    if (!quiereNuevo) return
+    const proximos = new URLSearchParams(parametros)
+    proximos.delete('nuevo')
+    setParametros(proximos, { replace: true })
+  }, [quiereNuevo, parametros, setParametros])
+
+  // ?recibir=<idTurno> (por ejemplo desde Hoy): abre el ingreso rápido de
+  // ese turno. Si está en la semana visible se abre en el render; si cae
+  // afuera, el efecto de abajo lo busca entre todos los turnos.
+  const turnoParaRecibir =
+    recibirId && !turnoARecibir
+      ? (turnos ?? []).find((t) => String(t.id) === String(recibirId))
+      : null
+  if (turnoParaRecibir) setTurnoARecibir(turnoParaRecibir)
+
+  // Limpia ?recibir= cuando el modal quedó abierto por ese parámetro.
+  useEffect(() => {
+    if (!recibirId || !turnoARecibir) return
+    const proximos = new URLSearchParams(parametros)
+    if (!proximos.has('recibir')) return
+    proximos.delete('recibir')
+    setParametros(proximos, { replace: true })
+  }, [recibirId, turnoARecibir, parametros, setParametros])
+
+  useEffect(() => {
+    if (!recibirId || turnoARecibir || cargando || turnoParaRecibir) return
+    // El turno puede caer fuera de la semana visible: se busca entre todos.
+    let activo = true
+    turnosService
+      .listar({}, token)
+      .then((todos) => {
+        if (!activo) return
+        const encontrado = (todos ?? []).find((t) => String(t.id) === String(recibirId))
+        if (encontrado) setTurnoARecibir(encontrado)
+      })
+      .catch(() => {})
+      .finally(() => {
+        // Resuelva o no, el parámetro ya cumplió su función: se limpia.
+        if (!activo) return
+        const proximos = new URLSearchParams(parametros)
+        proximos.delete('recibir')
+        setParametros(proximos, { replace: true })
+      })
+    return () => {
+      activo = false
+    }
+  }, [recibirId, turnoARecibir, cargando, turnoParaRecibir, turnos, token, parametros, setParametros])
 
   function abrirNuevo(fecha = hoy) {
     setEnEdicion(null)
@@ -113,7 +214,7 @@ export default function Turnos() {
     }
   }
 
-  const sinVehiculos = (vehiculos ?? []).length === 0
+  const sinVehiculos = vehiculos?.length === 0
   const ocupadosEnSemana = visibles.filter((t) => dias.includes(t.fecha) && t.estado !== 'cancelado')
   const capacidadSemanal = dias.length * HORARIOS.length
 
@@ -139,23 +240,24 @@ export default function Turnos() {
       />
 
       {sinVehiculos && (
-        <div className="mt-4">
-          <Alert tipo="info">
-            Para agendar un turno primero cargá un vehículo.{' '}
-            <Link to="/vehiculos" className="text-amber hover:underline">
-              Ir a Vehículos
-            </Link>
-          </Alert>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted">
+            Para agendar un turno primero hace falta un cliente con su vehículo.
+          </p>
+          <Button variante="secundario" onClick={() => navigate('/clientes?nuevo=1')}>
+            Cargar cliente y vehículo
+          </Button>
         </div>
       )}
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-3 items-center gap-2 sm:flex sm:w-auto [&>button]:px-3 sm:[&>button]:px-5">
           <Button
             variante="secundario"
             onClick={() => setInicioSemana(sumarDias(inicioSemana, -7))}
           >
-            ← Semana anterior
+            ←<span className="hidden sm:inline"> Semana anterior</span>
+            <span className="sm:hidden"> Anterior</span>
           </Button>
           <Button variante="fantasma" onClick={() => setInicioSemana(lunesDe(hoy))}>
             Esta semana
@@ -164,7 +266,8 @@ export default function Turnos() {
             variante="secundario"
             onClick={() => setInicioSemana(sumarDias(inicioSemana, 7))}
           >
-            Semana siguiente →
+            <span className="hidden sm:inline">Semana siguiente </span>
+            <span className="sm:hidden">Siguiente </span>→
           </Button>
         </div>
         <Select
@@ -192,8 +295,18 @@ export default function Turnos() {
           <Alert tipo="ok">{aviso}</Alert>
         </div>
       )}
+      {errorClientes && (
+        <div className="mt-4">
+          <Alert>{errorClientes}</Alert>
+        </div>
+      )}
+      {errorVehiculos && (
+        <div className="mt-4">
+          <Alert>{errorVehiculos}</Alert>
+        </div>
+      )}
 
-      {cargando ? (
+      {cargando && !turnos ? (
         <Loader texto="Cargando agenda…" />
       ) : error ? (
         <div className="mt-6 space-y-4">
@@ -203,7 +316,11 @@ export default function Turnos() {
           </Button>
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div
+          className={`mt-6 grid gap-4 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
+            cargando ? 'opacity-60' : ''
+          }`}
+        >
           {dias.map((dia, indice) => {
             const delDia = porDia.get(dia) ?? []
             return (
@@ -232,47 +349,65 @@ export default function Turnos() {
                     const cliente = clientesPorId.get(turno.cliente_id)
                     const vehiculo = vehiculosPorId.get(turno.vehiculo_id)
                     return (
-                      <li
-                        key={turno.id}
-                        className="rounded-box border border-graphite-600 bg-graphite-700 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-sm font-semibold text-amber">
-                            {turno.hora}
-                          </span>
-                          <Badge tono={TONOS_ESTADO[turno.estado]}>
-                            {ETIQUETAS_ESTADO[turno.estado]}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-sm font-medium">{turno.servicio}</p>
-                        <p className="text-xs text-muted">
-                          {cliente ? `${cliente.apellido}, ${cliente.nombre}` : 'Cliente eliminado'}
-                          {vehiculo ? ` · ${vehiculo.patente}` : ''}
-                        </p>
-                        {turno.notas && <p className="mt-1 text-xs text-muted">{turno.notas}</p>}
-                        <div className="mt-2 flex gap-1">
-                          <Button
-                            variante="fantasma"
-                            onClick={() => {
-                              setEnEdicion(turno)
-                              setFormularioAbierto(true)
-                            }}
-                          >
-                            Editar
-                          </Button>
-                          {turno.estado !== 'cancelado' && (
-                            <Button
-                              variante="fantasma"
-                              onClick={() => {
-                                setErrorCancelar('')
-                                setACancelar(turno)
-                              }}
-                            >
-                              Cancelar
+                      <Ficha key={turno.id} acento={ACENTOS_ESTADO[turno.estado] ?? 'neutro'}>
+                        <FichaCabecera
+                          antetitulo={ETIQUETAS_ESTADO[turno.estado] ?? turno.estado}
+                          titulo={
+                            <>
+                              <span className="font-mono text-amber-texto">{turno.hora}</span>{' '}
+                              <span>{turno.servicio}</span>
+                            </>
+                          }
+                          className="px-4 pb-3 pt-3 [&_h3]:whitespace-normal [&_h3]:text-lg"
+                        >
+                          {turno.notas && <p className="mt-1 text-xs text-muted">{turno.notas}</p>}
+                        </FichaCabecera>
+                        {vehiculo && (
+                          <FichaSeccion className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 text-sm">
+                            <Patente valor={vehiculo.patente} tamano="sm" />
+                            <span className="min-w-0 truncate text-muted">
+                              {vehiculo.marca} <span className="font-semibold text-ink">{vehiculo.modelo}</span>
+                            </span>
+                          </FichaSeccion>
+                        )}
+                        <FichaPersona
+                          etiqueta="Cliente"
+                          persona={cliente}
+                          texto={cliente ? undefined : 'Cliente eliminado'}
+                          className="px-4 py-2"
+                        />
+                        <FichaPie>
+                          {puedeRecibirse(turno) && (
+                            <Button className={BOTON_PIE} onClick={() => setTurnoARecibir(turno)}>
+                              Recibir auto
                             </Button>
                           )}
-                        </div>
-                      </li>
+                          <span className="ml-auto flex gap-1">
+                            <Button
+                              variante="fantasma"
+                              className={BOTON_PIE}
+                              onClick={() => {
+                                setEnEdicion(turno)
+                                setFormularioAbierto(true)
+                              }}
+                            >
+                              Editar
+                            </Button>
+                            {turno.estado !== 'cancelado' && (
+                              <Button
+                                variante="fantasma"
+                                className={`${BOTON_PIE} hover:!text-danger`}
+                                onClick={() => {
+                                  setErrorCancelar('')
+                                  setACancelar(turno)
+                                }}
+                              >
+                                Cancelar
+                              </Button>
+                            )}
+                          </span>
+                        </FichaPie>
+                      </Ficha>
                     )
                   })}
                 </ul>
@@ -281,7 +416,7 @@ export default function Turnos() {
                   <button
                     type="button"
                     onClick={() => abrirNuevo(dia)}
-                    className="mt-3 w-full rounded-box border border-dashed border-graphite-600 px-3 py-2 text-sm text-muted transition-colors hover:border-amber hover:text-amber"
+                    className="mt-3 w-full rounded-lg border border-dashed border-graphite-600 px-3 py-2 text-sm text-muted transition-colors hover:border-amber hover:text-amber-texto"
                   >
                     + Agendar en este día
                   </button>
@@ -321,6 +456,25 @@ export default function Turnos() {
         textoConfirmar="Cancelar turno"
         onConfirmar={confirmarCancelacion}
         onCerrar={() => setACancelar(null)}
+      />
+
+      <IngresoRapido
+        abierto={Boolean(turnoARecibir)}
+        onCerrar={() => setTurnoARecibir(null)}
+        onListo={() => {
+          setTurnoARecibir(null)
+          recargar()
+        }}
+        inicial={
+          turnoARecibir
+            ? {
+                turno: turnoARecibir,
+                vehiculoId: turnoARecibir.vehiculo_id,
+                clienteId: turnoARecibir.cliente_id,
+                motivo: turnoARecibir.servicio,
+              }
+            : undefined
+        }
       />
     </div>
   )

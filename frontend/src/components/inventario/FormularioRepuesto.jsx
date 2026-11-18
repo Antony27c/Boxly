@@ -58,7 +58,7 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
     <form onSubmit={enviar} noValidate className="space-y-4">
       {errorApi && <Alert>{errorApi}</Alert>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label="Código"
           value={datos.codigo}
@@ -66,7 +66,7 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
           error={errores.codigo}
           ayuda="Se guarda en mayúsculas y sin espacios."
           disabled={guardando}
-          placeholder="REP-1001"
+          placeholder="Ej.: REP-1001"
         />
         <Field
           label="Nombre"
@@ -74,7 +74,7 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
           onChange={(e) => cambiar('nombre', e.target.value)}
           error={errores.nombre}
           disabled={guardando}
-          placeholder="Filtro de aceite"
+          placeholder="Ej.: Filtro de aceite"
         />
       </div>
 
@@ -86,7 +86,7 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
         placeholder="Filtro original para service."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field
           label="Precio ($)"
           inputMode="decimal"
@@ -94,7 +94,7 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
           onChange={(e) => cambiar('precio', e.target.value)}
           error={errores.precio}
           disabled={guardando}
-          placeholder="8500"
+          placeholder="Ej.: 8500"
         />
         <Field
           label="Stock actual"

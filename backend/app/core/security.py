@@ -1,26 +1,40 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+import jwt
+from jwt.exceptions import PyJWTError
 
 from app.core.config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt solo usa los primeros 72 bytes de la contraseña (la librería
+# anterior truncaba igual): se recorta acá para que hash y verify se
+# comporten de forma pareja.
+_MAX_PASSWORD_BYTES = 72
+
+
+def _a_bytes(texto: str) -> bytes:
+    return texto.encode("utf-8")[:_MAX_PASSWORD_BYTES]
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_a_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
-    return pwd_context.verify(plain_password, password_hash)
+    try:
+        return bcrypt.checkpw(
+            _a_bytes(plain_password), password_hash.encode("utf-8")
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def create_access_token(
     subject: str | int,
     extra_claims: dict[str, Any] | None = None,
     expires_minutes: int | None = None,
+    token_version: int = 0,
 ) -> str:
     settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(
@@ -29,6 +43,9 @@ def create_access_token(
     payload: dict[str, Any] = {"sub": str(subject), "exp": expire}
     if extra_claims:
         payload.update(extra_claims)
+    # "tv" = token_version del usuario: dependencies.py lo compara con la DB y
+    # un token viejo (sin "tv" o con otro valor) da 401 al cambiar la contraseña.
+    payload["tv"] = token_version
     return jwt.encode(
         payload,
         settings.jwt_secret_key,
@@ -44,7 +61,7 @@ def _decode(token: str) -> dict[str, Any]:
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
-    except JWTError as exc:
+    except PyJWTError as exc:
         raise ValueError("Token inválido o expirado") from exc
 
 

@@ -24,6 +24,16 @@ OPCIONALES = {"esperando_repuestos"}
 CERRADOS = {"entregado", "cancelado"}
 
 
+def _cliente_id(usuario: Usuario) -> int:
+    """cliente_id de la cuenta logueada; 403 si no está vinculada a un cliente."""
+    if usuario.cliente_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu usuario no está vinculado a un cliente",
+        )
+    return usuario.cliente_id
+
+
 def _nombre(codigo: str) -> str:
     return ETAPAS.get(codigo, (codigo, ""))[0]
 
@@ -82,9 +92,10 @@ def _resumen(orden: Orden) -> MiOrdenResumen:
 
 
 def list_mis_vehiculos(db: Session, usuario: Usuario) -> list[MiVehiculoResponse]:
-    ordenes = repository.list_ordenes(db, usuario.cliente_id)
+    cliente_id = _cliente_id(usuario)
+    ordenes = repository.list_ordenes(db, cliente_id)
     respuesta = []
-    for vehiculo in vehiculos_repository.list_vehiculos(db, cliente_id=usuario.cliente_id):
+    for vehiculo in vehiculos_repository.list_vehiculos(db, cliente_id=cliente_id):
         propias = [o for o in ordenes if o.vehiculo_id == vehiculo.id]
         activa = next((o for o in propias if o.estado not in CERRADOS), None)
         item = MiVehiculoResponse.model_validate(vehiculo)
@@ -97,12 +108,14 @@ def list_mis_vehiculos(db: Session, usuario: Usuario) -> list[MiVehiculoResponse
 def list_mis_ordenes(
     db: Session, usuario: Usuario, *, vehiculo_id: int | None = None
 ) -> list[MiOrdenResumen]:
-    ordenes = repository.list_ordenes(db, usuario.cliente_id, vehiculo_id=vehiculo_id)
+    ordenes = repository.list_ordenes_resumen(
+        db, _cliente_id(usuario), vehiculo_id=vehiculo_id
+    )
     return [_resumen(o) for o in ordenes]
 
 
 def get_mi_orden(db: Session, usuario: Usuario, orden_id: int) -> MiOrdenDetalle:
-    orden = repository.get_orden(db, usuario.cliente_id, orden_id)
+    orden = repository.get_orden(db, _cliente_id(usuario), orden_id)
     if orden is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

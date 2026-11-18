@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { ordenesService, sePuedeEditarDetalle } from '@/services/ordenes'
 import { repuestosService } from '@/services/repuestos'
+import { pesos } from '@/utils/formato'
 
 const VACIO = {
   tipo: 'trabajo',
@@ -16,10 +17,6 @@ const VACIO = {
   descripcion: '',
   cantidad: '1',
   precio_unitario: '',
-}
-
-function pesos(valor) {
-  return `$ ${Number(valor ?? 0).toLocaleString('es-AR')}`
 }
 
 export default function DetallesOrden({ orden }) {
@@ -33,7 +30,7 @@ export default function DetallesOrden({ orden }) {
   )
 
   const { datos: detalles, cargando, error, recargar } = useRecurso(cargarDetalles)
-  const { datos: repuestos } = useRecurso(cargarRepuestos)
+  const { datos: repuestos, error: errorRepuestos } = useRecurso(cargarRepuestos)
 
   const [datos, setDatos] = useState(VACIO)
   const [errores, setErrores] = useState({})
@@ -136,7 +133,7 @@ export default function DetallesOrden({ orden }) {
     }
   }
 
-  if (cargando) return <Loader texto="Cargando líneas…" />
+  if (cargando && !detalles) return <Loader texto="Cargando líneas…" />
 
   if (error) {
     return (
@@ -152,6 +149,7 @@ export default function DetallesOrden({ orden }) {
   return (
     <div className="space-y-5">
       {errorApi && <Alert>{errorApi}</Alert>}
+      {errorRepuestos && <Alert>{errorRepuestos}</Alert>}
 
       {(detalles ?? []).length === 0 ? (
         <p className="text-sm text-muted">
@@ -196,7 +194,7 @@ export default function DetallesOrden({ orden }) {
 
       {editable && (
         <form onSubmit={agregar} noValidate className="space-y-4 border-t border-graphite-700 pt-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select
               label="Tipo de línea"
               value={datos.tipo}
@@ -232,7 +230,7 @@ export default function DetallesOrden({ orden }) {
                 onChange={(e) => cambiar('descripcion', e.target.value)}
                 error={errores.descripcion}
                 disabled={guardando}
-                placeholder="Cambio de pastillas de freno"
+                placeholder="Ej.: Cambio de pastillas de freno"
               />
             )}
             <Field

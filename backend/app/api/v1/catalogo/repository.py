@@ -18,7 +18,9 @@ class CatalogoRepository:
             stmt=stmt.where(Modelo.marca_id == marca_id)
         if q:
             stmt = stmt.where(Modelo.nombre.ilike(f"%{q.strip()}%"))
-        stmt = stmt.order_by(Modelo.nombre)
+        # nombre no es único global (lo es por marca): id desempata para que el
+        # orden sea estable también al listar modelos de todas las marcas.
+        stmt = stmt.order_by(Modelo.nombre, Modelo.id)
         return list(db.scalars(stmt).all())
 
 catalogo_repository = CatalogoRepository()

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
 from app.models.usuario import RolUsuario, Usuario
+from app.schemas.paginacion import ParametrosPagina, aplicar, contar
 
 
 def get_by_id(db: Session, user_id: int) -> Usuario | None:
@@ -24,20 +25,34 @@ def get_by_cliente_id(db: Session, cliente_id: int) -> Usuario | None:
     return db.scalar(stmt)
 
 
-def list_usuarios(
-    db: Session,
-    *,
-    solo_activos: bool | None = None,
-    rol: RolUsuario | None = None,
-) -> list[Usuario]:
-    stmt = select(Usuario).order_by(Usuario.id)
+def _stmt_filtrado(*, solo_activos: bool | None, rol: RolUsuario | None):
+    stmt = select(Usuario)
     if solo_activos is True:
         stmt = stmt.where(Usuario.activo.is_(True))
     elif solo_activos is False:
         stmt = stmt.where(Usuario.activo.is_(False))
     if rol is not None:
         stmt = stmt.where(Usuario.rol == rol)
+    return stmt
+
+
+def list_usuarios(
+    db: Session,
+    *,
+    solo_activos: bool | None = None,
+    rol: RolUsuario | None = None,
+    pagina: ParametrosPagina | None = None,
+) -> list[Usuario]:
+    stmt = _stmt_filtrado(solo_activos=solo_activos, rol=rol).order_by(Usuario.id)
+    if pagina is not None:
+        stmt = aplicar(stmt, pagina)
     return list(db.scalars(stmt).all())
+
+
+def contar_usuarios(
+    db: Session, *, solo_activos: bool | None = None, rol: RolUsuario | None = None
+) -> int:
+    return contar(db, _stmt_filtrado(solo_activos=solo_activos, rol=rol))
 
 
 def create(

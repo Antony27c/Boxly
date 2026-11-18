@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import BanderaCuadros from '@/components/ilustraciones/BanderaCuadros'
+import LlaveEntregada from '@/components/ilustraciones/LlaveEntregada'
 import { TAMANO_MAXIMO, TIPOS_IMAGEN } from '@/components/ordenes/ImagenesOrden'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
@@ -6,11 +8,74 @@ import Field from '@/components/ui/Field'
 import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
 import { DESCRIPCION_ESTADOS, ordenesService, proximosEstados } from '@/services/ordenes'
+import '@/styles/ordenes.css'
 
-export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCancelar }) {
+// Comentarios listos para tocar según la etapa a la que se pasa la orden.
+const SUGERENCIAS = {
+  Ingresado: ['Auto recibido en el taller.', 'Auto recibido con turno.'],
+  'En diagnóstico': ['Empiezo la revisión.', 'Se revisa la falla reportada.'],
+  'Esperando repuestos': ['Se pidió el repuesto.', 'Falta repuesto, se avisa al cliente.'],
+  Listo: ['Trabajo terminado, probado y listo para retirar.'],
+  Entregado: ['Auto entregado al cliente.'],
+  Cancelado: ['El cliente no aceptó el presupuesto.'],
+}
+
+// Guiño breve al cerrar el trabajo (Listo) o entregar el auto. El texto repite
+// lo que dice el dibujo; con movimiento reducido no se muestra y el modal se
+// cierra enseguida, como antes.
+export const DURACION_GUINO = 1500
+const GUINOS = {
+  Listo: {
+    texto: 'Auto listo para retirar.',
+    Dibujo: BanderaCuadros,
+    clase: 'guino-bandera',
+  },
+  Entregado: {
+    texto: 'Auto entregado al cliente.',
+    Dibujo: LlaveEntregada,
+    clase: 'guino-llave',
+  },
+}
+
+function movimientoReducido() {
+  if (typeof document !== 'undefined' && document.documentElement.classList.contains('reducir-movimiento')) {
+    return true
+  }
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+export default function CambioEstado({ orden, puedeCobrar = false, destinoInicial = '', onListo, onCancelar }) {
   const { token } = useAuth()
+  const [guino, setGuino] = useState('')
+  const alListo = useRef(onListo)
+  const guinoPendiente = useRef(null)
+
+  useEffect(() => {
+    alListo.current = onListo
+  })
+
+  // Si el modal se cierra durante el guiño el cambio ya está guardado:
+  // se avisa igual para que la pantalla se recargue.
+  useEffect(
+    () => () => {
+      const pendiente = guinoPendiente.current
+      if (!pendiente) return
+      guinoPendiente.current = null
+      clearTimeout(pendiente.temporizador)
+      alListo.current(...pendiente.resultado)
+    },
+    [],
+  )
+
   const opciones = proximosEstados(orden.estado)
-  const [nuevo, setNuevo] = useState(opciones.find((estado) => estado !== 'Cancelado') ?? opciones[0] ?? '')
+  const [nuevo, setNuevo] = useState(() => {
+    if (destinoInicial && opciones.includes(destinoInicial)) return destinoInicial
+    return opciones.find((estado) => estado !== 'Cancelado') ?? opciones[0] ?? ''
+  })
   const [descripcion, setDescripcion] = useState('')
   const [monto, setMonto] = useState(() => String(Number(orden.costo_estimado) || ''))
   const [errorMonto, setErrorMonto] = useState('')
@@ -64,8 +129,23 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
       }
     }
     setGuardando(false)
-    onListo(nuevo, fallidas, errorCobro)
+    const resultado = [nuevo, fallidas, errorCobro]
+    if (!GUINOS[nuevo] || movimientoReducido()) {
+      onListo(...resultado)
+      return
+    }
+    setGuino(nuevo)
+    guinoPendiente.current = {
+      resultado,
+      temporizador: setTimeout(() => {
+        guinoPendiente.current = null
+        alListo.current(...resultado)
+      }, DURACION_GUINO),
+    }
   }
+
+  const datosGuino = GUINOS[guino]
+  const ocupado = guardando || Boolean(guino)
 
   return (
     <form onSubmit={enviar} noValidate className="space-y-5">
@@ -96,7 +176,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
                 value={estado}
                 checked={nuevo === estado}
                 onChange={() => setNuevo(estado)}
-                disabled={guardando}
+                disabled={ocupado}
                 className="mt-1 accent-amber"
               />
               <span>
@@ -108,6 +188,27 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
         </div>
       </fieldset>
 
+      {(SUGERENCIAS[nuevo] ?? []).length > 0 && (
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-ink">Comentarios rápidos</p>
+          <div className="flex flex-wrap gap-2">
+            {SUGERENCIAS[nuevo].map((texto) => (
+              <button
+                key={texto}
+                type="button"
+                onClick={() => {
+                  setDescripcion(texto)
+                  if (error) setError('')
+                }}
+                className="rounded-full border border-graphite-600 px-3 py-1.5 text-xs text-muted transition-colors hover:border-amber hover:text-ink"
+              >
+                {texto}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Textarea
         label="Descripción de la etapa"
         value={descripcion}
@@ -116,7 +217,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
           if (error) setError('')
         }}
         error={error}
-        disabled={guardando}
+        disabled={ocupado}
         placeholder="Se revisó el tren delantero: bujes gastados, hay que cambiarlos."
         ayuda="Queda guardada en el historial de la orden."
       />
@@ -131,8 +232,8 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
             if (errorMonto) setErrorMonto('')
           }}
           error={errorMonto}
-          disabled={guardando}
-          placeholder="185000"
+          disabled={ocupado}
+          placeholder="Ej.: 185000"
           ayuda={
             puedeCobrar
               ? 'Si lo completás, el cobro le llega al cliente y puede pagarlo online.'
@@ -147,10 +248,10 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
         </label>
         <input
           type="file"
-          accept={TIPOS_IMAGEN}
+          accept="image/*"
           capture="environment"
           multiple
-          disabled={guardando}
+          disabled={ocupado}
           onChange={(e) => {
             const elegidas = [...(e.target.files ?? [])]
             const mala = elegidas.find(
@@ -174,15 +275,25 @@ export default function CambioEstado({ orden, puedeCobrar = false, onListo, onCa
         )}
       </div>
 
+      {datosGuino && (
+        <div
+          role="status"
+          className="flex items-center gap-3 rounded-box border border-ok/40 bg-ok/10 p-3 text-sm font-medium text-ok"
+        >
+          <datosGuino.Dibujo className={`h-9 w-9 ${datosGuino.clase}`} />
+          {datosGuino.texto}
+        </div>
+      )}
+
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variante="fantasma" onClick={onCancelar} disabled={guardando}>
+        <Button type="button" variante="fantasma" onClick={onCancelar} disabled={ocupado}>
           Cancelar
         </Button>
         <Button
           type="submit"
           variante={nuevo === 'Cancelado' ? 'peligro' : 'primario'}
           cargando={guardando}
-          disabled={!nuevo}
+          disabled={!nuevo || Boolean(guino)}
         >
           {guardando ? 'Guardando…' : `Pasar a ${nuevo}`}
         </Button>

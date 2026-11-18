@@ -39,11 +39,13 @@ def get_current_user(
         if user_id is None:
             raise credentials_exception
         uid = int(user_id)
+        # Token sin "tv" se trata como versión 0.
+        token_version = payload.get("tv") or 0
     except (ValueError, TypeError):
         raise credentials_exception from None
 
     user = db.get(Usuario, uid)
-    if user is None or not user.activo:
+    if user is None or not user.activo or user.token_version != token_version:
         raise credentials_exception
     return user
 

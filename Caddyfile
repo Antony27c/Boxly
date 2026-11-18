@@ -1,0 +1,24 @@
+# Boxly — HTTPS automático con Caddy.
+# DOMINIO viene del archivo .env (ej. taller.example.com, sin https://).
+# Caddy obtiene y renueva el certificado solo: el dominio tiene que
+# resolver por DNS (registro A/AAAA) a la IP de este servidor.
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# API de FastAPI (incluye el webhook de Mercado Pago)
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Archivos subidos por la API (imágenes de órdenes, etc.)
+	handle /uploads/* {
+		header X-Content-Type-Options nosniff
+		reverse_proxy api:8000
+	}
+
+	# Todo lo demás: frontend estático (nginx)
+	handle {
+		reverse_proxy web:80
+	}
+}

@@ -1,10 +1,14 @@
 // Formateos compartidos por las pantallas de métricas.
 
 export function pesos(valor) {
-  return Number(valor ?? 0).toLocaleString('es-AR', {
+  const numero = Number(valor ?? 0)
+  // Con centavos se muestran siempre 2 decimales ($ 45.999,50); sin centavos, ninguno ($ 50.000)
+  const decimales = Number.isInteger(numero) ? 0 : 2
+  return numero.toLocaleString('es-AR', {
     style: 'currency',
     currency: 'ARS',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
   })
 }
 

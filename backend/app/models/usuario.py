@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -33,6 +33,11 @@ class Usuario(Base):
     apellido: Mapped[str] = mapped_column(String(80), nullable=False)
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Se copia en el claim "tv" del JWT: al cambiar la contraseña sube y los
+    # tokens emitidos antes quedan inválidos.
+    token_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     rol: Mapped[RolUsuario] = mapped_column(
         Enum(RolUsuario, name="rol_usuario", native_enum=False),
         nullable=False,

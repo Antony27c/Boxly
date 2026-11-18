@@ -9,11 +9,11 @@ export default function ProtectedRoute({ roles }) {
 
   if (cargandoSesion) return <Loader texto="Verificando sesión…" />
 
-  if (!autenticado) {
-    return <Navigate to="/login" state={{ desde: location.pathname }} replace />
+  if (!autenticado || !usuario?.rol) {
+    return <Navigate to="/login" state={{ desde: location.pathname + location.search }} replace />
   }
 
-  if (roles && usuario?.rol && !roles.includes(usuario.rol)) {
+  if (roles && !roles.includes(usuario.rol)) {
     return <Navigate to={inicioSegunRol(usuario.rol)} replace />
   }
 

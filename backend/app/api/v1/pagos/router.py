@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Header, Query, status
 
 from app.api.v1.pagos import service
 from app.core.dependencies import DbSession, require_roles
@@ -33,12 +33,17 @@ def webhook(
     topic: str | None = Query(default=None),
     data_id: str | None = Query(default=None, alias="data.id"),
     id_ipn: str | None = Query(default=None, alias="id"),
+    x_signature: Annotated[str | None, Header(alias="x-signature")] = None,
+    x_request_id: Annotated[str | None, Header(alias="x-request-id")] = None,
 ) -> MessageResponse:
     datos = datos or {}
+    data = datos.get("data") if isinstance(datos.get("data"), dict) else {}
+    payment_id = str(data.get("id") or data_id or id_ipn or "") or None
+    service.verificar_firma_webhook(payment_id, x_signature, x_request_id)
     service.procesar_notificacion(
         db,
         tipo=datos.get("type") or tipo or topic,
-        payment_id=str((datos.get("data") or {}).get("id") or data_id or id_ipn or "") or None,
+        payment_id=payment_id,
     )
     return MessageResponse(detail="ok")
 

@@ -1,0 +1,51 @@
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import CobroOrden from '@/components/ordenes/CobroOrden'
+import { pesos } from '@/utils/formato'
+
+// pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
+const monto = (valor) => pesos(valor).replace(/\s/g, ' ')
+
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ token: 'tok' }) }))
+
+const base = { id: 42, estado: 'Listo', pagada: false, cobro_estado: null, costo_estimado: 150000 }
+
+function mostrar(orden, esMostrador = true) {
+  return render(<CobroOrden orden={{ ...base, ...orden }} esMostrador={esMostrador} onListo={vi.fn()} onCancelar={vi.fn()} />)
+}
+
+describe('Cobro como ticket de caja', () => {
+  it('muestra el presupuesto y el total enviado con montos en mono', () => {
+    const { container } = mostrar({ cobro_estado: 'aprobado', costo_final: 185000, cobro_aprobado_por_nombre: 'Ana' })
+    expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
+    expect(screen.getByText('Presupuesto estimado:')).toBeInTheDocument()
+    expect(screen.getByText(monto(150000))).toHaveClass('font-mono')
+    expect(screen.getByText('Enviado al cliente:')).toBeInTheDocument()
+    const total = screen.getByText(monto(185000))
+    expect(total).toHaveClass('font-mono')
+    // La línea punteada separa el total del resto del ticket.
+    expect(total.closest('.border-dashed')).toBeInTheDocument()
+    expect(screen.getByText('Aprobó Ana')).toBeInTheDocument()
+  })
+
+  it('el propuesto pendiente muestra el monto y que espera aprobación', () => {
+    mostrar({ cobro_estado: 'pendiente', monto_propuesto: 90000, cobro_propuesto_por_nombre: 'Mario' })
+    expect(screen.getByText('Propuesto:')).toBeInTheDocument()
+    expect(screen.getByText(monto(90000))).toHaveClass('font-mono')
+    expect(screen.getByText('Esperando aprobación de administración o recepción.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Monto a cobrar')).toHaveValue('90000')
+  })
+
+  it('pagada muestra lo que pagó el cliente', () => {
+    mostrar({ pagada: true, cobro_estado: 'aprobado', costo_final: 70000 })
+    expect(screen.getByText('El cliente ya pagó')).toBeInTheDocument()
+    expect(screen.getByText(monto(70000))).toHaveClass('font-mono')
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+  })
+
+  it('sin cobro avisa que todavía no se emitió y no hay total', () => {
+    const { container } = mostrar({})
+    expect(screen.getByText('Todavía no se emitió el cobro de esta orden.')).toBeInTheDocument()
+    expect(container.querySelector('.border-dashed')).not.toBeInTheDocument()
+  })
+})

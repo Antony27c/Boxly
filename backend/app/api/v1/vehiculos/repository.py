@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.orden import Orden
 from app.models.turno import Turno
 from app.models.vehiculo import Vehiculo
+from app.schemas.paginacion import ParametrosPagina, aplicar, contar
 
 
 def get_by_id(db: Session, vehiculo_id: int) -> Vehiculo | None:
@@ -15,14 +16,13 @@ def get_by_patente(db: Session, patente: str) -> Vehiculo | None:
     return db.scalar(stmt)
 
 
-def list_vehiculos(
-    db: Session,
+def _stmt_filtrado(
     *,
-    cliente_id: int | None = None,
-    mecanico_id: int | None = None,
-    q: str | None = None,
-) -> list[Vehiculo]:
-    stmt = select(Vehiculo).order_by(Vehiculo.patente)
+    cliente_id: int | None,
+    mecanico_id: int | None,
+    q: str | None,
+):
+    stmt = select(Vehiculo)
     if cliente_id is not None:
         stmt = stmt.where(Vehiculo.cliente_id == cliente_id)
     if q:
@@ -36,7 +36,35 @@ def list_vehiculos(
         stmt = stmt.where(
             Vehiculo.id.in_(select(Orden.vehiculo_id).where(Orden.mecanico_id == mecanico_id))
         )
+    return stmt
+
+
+def list_vehiculos(
+    db: Session,
+    *,
+    cliente_id: int | None = None,
+    mecanico_id: int | None = None,
+    q: str | None = None,
+    pagina: ParametrosPagina | None = None,
+) -> list[Vehiculo]:
+    stmt = _stmt_filtrado(cliente_id=cliente_id, mecanico_id=mecanico_id, q=q).order_by(
+        Vehiculo.patente, Vehiculo.id
+    )
+    if pagina is not None:
+        stmt = aplicar(stmt, pagina)
     return list(db.scalars(stmt).all())
+
+
+def contar_vehiculos(
+    db: Session,
+    *,
+    cliente_id: int | None = None,
+    mecanico_id: int | None = None,
+    q: str | None = None,
+) -> int:
+    return contar(
+        db, _stmt_filtrado(cliente_id=cliente_id, mecanico_id=mecanico_id, q=q)
+    )
 
 
 def list_ordenes(
