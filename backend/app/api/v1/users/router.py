@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.v1.users import service
 from app.core.dependencies import DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
+from app.schemas.paginacion import PaginaParams
 from app.schemas.usuario import (
     MecanicoResponse,
     MessageResponse,
@@ -32,10 +33,16 @@ MostradorUser = Annotated[
 def listar_usuarios(
     db: DbSession,
     _: AdminUser,
+    pagina: PaginaParams,
+    response: Response,
     solo_activos: bool | None = Query(default=None),
     rol: RolUsuario | None = Query(default=None),
 ) -> list[UsuarioResponse]:
-    return service.list_usuarios(db, solo_activos=solo_activos, rol=rol)
+    items, total = service.list_usuarios(
+        db, solo_activos=solo_activos, rol=rol, pagina=pagina
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return items
 
 
 @router.post(

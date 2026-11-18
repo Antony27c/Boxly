@@ -1,7 +1,12 @@
+import logging
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -34,10 +39,36 @@ def register_exception_handlers(app: FastAPI) -> None:
             },
         )
 
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(
+        request: Request, _exc: IntegrityError
+    ) -> JSONResponse:
+        # La sesión de la request la cierra get_db al propagarse la excepción
+        # (Session.close() revierte la transacción pendiente). Si algún
+        # endpoint dejara su propia sesión en request.state.db, se revierte acá.
+        session = getattr(request.state, "db", None)
+        if session is not None:
+            session.rollback()
+        # No se devuelve el error de SQLAlchemy: puede incluir la consulta SQL
+        # y los valores que la originaron.
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": (
+                    "El registro entra en conflicto con datos existentes "
+                    "(duplicado o referencia inválida)"
+                ),
+                "code": status.HTTP_409_CONFLICT,
+            },
+        )
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(
-        _request: Request, _exc: Exception
+        request: Request, _exc: Exception
     ) -> JSONResponse:
+        logger.exception(
+            "Error no controlado en %s %s", request.method, request.url.path
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={

@@ -5,14 +5,16 @@ Uso (desde la carpeta backend/, con venv activo y PostgreSQL disponible):
 
     python -m scripts.create_admin
 
-Variables opcionales (.env o entorno):
-    BOXLY_ADMIN_EMAIL, BOXLY_ADMIN_PASSWORD, BOXLY_ADMIN_NOMBRE, BOXLY_ADMIN_APELLIDO
+Variables (.env o entorno):
+    BOXLY_ADMIN_EMAIL, BOXLY_ADMIN_NOMBRE, BOXLY_ADMIN_APELLIDO (opcionales)
+    BOXLY_ADMIN_PASSWORD (obligatoria; si falta se pide por terminal)
 
 La carga formal de seeds (BD-03) la completa Pablo Romano.
 """
 
 from __future__ import annotations
 
+import getpass
 import os
 import sys
 
@@ -27,7 +29,22 @@ def main() -> int:
     Base.metadata.create_all(bind=engine)
 
     email = os.getenv("BOXLY_ADMIN_EMAIL", "admin@boxly.com").lower().strip()
-    password = os.getenv("BOXLY_ADMIN_PASSWORD", "Admin123")
+    password = os.getenv("BOXLY_ADMIN_PASSWORD", "").strip()
+    if not password:
+        if not sys.stdin.isatty():
+            print(
+                "ERROR: falta BOXLY_ADMIN_PASSWORD y no hay terminal para pedirla. "
+                "Definí la variable de entorno o ejecutá el script en una terminal.",
+                file=sys.stderr,
+            )
+            return 1
+        password = getpass.getpass("Contraseña del administrador: ")
+        if not password:
+            print("ERROR: la contraseña no puede estar vacía.", file=sys.stderr)
+            return 1
+        if password != getpass.getpass("Repetí la contraseña: "):
+            print("ERROR: las contraseñas no coinciden.", file=sys.stderr)
+            return 1
     nombre = os.getenv("BOXLY_ADMIN_NOMBRE", "Admin")
     apellido = os.getenv("BOXLY_ADMIN_APELLIDO", "Boxly")
 
@@ -49,7 +66,7 @@ def main() -> int:
         print(f"  id:    {user.id}")
         print(f"  email: {user.email}")
         print(f"  rol:   {user.rol.value}")
-        print("  (usá la contraseña configurada en BOXLY_ADMIN_PASSWORD / default Admin123)")
+        print("  (usá la contraseña definida en BOXLY_ADMIN_PASSWORD o la ingresada)")
         return 0
     finally:
         db.close()

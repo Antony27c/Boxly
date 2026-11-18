@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
-from jose import jwt
+import jwt
 
 from app.core.config import get_settings
 from app.core.email import ResultadoEnvio
@@ -12,7 +12,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models import Cliente, Usuario
 from app.models.usuario import RolUsuario
-from main import app
+from app.main import app
 
 CLAVE = "Clave1234"
 
@@ -137,7 +137,10 @@ def test_cliente_sin_correo_no_se_puede_invitar(api, datos, envio):
 def test_si_falla_el_correo_el_administrador_lo_ve(api, datos, envio):
     envio.return_value = ResultadoEnvio("fallido", "Asunto", "SMTPAuthenticationError: clave mala")
     r = _invitar(api, datos)
-    assert r.status_code == 502 and "clave mala" in r.json()["detail"]
+    assert r.status_code == 502
+    detalle = r.json()["detail"]
+    assert "clave mala" not in detalle and "SMTP" not in detalle
+    assert detalle == "No se pudo enviar el correo de invitación. Revisá la configuración de email."
 
 
 def test_un_mecanico_no_puede_invitar(api, datos, envio):
