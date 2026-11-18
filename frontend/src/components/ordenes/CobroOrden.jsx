@@ -4,10 +4,8 @@ import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import { useAuth } from '@/context/AuthContext'
 import { estadoCobro, ordenesService } from '@/services/ordenes'
-
-function pesos(valor) {
-  return Number(valor ?? 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
-}
+import { pesos } from '@/utils/formato'
+import '@/styles/ticket.css'
 
 function montoInicial(orden) {
   const valor = Number(orden.costo_final) || Number(orden.monto_propuesto) || Number(orden.costo_estimado) || ''
@@ -22,6 +20,24 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
   const [guardando, setGuardando] = useState(false)
 
   const soloLectura = situacion === 'pagada' || (!esMostrador && situacion === 'aprobado')
+
+  // Línea del total del ticket según en qué quedó el cobro (sin cobro no hay total).
+  const total =
+    situacion === 'pagada'
+      ? { etiqueta: 'El cliente ya pagó', monto: orden.costo_final, clase: 'text-ok' }
+      : situacion === 'aprobado'
+        ? {
+            etiqueta: 'Enviado al cliente:',
+            monto: orden.costo_final,
+            detalle: orden.cobro_aprobado_por_nombre && `Aprobó ${orden.cobro_aprobado_por_nombre}`,
+          }
+        : situacion === 'pendiente'
+          ? {
+              etiqueta: 'Propuesto:',
+              monto: orden.monto_propuesto,
+              detalle: orden.cobro_propuesto_por_nombre && `Por ${orden.cobro_propuesto_por_nombre}`,
+            }
+          : null
 
   const accion = esMostrador
     ? situacion === 'pendiente'
@@ -61,28 +77,28 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
 
   return (
     <form onSubmit={enviar} noValidate className="space-y-4">
-      <div className="space-y-1 rounded-box border border-graphite-700 bg-graphite-900 p-3 text-sm">
-        {situacion === 'pagada' && <p className="font-medium text-ok">El cliente ya pagó {pesos(orden.costo_final)}.</p>}
-        {situacion === 'aprobado' && (
-          <p>
-            <span className="font-medium">Enviado al cliente:</span> {pesos(orden.costo_final)}
-            {orden.cobro_aprobado_por_nombre && (
-              <span className="text-muted"> · aprobó {orden.cobro_aprobado_por_nombre}</span>
-            )}
-          </p>
-        )}
-        {situacion === 'pendiente' && (
-          <p>
-            <span className="font-medium">Propuesto:</span> {pesos(orden.monto_propuesto)}
-            {orden.cobro_propuesto_por_nombre && (
-              <span className="text-muted"> · por {orden.cobro_propuesto_por_nombre}</span>
-            )}
-            <span className="block text-amber-deep">Esperando aprobación de administración o recepción.</span>
+      <div className="ticket-caja space-y-2 border-x border-graphite-700 bg-graphite-900 px-4 py-5 text-sm">
+        <p className="text-center font-mono text-[11px] uppercase tracking-[0.2em] text-muted" aria-hidden="true">
+          Cobro{orden.id != null && ` · Orden #${orden.id}`}
+        </p>
+        {Number(orden.costo_estimado) > 0 && (
+          <p className="flex items-baseline justify-between gap-3 text-muted">
+            <span>Presupuesto estimado:</span>
+            <span className="shrink-0 font-mono tabular-nums">{pesos(orden.costo_estimado)}</span>
           </p>
         )}
         {situacion === 'sin_cobro' && <p className="text-muted">Todavía no se emitió el cobro de esta orden.</p>}
-        {Number(orden.costo_estimado) > 0 && (
-          <p className="text-muted">Presupuesto estimado: {pesos(orden.costo_estimado)}</p>
+        {total && (
+          <div className="space-y-1 border-t border-dashed border-graphite-600 pt-2">
+            <p className={`flex items-baseline justify-between gap-3 font-medium ${total.clase}`}>
+              <span>{total.etiqueta}</span>
+              <span className="shrink-0 font-mono text-base font-semibold tabular-nums">{pesos(total.monto)}</span>
+            </p>
+            {total.detalle && <p className="text-muted">{total.detalle}</p>}
+            {situacion === 'pendiente' && (
+              <p className="text-amber-deep">Esperando aprobación de administración o recepción.</p>
+            )}
+          </div>
         )}
       </div>
 
@@ -110,7 +126,7 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
               if (error) setError('')
             }}
             disabled={guardando}
-            placeholder="185000"
+            placeholder="Ej.: 185000"
             ayuda={
               esMostrador
                 ? 'Al confirmar, el cliente lo ve en su portal y puede pagarlo online.'
