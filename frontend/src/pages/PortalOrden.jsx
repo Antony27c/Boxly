@@ -3,54 +3,24 @@ import { Link, useParams } from 'react-router-dom'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
+import { Chip, Chips, Ficha, FichaCabecera } from '@/components/ui/Ficha'
 import Loader from '@/components/ui/Loader'
+import Patente from '@/components/ui/Patente'
 import LineaDeTiempo from '@/components/ordenes/LineaDeTiempo'
+import RutaSeguimiento from '@/components/portal/RutaSeguimiento'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { nombreEstado } from '@/services/ordenes'
 import { pagosService, portalService } from '@/services/portal'
+import { pesos } from '@/utils/formato'
 
-function pesos(valor) {
-  return Number(valor ?? 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
-}
+const ACENTOS_ESTADO = { listo: 'ok', entregado: 'ok', cancelado: 'danger', pendiente: 'neutro' }
+// El encabezado usa el lenguaje de ficha pero no es una tarjeta clickeable: no se levanta.
+const FICHA_QUIETA =
+  'hover:!border-graphite-700 hover:!shadow-[0_1px_2px_rgba(16,18,22,0.06)] motion-safe:hover:!translate-y-0'
 
 function fecha(iso) {
   return iso ? new Date(iso).toLocaleDateString('es-AR') : '—'
-}
-
-// Estilo de cada paso del recorrido. El texto del estado acompaña al color.
-const PASOS = {
-  completado: { marca: '✓', clase: 'border-ok bg-ok text-white', texto: 'Completado' },
-  actual: { marca: '●', clase: 'border-amber bg-amber text-white ring-4 ring-amber/25', texto: 'Ahora' },
-  pendiente: { marca: '', clase: 'border-graphite-600 bg-graphite-800 text-muted', texto: 'Pendiente' },
-  omitido: { marca: '–', clase: 'border-graphite-600 bg-graphite-900 text-muted', texto: 'No hizo falta' },
-}
-
-function Recorrido({ pasos }) {
-  return (
-    <ol className="grid gap-3 sm:grid-flow-col sm:auto-cols-fr">
-      {pasos.map((paso) => {
-        const estilo = PASOS[paso.estado] ?? PASOS.pendiente
-        return (
-          <li key={paso.codigo} className="flex items-center gap-3 sm:flex-col sm:text-center">
-            <span
-              aria-hidden="true"
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold ${estilo.clase}`}
-            >
-              {estilo.marca}
-            </span>
-            <span>
-              <span className={`block text-sm ${paso.estado === 'actual' ? 'font-semibold' : ''}`}>
-                {paso.nombre}
-              </span>
-              <span className="block text-xs text-muted">{estilo.texto}</span>
-            </span>
-          </li>
-        )
-      })}
-    </ol>
-  )
 }
 
 export default function PortalOrden() {
@@ -100,14 +70,29 @@ export default function PortalOrden() {
     <div className="animate-bay-in space-y-6">
       {volver}
 
-      <EncabezadoPagina
-        titulo={`${orden.vehiculo.marca} ${orden.vehiculo.modelo}`}
-        descripcion={`Patente ${orden.vehiculo.patente} · Orden ${orden.codigo}`}
-        acciones={<Badge tono={orden.pagada ? 'ok' : 'ambar'}>{nombreEstado(orden.estado)}</Badge>}
-      />
+      <Ficha as="header" acento={ACENTOS_ESTADO[orden.estado] ?? 'amber'} className={FICHA_QUIETA}>
+        <FichaCabecera
+          nivel="h1"
+          antetitulo={orden.vehiculo.marca}
+          titulo={orden.vehiculo.modelo}
+          aside={
+            <>
+              <span className="sr-only">Patente</span>
+              <Patente valor={orden.vehiculo.patente} tamano="md" className="mt-0.5" />
+            </>
+          }
+          silueta
+          className="sm:[&_h1]:text-3xl"
+        >
+          <Chips className="items-center">
+            <Badge tono={orden.pagada ? 'ok' : 'ambar'}>{nombreEstado(orden.estado)}</Badge>
+            <Chip mono>Orden {orden.codigo}</Chip>
+          </Chips>
+        </FichaCabecera>
+      </Ficha>
 
       <section className="rounded-box border border-graphite-700 bg-graphite-800 p-5">
-        <Recorrido pasos={orden.pasos} />
+        <RutaSeguimiento pasos={orden.pasos} />
         {orden.etapa_actual && (
           <p className="mt-5 border-t border-graphite-700 pt-4 text-sm">
             <span className="font-semibold">{orden.etapa_actual.nombre}: </span>
