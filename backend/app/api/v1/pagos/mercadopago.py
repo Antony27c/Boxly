@@ -47,5 +47,12 @@ def crear_preferencia(
     return _request("POST", "/checkout/preferences", token, body)
 
 
+def obtener_preferencia(token: str, preference_id: str) -> dict:
+    return _request("GET", f"/checkout/preferences/{preference_id}", token)
+
+
 def obtener_pago(token: str, payment_id: str) -> dict:
+    # Defensa en profundidad: el id va dentro de la URL, solo dígitos.
+    if not payment_id.isdigit():
+        raise MercadoPagoError("payment_id inválido")
     return _request("GET", f"/v1/payments/{payment_id}", token)

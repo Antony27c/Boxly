@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import select
 from typing import List, Optional
 
 from app.models.orden import Historial_estado, Orden
@@ -7,10 +7,25 @@ from app.models.detalle_orden import DetalleOrden
 from app.models.imagen_orden import ImagenOrden
 from app.models.notificacion import Notificacion
 
+# Relaciones que siempre serializa OrdenResponse: las de uno-a-uno con
+# joinedload (una sola query) y la colección de pagos con selectinload.
+_LOADERS_ORDEN = (
+    joinedload(Orden.cliente),
+    joinedload(Orden.vehiculo),
+    joinedload(Orden.mecanico),
+    joinedload(Orden.cobro_propuesto_por),
+    joinedload(Orden.cobro_aprobado_por),
+    selectinload(Orden.pagos),
+)
+
 class OrdenRepository:
-    
+
     def obtener_ordenes(self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None) -> List[Orden]:
-        query = select(Orden).order_by(Orden.fecha_ingreso.desc())
+        query = (
+            select(Orden)
+            .order_by(Orden.fecha_ingreso.desc())
+            .options(*_LOADERS_ORDEN)
+        )
         if estado:
             query = query.where(Orden.estado == estado)
         if mecanico_id is not None:
@@ -18,11 +33,18 @@ class OrdenRepository:
         return list(db.scalars(query).all())
 
     def obtener_por_id(self, db: Session, orden_id: int) -> Optional[Orden]:
-        return db.get(Orden, orden_id)
+        return db.get(Orden, orden_id, options=_LOADERS_ORDEN)
 
     def siguiente_codigo(self, db:Session) -> str:
-        ultimo_id = db.scalar(select(func.max(Orden.id))) or 0
-        return f"OT-{1000 + ultimo_id + 1}"
+        codigos = db.scalars(select(Orden.codigo)).all()
+        maximo = 1000
+        for codigo in codigos:
+            if codigo.startswith("OT-"):
+                try:
+                    maximo = max(maximo, int(codigo.removeprefix("OT-")))
+                except ValueError:
+                    continue
+        return f"OT-{maximo + 1}"
 
     def crear(self, db:Session, orden:Orden) -> Orden:
         db.add(orden)

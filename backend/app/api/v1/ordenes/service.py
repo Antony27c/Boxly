@@ -1,9 +1,12 @@
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import BackgroundTasks, HTTPException, UploadFile
 from typing import List, Optional
 from datetime import datetime, timezone
 
 from app.core.config import UPLOADS_DIR
+from app.core import imagenes
 import anyio
 
 from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
@@ -63,7 +66,7 @@ class OrdenService:
         orden.costo_final = monto
         orden.cobro_estado = "aprobado"
         orden.cobro_aprobado_por_id = usuario_id
-        orden.cobro_aprobado_en = datetime.now()
+        orden.cobro_aprobado_en = datetime.now(timezone.utc)
 
     def _avisar_cobro(self, orden: Orden, background_tasks: BackgroundTasks | None) -> None:
         if background_tasks is None or not orden.cliente or not orden.cliente.email:
@@ -158,28 +161,36 @@ class OrdenService:
         if datos.mecanico_id is not None:
             self._validar_mecanico(db, datos.mecanico_id)
 
-        orden =Orden(
-            cliente_id = vehiculo.cliente_id,
-            vehiculo_id=vehiculo.id,
-            creado_por_id=creado_por_id,
-            mecanico_id=datos.mecanico_id,
-            codigo=orden_repository.siguiente_codigo(db),
-            estado="pendiente",
-            descripcion_ingreso=datos.descripcion_ingreso,
-            costo_estimado=datos.costo_estimado,
-            fecha_estimada_entrega= datos.fecha_estimada_entrega,
-        )
-        db.add(orden)
-        db.flush()
-        orden_repository.guardar_historial(
-            db,
-            orden_id=orden.id,
-            usuario_id=creado_por_id,
-            estado_anterior= None,
-            estado_nuevo="pendiente",
-            comentario="Orden creada",
-        )
-        return orden_repository.guardar_cambios(db, orden)
+        cliente_id = vehiculo.cliente_id
+        vehiculo_id = vehiculo.id
+        for intento in range(3):
+            orden = Orden(
+                cliente_id = cliente_id,
+                vehiculo_id=vehiculo_id,
+                creado_por_id=creado_por_id,
+                mecanico_id=datos.mecanico_id,
+                codigo=orden_repository.siguiente_codigo(db),
+                estado="pendiente",
+                descripcion_ingreso=datos.descripcion_ingreso,
+                costo_estimado=datos.costo_estimado,
+                fecha_estimada_entrega= datos.fecha_estimada_entrega,
+            )
+            db.add(orden)
+            try:
+                db.flush()
+                orden_repository.guardar_historial(
+                    db,
+                    orden_id=orden.id,
+                    usuario_id=creado_por_id,
+                    estado_anterior= None,
+                    estado_nuevo="pendiente",
+                    comentario="Orden creada",
+                )
+                return orden_repository.guardar_cambios(db, orden)
+            except IntegrityError as exc:
+                db.rollback()
+                if intento == 2 or "codigo" not in str(exc).lower():
+                    raise
     
     def editar_orden(
         self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int,
@@ -187,10 +198,39 @@ class OrdenService:
     ) -> Orden:
        
         orden = self.obtener_detalle_orden(db, orden_id)
+
+        if orden.estado in ("entregado", "cancelado"):
+            # La orden está cerrada: no admite cambios de datos. La única
+            # excepción es dejar un comentario en el historial (re-enviar el
+            # mismo estado no cuenta como cambio).
+            campos = datos.model_dump(exclude={"comentario_cambio"}, exclude_unset=True)
+            if campos.get("estado") == orden.estado:
+                campos.pop("estado")
+            comentario = (datos.comentario_cambio or "").strip()
+            if campos or not comentario:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Orden cerrada: no se puede modificar",
+                )
+            orden_repository.guardar_historial(
+                db,
+                orden_id=orden.id,
+                usuario_id=usuario_id,
+                estado_anterior=orden.estado,
+                estado_nuevo=orden.estado,
+                comentario=comentario,
+            )
+            return orden_repository.guardar_cambios(db, orden)
+
         notificar_estado = None
 
-        if datos.costo_final is not None and orden.pagada:
-            raise HTTPException(status_code=409, detail="La orden ya está pagada; no se puede cambiar el monto")
+        if datos.costo_final is not None:
+            self._validar_cobrable(orden)
+            if any(pago.estado in ("pendiente", "aprobado") for pago in orden.pagos):
+                raise HTTPException(
+                    status_code=409,
+                    detail="La orden tiene un pago pendiente o aprobado; no se puede cambiar el costo final",
+                )
         if datos.mecanico_id is not None:
             self._validar_mecanico(db,datos.mecanico_id)
        
@@ -222,7 +262,16 @@ class OrdenService:
             orden.estado = datos.estado
             if datos.estado == "entregado" and orden.fecha_entrega is None:
                 orden.fecha_entrega= datetime.now(timezone.utc)
-                
+            if datos.estado == "cancelado" and self._devolver_stock(db, orden):
+                orden_repository.guardar_historial(
+                    db,
+                    orden_id=orden.id,
+                    usuario_id=usuario_id,
+                    estado_anterior=orden.estado,
+                    estado_nuevo=orden.estado,
+                    comentario="Stock devuelto por cancelación",
+                )
+
             notificar_estado = datos.estado
         for campo in (
             "mecanico_id",
@@ -320,6 +369,7 @@ class OrdenService:
                 detail="Solo se pueden eliminar órdenes pendientes. Para las demás, pasala a 'cancelado'.",
             )
         urls = [imagen.url for imagen in orden.imagenes]
+        self._devolver_stock(db, orden)
         orden_repository.eliminar(db, orden)
         for url in urls:
             _borrar_archivo(url)
@@ -328,9 +378,30 @@ class OrdenService:
     def _validar_orden_editable(self, orden: Orden) -> None:
         if orden.estado in ("entregado", "cancelado"):
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="No se puede modificar lineas de una orden cerrada",
             )
+
+    def _devolver_stock(self, db: Session, orden: Orden) -> bool:
+        """Devuelve al stock los repuestos de las líneas de la orden.
+
+        Cada reposición es un UPDATE atómico para no pisar movimientos
+        concurrentes. Devuelve True si la orden tenía repuestos.
+        """
+        cantidades: dict[int, int] = {}
+        for detalle in orden.detalles:
+            if detalle.repuesto_id is not None:
+                cantidades[detalle.repuesto_id] = (
+                    cantidades.get(detalle.repuesto_id, 0) + detalle.cantidad
+                )
+        for repuesto_id, cantidad in cantidades.items():
+            db.execute(
+                update(Repuesto)
+                .where(Repuesto.id == repuesto_id)
+                .values(stock=Repuesto.stock + cantidad)
+            )
+        return bool(cantidades)
+
     def _a_response_detalle(self, detalle:DetalleOrden) -> DetalleOrdenResponse:
         item= DetalleOrdenResponse.model_validate(detalle)
         item.subtotal=detalle.cantidad * detalle.precio_unitario
@@ -352,8 +423,6 @@ class OrdenService:
             repuesto = db.get(Repuesto, datos.repuesto_id)
             if repuesto is None or not repuesto.activo:
                 raise HTTPException(status_code=404, detail="Repuesto no encontrado o inactivo")
-            if repuesto.stock < datos.cantidad:
-                raise HTTPException(status_code=409, detail=f"Stock insuficiente: quedan {repuesto.stock} de {repuesto.nombre}")
         descripcion = datos.descripcion or (repuesto.nombre if repuesto else None)
         if not descripcion:
             raise HTTPException(status_code=422, detail="Las lineas de mano de obra necesitan descripcion",)
@@ -361,8 +430,17 @@ class OrdenService:
         if precio is None:
             raise HTTPException(status_code=422, detail="las lineas de mano de obra necesitan precio unitario",)
         if repuesto is not None:
-            repuesto.stock -= datos.cantidad
-            db.add(repuesto)
+            descuento = db.execute(
+                update(Repuesto)
+                .where(Repuesto.id == repuesto.id, Repuesto.stock >= datos.cantidad)
+                .values(stock=Repuesto.stock - datos.cantidad)
+            )
+            if descuento.rowcount == 0:
+                db.refresh(repuesto)
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Stock insuficiente: quedan {repuesto.stock} de {repuesto.nombre}",
+                )
         detalle = DetalleOrden(
             orden_id=orden.id,
             repuesto_id=datos.repuesto_id,
@@ -386,11 +464,12 @@ class OrdenService:
         detalle = orden_repository.obtener_detalle(db, orden_id, detalle_id)
         if detalle is None:
             raise HTTPException(status_code=404, detail="Linea no encontrada en esta Orden")
-        if detalle.repuesto_id is not None: 
-            repuesto = db.get(Repuesto, detalle.repuesto_id)
-            if repuesto is not None:
-                repuesto.stock += detalle.cantidad
-                db.add(repuesto)
+        if detalle.repuesto_id is not None:
+            db.execute(
+                update(Repuesto)
+                .where(Repuesto.id == detalle.repuesto_id)
+                .values(stock=Repuesto.stock + detalle.cantidad)
+            )
         orden_repository.guardar_historial(
             db,
             orden_id=orden.id,
@@ -413,24 +492,28 @@ class OrdenService:
             raise HTTPException(status_code=422, detail=f"Etapa desconocida: '{etapa}'")
 
         contenido = archivo.file.read(MAX_BYTES_IMAGEN + 1)
-        if len(contenido) > MAX_BYTES_IMAGEN:
-            raise HTTPException(status_code=413, detail="La imagen no puede pesar más de 5 MB")
-        extension = _extension_imagen(contenido)
-        if extension is None:
-            raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG, PNG o WEBP")
+        contenido, extension = imagenes.procesar(contenido)
 
-        carpeta = UPLOADS_DIR / "ordenes" / str(orden.id)
-        carpeta.mkdir(parents=True, exist_ok=True)
         nombre_archivo = f"{uuid.uuid4().hex}{extension}"
-        (carpeta / nombre_archivo).write_bytes(contenido)
-
         imagen = ImagenOrden(
             orden_id=orden.id,
             etapa=etapa,
             url=f"/uploads/ordenes/{orden.id}/{nombre_archivo}",
             usuario_id=usuario_id,
         )
-        return ImagenOrdenResponse.model_validate(orden_repository.guardar_imagen(db, imagen))
+        imagen = orden_repository.guardar_imagen(db, imagen)
+
+        # El archivo se escribe después del commit: si falla, se borra la
+        # fila para no quedar con una imagen registrada sin archivo.
+        try:
+            imagenes.guardar(
+                contenido,
+                UPLOADS_DIR / "ordenes" / str(orden.id) / nombre_archivo,
+            )
+        except Exception:
+            orden_repository.eliminar_imagen(db, imagen)
+            raise
+        return ImagenOrdenResponse.model_validate(imagen)
     def eliminar_imagen(self, db:Session, orden_id:int, imagen_id: int, usuario: Usuario)-> None:
         self.obtener_detalle_orden(db, orden_id)
         imagen= orden_repository.obtener_imagen(db, imagen_id)

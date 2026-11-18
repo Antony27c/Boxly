@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.clientes import repository as clientes_repository
 from app.api.v1.vehiculos import repository
 from app.schemas.orden import OrdenResponse
+from app.schemas.paginacion import ParametrosPagina
 from app.schemas.vehiculo import VehiculoCreate, VehiculoResponse, VehiculoUpdate
 
 
@@ -47,11 +48,15 @@ def list_vehiculos(
     cliente_id: int | None = None,
     mecanico_id: int | None = None,
     q: str | None = None,
-) -> list[VehiculoResponse]:
+    pagina: ParametrosPagina | None = None,
+) -> tuple[list[VehiculoResponse], int]:
     vehiculos = repository.list_vehiculos(
+        db, cliente_id=cliente_id, mecanico_id=mecanico_id, q=q, pagina=pagina
+    )
+    total = repository.contar_vehiculos(
         db, cliente_id=cliente_id, mecanico_id=mecanico_id, q=q
     )
-    return [_to_response(v) for v in vehiculos]
+    return [_to_response(v) for v in vehiculos], total
 
 
 def get_vehiculo(

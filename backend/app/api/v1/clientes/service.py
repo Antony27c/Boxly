@@ -1,3 +1,5 @@
+import logging
+
 import anyio
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,14 +14,19 @@ from app.db.session import SessionLocal
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 from app.schemas.usuario import MessageResponse
 
+logger = logging.getLogger(__name__)
+
 
 def _to_response(cliente) -> ClienteResponse:
     return ClienteResponse.model_validate(cliente)
 
 
-def _get_or_404(db: Session, cliente_id: int):
+def _get_or_404(db: Session, cliente_id: int, mecanico_id: int | None = None):
     cliente = repository.get_by_id(db, cliente_id)
-    if cliente is None:
+    if cliente is None or (
+        mecanico_id is not None
+        and not repository.tiene_orden_del_mecanico(db, cliente_id, mecanico_id)
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cliente no encontrado",
@@ -27,12 +34,24 @@ def _get_or_404(db: Session, cliente_id: int):
     return cliente
 
 
-def list_clientes(db: Session, *, q: str | None = None) -> list[ClienteResponse]:
-    return [_to_response(c) for c in repository.list_clientes(db, q=q)]
+def list_clientes(
+    db: Session,
+    *,
+    q: str | None = None,
+    mecanico_id: int | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> tuple[list[ClienteResponse], int]:
+    clientes, total = repository.list_clientes(
+        db, q=q, mecanico_id=mecanico_id, limit=limit, offset=offset
+    )
+    return [_to_response(c) for c in clientes], total
 
 
-def get_cliente(db: Session, cliente_id: int) -> ClienteResponse:
-    return _to_response(_get_or_404(db, cliente_id))
+def get_cliente(
+    db: Session, cliente_id: int, mecanico_id: int | None = None
+) -> ClienteResponse:
+    return _to_response(_get_or_404(db, cliente_id, mecanico_id))
 
 
 def create_cliente(db: Session, data: ClienteCreate) -> ClienteResponse:
@@ -120,9 +139,14 @@ def invitar_al_portal(db: Session, cliente_id: int) -> MessageResponse:
     """Botón "Invitar al portal": el administrador ve enseguida si el correo salió."""
     envio = _enviar_invitacion(db, cliente_id)
     if envio.resultado != "enviado":
+        logger.exception(
+            "No se pudo enviar la invitación al portal del cliente %s: %s",
+            cliente_id,
+            envio.error,
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"No se pudo enviar el correo: {envio.error}",
+            detail="No se pudo enviar el correo de invitación. Revisá la configuración de email.",
         )
     return MessageResponse(detail="Invitación enviada.")
 

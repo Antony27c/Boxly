@@ -17,7 +17,7 @@ class Vehiculo(Base):
     __tablename__ = "vehiculos"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False, index=True)
     patente: Mapped[str] = mapped_column(String(15), unique=True, nullable=False, index=True)
     marca: Mapped[str] = mapped_column(String(60), nullable=False)
     modelo: Mapped[str] = mapped_column(String(60), nullable=False)

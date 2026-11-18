@@ -1,9 +1,10 @@
+from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.v1.turnos import service
-from app.core.dependencies import PersonalUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import MessageResponse
 from app.schemas.turno import (
@@ -28,11 +29,27 @@ MostradorUser = Annotated[
 )
 def listar_turnos(
     db: DbSession,
-    _: PersonalUser,
+    usuario: PersonalUser,
+    response: Response,
     estado: str | None = Query(default=None),
     cliente_id: int | None = Query(default=None),
+    desde: date | datetime | None = Query(default=None),
+    hasta: date | datetime | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> list[TurnoResponse]:
-    return service.list_turnos(db, estado=estado, cliente_id=cliente_id)
+    turnos, total = service.list_turnos(
+        db,
+        estado=estado,
+        cliente_id=cliente_id,
+        mecanico_id=filtro_mecanico(usuario),
+        desde=desde,
+        hasta=hasta,
+        limit=limit,
+        offset=offset,
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return turnos
 
 
 @router.post(
@@ -57,9 +74,9 @@ def crear_turno(
 def obtener_turno(
     turno_id: int,
     db: DbSession,
-    _: PersonalUser,
+    usuario: PersonalUser,
 ) -> TurnoResponse:
-    return service.get_turno(db, turno_id)
+    return service.get_turno(db, turno_id, filtro_mecanico(usuario))
 
 
 @router.put(
@@ -85,9 +102,9 @@ def cambiar_estado_turno(
     turno_id: int,
     data: TurnoEstadoUpdate,
     db: DbSession,
-    _: MostradorUser,
+    usuario: PersonalUser,
 ) -> TurnoResponse:
-    return service.cambiar_estado(db, turno_id, data)
+    return service.cambiar_estado(db, turno_id, data, filtro_mecanico(usuario))
 
 
 @router.delete(

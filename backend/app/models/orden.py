@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -27,17 +27,25 @@ class Orden(Base):
 
     __tablename__ = "ordenes"
 
+    __table_args__ = (
+        CheckConstraint(
+            "estado IN ('pendiente', 'ingresado', 'en_diagnostico', "
+            "'esperando_repuestos', 'listo', 'entregado', 'cancelado')",
+            name="ck_ordenes_estado_valido",
+        ),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False)
-    vehiculo_id: Mapped[int] = mapped_column(ForeignKey("vehiculos.id"), nullable=False)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False, index=True)
+    vehiculo_id: Mapped[int] = mapped_column(ForeignKey("vehiculos.id"), nullable=False, index=True)
     creado_por_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     mecanico_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("usuarios.id"), nullable=True
+        ForeignKey("usuarios.id"), nullable=True, index=True
     )
     codigo: Mapped[str] = mapped_column(
         String(30), unique=True, nullable=False, index=True
     )
-    estado: Mapped[str] = mapped_column(String(30), default="pendiente", nullable=False)
+    estado: Mapped[str] = mapped_column(String(30), default="pendiente", nullable=False, index=True)
     descripcion_ingreso: Mapped[str] = mapped_column(Text, nullable=False)
     diagnostico: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     costo_estimado: Mapped[Optional[Decimal]] = mapped_column(
@@ -54,7 +62,7 @@ class Orden(Base):
     )
     cobro_aprobado_en: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     fecha_ingreso: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
+        DateTime, server_default=func.now(), nullable=False, index=True
     )
     fecha_estimada_entrega: Mapped[Optional[datetime]] = mapped_column(
         DateTime, nullable=True
@@ -134,7 +142,7 @@ class Historial_estado(Base):
     __tablename__ = "historial_estado"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    orden_id: Mapped[int] = mapped_column(ForeignKey("ordenes.id"), nullable=False)
+    orden_id: Mapped[int] = mapped_column(ForeignKey("ordenes.id"), nullable=False, index=True)
     usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     estado_anterior: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     estado_nuevo: Mapped[str] = mapped_column(String(30), nullable=False)

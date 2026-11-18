@@ -1,5 +1,5 @@
 from sqlalchemy import and_, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date, datetime, timedelta
@@ -145,14 +145,20 @@ class MecanicosService:
         turnos = list(db.scalars(stmt_turnos).all())
 
         # Contrato S7: órdenes abiertas en el rango (ingresaron antes del fin y siguen
-        # abiertas) o que se entregaron dentro del rango.
-        stmt_ordenes = select(Orden).where(
-            Orden.mecanico_id == mecanico_id,
-            or_(
-                and_(Orden.estado.not_in(ESTADOS_CERRADOS), Orden.fecha_ingreso < fin),
-                and_(Orden.estado == "entregado", Orden.fecha_entrega >= inicio, Orden.fecha_entrega < fin),
-            ),
-        ).order_by(Orden.fecha_ingreso)
+        # abiertas) o que se entregaron dentro del rango. joinedload del vehículo
+        # evita un N+1 al armar vehiculo_patente/marca/modelo de cada orden.
+        stmt_ordenes = (
+            select(Orden)
+            .where(
+                Orden.mecanico_id == mecanico_id,
+                or_(
+                    and_(Orden.estado.not_in(ESTADOS_CERRADOS), Orden.fecha_ingreso < fin),
+                    and_(Orden.estado == "entregado", Orden.fecha_entrega >= inicio, Orden.fecha_entrega < fin),
+                ),
+            )
+            .options(joinedload(Orden.vehiculo))
+            .order_by(Orden.fecha_ingreso)
+        )
         ordenes = list(db.scalars(stmt_ordenes).all())
 
         return {

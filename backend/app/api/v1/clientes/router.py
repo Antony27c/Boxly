@@ -1,9 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response, status
 
 from app.api.v1.clientes import service
-from app.core.dependencies import PersonalUser, DbSession, require_roles
+from app.core.dependencies import PersonalUser, DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import MessageResponse
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
@@ -23,10 +23,21 @@ MostradorUser = Annotated[
 )
 def listar_clientes(
     db: DbSession,
-    _: PersonalUser,
+    usuario: PersonalUser,
+    response: Response,
     q: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> list[ClienteResponse]:
-    return service.list_clientes(db, q=q)
+    clientes, total = service.list_clientes(
+        db,
+        q=q,
+        mecanico_id=filtro_mecanico(usuario),
+        limit=limit,
+        offset=offset,
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return clientes
 
 
 @router.post(
@@ -69,9 +80,9 @@ def invitar_cliente(
 def obtener_cliente(
     cliente_id: int,
     db: DbSession,
-    _: PersonalUser,
+    usuario: PersonalUser,
 ) -> ClienteResponse:
-    return service.get_cliente(db, cliente_id)
+    return service.get_cliente(db, cliente_id, mecanico_id=filtro_mecanico(usuario))
 
 
 @router.put(

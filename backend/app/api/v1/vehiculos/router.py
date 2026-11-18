@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.v1.vehiculos import service
 from app.core.dependencies import PersonalUser, DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
+from app.schemas.paginacion import PaginaParams
 from app.schemas.usuario import MessageResponse
 from app.schemas.orden import OrdenResponse
 from app.schemas.vehiculo import VehiculoCreate, VehiculoResponse, VehiculoUpdate
@@ -25,12 +26,20 @@ MostradorUser = Annotated[
 def listar_vehiculos(
     db: DbSession,
     usuario: PersonalUser,
+    pagina: PaginaParams,
+    response: Response,
     cliente_id: int | None = Query(default=None),
     q: str | None = Query(default=None),
 ) -> list[VehiculoResponse]:
-    return service.list_vehiculos(
-        db, cliente_id=cliente_id, mecanico_id=filtro_mecanico(usuario), q=q
+    items, total = service.list_vehiculos(
+        db,
+        cliente_id=cliente_id,
+        mecanico_id=filtro_mecanico(usuario),
+        q=q,
+        pagina=pagina,
     )
+    response.headers["X-Total-Count"] = str(total)
+    return items
 
 
 @router.post(

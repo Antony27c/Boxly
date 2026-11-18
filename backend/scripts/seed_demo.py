@@ -206,8 +206,8 @@ ORDENES = [
 
 TURNOS = [
     ("AB123CD", 1, 10, "confirmado", "Cambio de aceite y revision de frenos", MARIO),
-    ("AD789GH", 2, 9, "pendiente", "Revisión de la junta reparada", LUCIA),
-    ("AE321JK", 3, 15, "confirmado", "Cambio de cubiertas", MARIO),
+    ("AD789GH", 2, 10, "pendiente", "Revisión de la junta reparada", LUCIA),
+    ("AE321JK", 3, 16, "confirmado", "Cambio de cubiertas", MARIO),
 ]
 
 # (mecánico, día 0=lunes..6=domingo, desde, hasta). Mario hace mañana y tarde.
@@ -339,7 +339,7 @@ def main() -> int:
                 dict(
                     cliente_id=vehiculo.cliente_id, vehiculo_id=vehiculo.id, registrado_por_id=recepcion.id,
                     mecanico_id=usuarios[mecanico].id,
-                    fecha_hora=(ahora + timedelta(days=dias)).replace(hour=hora, tzinfo=timezone.utc),
+                    fecha_hora=(ahora + timedelta(days=dias)).replace(hour=hora),
                     estado=estado, motivo=motivo,
                 ),
             )

@@ -17,7 +17,7 @@ class DetalleOrden(Base):
     __tablename__ = "detalles_orden"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    orden_id: Mapped[int] = mapped_column(ForeignKey("ordenes.id"), nullable=False)
+    orden_id: Mapped[int] = mapped_column(ForeignKey("ordenes.id"), nullable=False, index=True)
     repuesto_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("repuestos.id"), nullable=True
     )

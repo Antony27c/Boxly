@@ -21,6 +21,11 @@ class BalanceMensualResponse(BaseModel):
     balance: Decimal
 
 
+class IngresoDiarioResponse(BaseModel):
+    fecha: date
+    ingresos: Decimal
+
+
 class FinanzasResponse(BaseModel):
     desde: date
     hasta: date
@@ -29,6 +34,7 @@ class FinanzasResponse(BaseModel):
     egresos_repuestos: Decimal
     balance: Decimal
     mensual: list[BalanceMensualResponse]
+    diario: list[IngresoDiarioResponse] = []
 
 
 class MecanicoDestacadoResponse(BaseModel):
