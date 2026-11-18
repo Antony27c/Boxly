@@ -7,15 +7,8 @@ import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
 import { SERVICIOS_SUGERIDOS } from '@/services/serviciosTurno'
 import { ESTADOS_TURNO, HORARIOS } from '@/services/turnos'
+import { ETIQUETAS_ESTADO } from '@/utils/etiquetas'
 import { validarTurno } from '@/utils/validation'
-
-const ETIQUETAS_ESTADO = {
-  pendiente: 'Pendiente',
-  confirmado: 'Confirmado',
-  en_taller: 'En el taller',
-  completado: 'Completado',
-  cancelado: 'Cancelado',
-}
 
 export default function FormularioTurno({
   turno,
@@ -112,7 +105,7 @@ export default function FormularioTurno({
     <form onSubmit={enviar} noValidate className="space-y-4">
       {errorApi && <Alert>{errorApi}</Alert>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Autocomplete
           label="Cliente"
           value={textoCliente}
@@ -178,7 +171,7 @@ export default function FormularioTurno({
         opciones={SERVICIOS_SUGERIDOS}
         error={errores.servicio}
         disabled={guardando}
-        placeholder="Service de 60.000 km"
+        placeholder="Ej.: Service de 60.000 km"
         ayuda="Elegí una sugerencia o escribí el servicio."
         sinResultados="Sin sugerencias: se guarda lo que escribas."
       />
@@ -215,5 +208,3 @@ export default function FormularioTurno({
     </form>
   )
 }
-
-export { ETIQUETAS_ESTADO }

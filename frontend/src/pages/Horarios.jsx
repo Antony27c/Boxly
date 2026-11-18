@@ -1,21 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Confirmacion from '@/components/ui/Confirmacion'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
+import { Chip, Chips, Ficha, FichaCabecera, FichaSeccion } from '@/components/ui/Ficha'
 import Loader from '@/components/ui/Loader'
 import Modal from '@/components/ui/Modal'
+import Patente from '@/components/ui/Patente'
 import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
 import FormularioHorario from '@/components/mecanicos/FormularioHorario'
-import { ETIQUETAS_ESTADO } from '@/components/turnos/FormularioTurno'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { ROLES_ADMIN, ROLES_MOSTRADOR } from '@/routes/navegacion'
 import { clientesService } from '@/services/clientes'
 import { DIAS_SEMANA, mecanicosService } from '@/services/mecanicos'
 import { nombreEstado } from '@/services/ordenes'
+import { ETIQUETAS_ESTADO } from '@/utils/etiquetas'
 import { aISO, etiquetaDia, lunesDe, sumarDias } from '@/utils/fechas'
 
 const TONOS_TURNO = {
@@ -28,6 +31,11 @@ const TONOS_TURNO = {
 }
 
 const TONOS_ORDEN = { listo: 'ok', entregado: 'ok', cancelado: 'peligro', pendiente: 'neutro' }
+const ACENTOS_ORDEN = { listo: 'ok', entregado: 'ok', cancelado: 'danger', pendiente: 'neutro' }
+
+// Mismas clases que Button variante="secundario", para usar en un Link.
+const BOTON_SECUNDARIO =
+  'inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold tracking-wide transition-colors bg-graphite-600 text-ink hover:bg-graphite-500'
 
 function minutos(hora) {
   const [h, m] = hora.split(':').map(Number)
@@ -67,22 +75,23 @@ export default function Horarios() {
     (t) => (esMostrador ? mecanicosService.listar(t) : Promise.resolve(null)),
     [esMostrador],
   )
-  const cargarCalendario = useCallback(
-    (t) =>
-      mecanicoId
-        ? mecanicosService.calendario(mecanicoId, { desde: inicioSemana, hasta: finSemana }, t)
-        : Promise.resolve(null),
-    [mecanicoId, inicioSemana, finSemana],
-  )
   const cargarClientes = useCallback((t) => clientesService.listar(t), [])
 
   const { datos: mecanicos, error: errorMecanicos } = useRecurso(cargarMecanicos)
-  const { datos: calendario, cargando, error, recargar } = useRecurso(cargarCalendario)
-  const { datos: clientes } = useRecurso(cargarClientes)
 
-  useEffect(() => {
-    if (!mecanicoId && mecanicos?.length) setMecanicoId(mecanicos[0].id)
-  }, [mecanicos, mecanicoId])
+  // Mecánico efectivo: el elegido a mano o, para mostrador, el primero de la lista.
+  const mecanicoElegido = mecanicoId ?? mecanicos?.[0]?.id ?? null
+
+  const cargarCalendario = useCallback(
+    (t) =>
+      mecanicoElegido
+        ? mecanicosService.calendario(mecanicoElegido, { desde: inicioSemana, hasta: finSemana }, t)
+        : Promise.resolve(null),
+    [mecanicoElegido, inicioSemana, finSemana],
+  )
+
+  const { datos: calendario, cargando, error, recargar } = useRecurso(cargarCalendario)
+  const { datos: clientes, error: errorClientes } = useRecurso(cargarClientes)
 
   const clientesPorId = useMemo(() => new Map((clientes ?? []).map((c) => [c.id, c])), [clientes])
 
@@ -105,10 +114,10 @@ export default function Horarios() {
 
   async function guardarHorario(datos) {
     if (enEdicion?.id) {
-      await mecanicosService.actualizarHorario(mecanicoId, enEdicion.id, datos, token)
+      await mecanicosService.actualizarHorario(mecanicoElegido, enEdicion.id, datos, token)
       setAviso('Franja actualizada.')
     } else {
-      await mecanicosService.crearHorario(mecanicoId, datos, token)
+      await mecanicosService.crearHorario(mecanicoElegido, datos, token)
       setAviso('Franja agregada.')
     }
     setEnEdicion(null)
@@ -119,7 +128,7 @@ export default function Horarios() {
     setProcesando(true)
     setErrorEliminar('')
     try {
-      await mecanicosService.eliminarHorario(mecanicoId, aEliminar.id, token)
+      await mecanicosService.eliminarHorario(mecanicoElegido, aEliminar.id, token)
       setAEliminar(null)
       setAviso('Franja eliminada.')
       await recargar()
@@ -148,7 +157,7 @@ export default function Horarios() {
             <Select
               aria-label="Mecánico"
               className="w-60"
-              value={mecanicoId ?? ''}
+              value={mecanicoElegido ?? ''}
               onChange={(e) => setMecanicoId(Number(e.target.value))}
               opciones={mecanicos.map((m) => ({ valor: m.id, texto: `${m.apellido}, ${m.nombre}` }))}
             />
@@ -161,9 +170,24 @@ export default function Horarios() {
           <Alert>{errorMecanicos}</Alert>
         </div>
       )}
+      {errorClientes && (
+        <div className="mt-4">
+          <Alert>{errorClientes}</Alert>
+        </div>
+      )}
       {esMostrador && mecanicos?.length === 0 && (
         <div className="mt-6">
-          <Vacio titulo="Sin mecánicos" mensaje="Todavía no hay mecánicos activos para cargarles horario." />
+          <Vacio
+            titulo="Sin mecánicos"
+            mensaje="Los turnos se dan por mecánico: primero hay que cargar usuarios con rol Mecánico."
+            accion={
+              esAdmin ? (
+                <Link to="/usuarios" className={BOTON_SECUNDARIO}>
+                  Cargar usuarios
+                </Link>
+              ) : undefined
+            }
+          />
         </div>
       )}
 
@@ -191,7 +215,7 @@ export default function Horarios() {
                 <p className="mt-0.5 text-sm text-muted">
                   {horarios.length
                     ? `${horasTotales(horarios)} h por semana en ${horarios.length} franja${horarios.length === 1 ? '' : 's'}`
-                    : 'Todavía no tiene franjas cargadas.'}
+                    : 'Sin franjas cargadas no se pueden dar turnos: marcá qué días y a qué hora trabaja.'}
                 </p>
               </div>
               {esAdmin && (
@@ -199,7 +223,7 @@ export default function Horarios() {
               )}
             </header>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-4 lg:grid-cols-7">
               {DIAS_SEMANA.map((dia, indice) => (
                 <div key={dia} className="rounded-box border border-graphite-700 bg-graphite-900 p-3">
                   <h3 className="text-sm font-semibold">{dia}</h3>
@@ -210,7 +234,7 @@ export default function Horarios() {
                     {franjasPorDia[indice].map((franja) => (
                       <li
                         key={franja.id}
-                        className="flex items-center justify-between gap-1 rounded-box border border-amber/40 bg-amber/10 px-2 py-1 font-mono text-xs text-amber-deep"
+                        className="flex items-center justify-between gap-1 rounded-box border border-amber/40 bg-amber/10 px-2 py-2 font-mono text-xs text-amber-deep sm:py-1"
                       >
                         {esAdmin ? (
                           <button
@@ -230,7 +254,7 @@ export default function Horarios() {
                           <button
                             type="button"
                             aria-label="Eliminar franja"
-                            className="px-1 text-muted hover:text-danger"
+                            className="min-h-8 min-w-8 px-1 text-muted hover:text-danger sm:min-h-0 sm:min-w-0"
                             onClick={() => {
                               setErrorEliminar('')
                               setAEliminar(franja)
@@ -246,7 +270,7 @@ export default function Horarios() {
                     <button
                       type="button"
                       onClick={() => setEnEdicion({ dia_semana: indice })}
-                      className="mt-2 w-full rounded-box border border-dashed border-graphite-600 px-2 py-1 text-xs text-muted transition-colors hover:border-amber hover:text-amber"
+                      className="mt-2 min-h-10 w-full rounded-lg border border-dashed border-graphite-600 px-2 py-1 text-xs sm:min-h-0 text-muted transition-colors hover:border-amber hover:text-amber-texto"
                     >
                       + Franja
                     </button>
@@ -276,7 +300,7 @@ export default function Horarios() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             {dias.map((dia, indice) => {
               const franjas = franjasPorDia[indice]
               const turnos = turnosPorDia.get(dia) ?? []
@@ -309,7 +333,7 @@ export default function Horarios() {
                       return (
                         <li key={turno.id} className="rounded-box border border-graphite-600 bg-graphite-700 p-2">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-xs font-semibold text-amber">{turno.hora}</span>
+                            <span className="font-mono text-xs font-semibold text-amber-texto">{turno.hora}</span>
                             <Badge tono={TONOS_TURNO[turno.estado]}>
                               {ETIQUETAS_ESTADO[turno.estado] ?? turno.estado}
                             </Badge>
@@ -334,22 +358,25 @@ export default function Horarios() {
             {calendario.ordenes.length === 0 ? (
               <p className="mt-2 text-sm text-muted">No tiene órdenes abiertas ni entregadas en esta semana.</p>
             ) : (
-              <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {calendario.ordenes.map((orden) => (
-                  <li key={orden.id} className="rounded-box border border-graphite-700 bg-graphite-800 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-sm font-semibold">{orden.codigo}</span>
-                      <Badge tono={TONOS_ORDEN[orden.estado] ?? 'ambar'}>{nombreEstado(orden.estado)}</Badge>
-                    </div>
-                    <p className="mt-2 text-sm">
-                      {orden.vehiculo_marca} {orden.vehiculo_modelo}
-                      <span className="text-muted"> · {orden.vehiculo_patente}</span>
-                    </p>
-                    <p className="mt-1 text-xs text-muted">
+                  <Ficha key={orden.id} acento={ACENTOS_ORDEN[orden.estado] ?? 'amber'}>
+                    <FichaCabecera
+                      antetitulo={orden.vehiculo_marca}
+                      titulo={orden.vehiculo_modelo}
+                      aside={orden.vehiculo_patente && <Patente valor={orden.vehiculo_patente} tamano="sm" className="mt-0.5" />}
+                      className="px-4 pb-3 pt-4 [&_h3]:text-lg"
+                    >
+                      <Chips>
+                        <Chip mono>{orden.codigo}</Chip>
+                        <Chip tono={TONOS_ORDEN[orden.estado] ?? 'ambar'}>{nombreEstado(orden.estado)}</Chip>
+                      </Chips>
+                    </FichaCabecera>
+                    <FichaSeccion className="px-4 py-2 text-xs text-muted">
                       Ingresó {fechaCorta(orden.fecha_ingreso)} · Entrega estimada{' '}
                       {fechaCorta(orden.fecha_estimada_entrega)}
-                    </p>
-                  </li>
+                    </FichaSeccion>
+                  </Ficha>
                 ))}
               </ul>
             )}

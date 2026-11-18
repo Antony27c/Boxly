@@ -1,27 +1,25 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import FormularioUsuario from '@/components/admin/FormularioUsuario'
+import TarjetaUsuario from '@/components/admin/TarjetaUsuario'
 import Alert from '@/components/ui/Alert'
-import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Confirmacion from '@/components/ui/Confirmacion'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
 import Modal from '@/components/ui/Modal'
+import Paginacion from '@/components/ui/Paginacion'
 import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
+import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
-import { ROLES, nombreRol, usuariosService } from '@/services/usuarios'
-
-const TONOS_ROL = {
-  administrador: 'ambar',
-  recepcion: 'neutro',
-  mecanico: 'neutro',
-}
+import { ROLES, usuariosService } from '@/services/usuarios'
 
 export default function Usuarios() {
   const { token } = useAuth()
+  const [parametros, setParametros] = useSearchParams()
   const [busqueda, setBusqueda] = useState('')
   const [rolFiltro, setRolFiltro] = useState('')
   const [enEdicion, setEnEdicion] = useState(null)
@@ -32,7 +30,24 @@ export default function Usuarios() {
   const [aviso, setAviso] = useState('')
   const [errorAccion, setErrorAccion] = useState('')
 
-  const cargarUsuarios = useCallback((t) => usuariosService.listar(t), [])
+  // Con búsqueda o filtro de rol se trabaja con la lista completa (los
+  // filtros son del lado del cliente); si no, se pagina en el servidor.
+  const modoCompleto = busqueda.trim() !== '' || rolFiltro !== ''
+  const { pagina, setPagina, offset, limite, paginas, desde, hasta, total, setTotal } =
+    usePaginacion()
+
+  const cargarUsuarios = useCallback(
+    (t) => {
+      if (modoCompleto) return usuariosService.listar(t)
+      return usuariosService
+        .listarPaginado({ limit: limite, offset }, t)
+        .then(({ items, total: cantidad }) => {
+          setTotal(cantidad)
+          return items
+        })
+    },
+    [modoCompleto, limite, offset, setTotal],
+  )
   const { datos: usuarios, cargando, error, recargar } = useRecurso(cargarUsuarios)
 
   const filtrados = useMemo(() => {
@@ -51,6 +66,26 @@ export default function Usuarios() {
     () => (usuarios ?? []).filter((usuario) => usuario.activo).length,
     [usuarios],
   )
+
+  // Con la lista completa se puede contar activos; paginado solo se sabe el
+  // total que informa el servidor.
+  const resumen = modoCompleto
+    ? `${activos} ${activos === 1 ? 'usuario activo' : 'usuarios activos'}.`
+    : `${total} ${total === 1 ? 'usuario' : 'usuarios'} en total.`
+
+  // ?nuevo=1 (por ejemplo desde la checklist de primeros pasos) abre el
+  // formulario de alta una vez; el efecto de abajo limpia el parámetro.
+  const quiereNuevo = parametros.get('nuevo') === '1'
+  if (quiereNuevo && !formularioAbierto) {
+    setEnEdicion(null)
+    setFormularioAbierto(true)
+  }
+  useEffect(() => {
+    if (!quiereNuevo) return
+    const proximos = new URLSearchParams(parametros)
+    proximos.delete('nuevo')
+    setParametros(proximos, { replace: true })
+  }, [quiereNuevo, parametros, setParametros])
 
   function abrirNuevo() {
     setEnEdicion(null)
@@ -102,9 +137,7 @@ export default function Usuarios() {
     <div className="animate-bay-in">
       <EncabezadoPagina
         titulo="Usuarios"
-        descripcion={`Usuarios del sistema y permisos de acceso. ${activos} ${
-          activos === 1 ? 'usuario activo' : 'usuarios activos'
-        }.`}
+        descripcion={`Usuarios del sistema y permisos de acceso. ${resumen}`}
         acciones={<Button onClick={abrirNuevo}>Nuevo usuario</Button>}
       />
 
@@ -112,7 +145,7 @@ export default function Usuarios() {
         <Field
           label="Buscar por nombre o correo"
           type="search"
-          placeholder="Sofía"
+          placeholder="Ej.: Sofía"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
         />
@@ -135,7 +168,7 @@ export default function Usuarios() {
         </div>
       )}
 
-      {cargando ? (
+      {cargando && !usuarios ? (
         <Loader texto="Cargando usuarios…" />
       ) : error ? (
         <div className="mt-6 space-y-4">
@@ -147,60 +180,50 @@ export default function Usuarios() {
       ) : filtrados.length === 0 ? (
         <div className="mt-6">
           <Vacio
-            titulo="Sin usuarios para mostrar"
-            mensaje="Ajustá la búsqueda o cargá un usuario nuevo."
+            titulo={busqueda || rolFiltro ? 'Sin resultados' : 'Todavía no hay usuarios'}
+            mensaje={
+              busqueda || rolFiltro
+                ? 'Probá con otro nombre, correo o rol.'
+                : 'Desde acá creás los accesos del taller: recepción para el mostrador, mecánicos y administradores.'
+            }
             accion={<Button onClick={abrirNuevo}>Nuevo usuario</Button>}
           />
         </div>
       ) : (
-        <ul className="mt-6 grid gap-4 lg:grid-cols-2">
+        <ul
+          className={`mt-6 grid gap-4 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
+            cargando ? 'opacity-60' : ''
+          }`}
+        >
           {filtrados.map((usuario) => (
-            <li
+            <TarjetaUsuario
               key={usuario.id}
-              className="flex flex-col rounded-box border border-graphite-700 bg-graphite-800 p-5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-lg font-semibold text-ink">
-                    {usuario.apellido}, {usuario.nombre}
-                  </p>
-                  <p className="text-sm text-muted">{usuario.email}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1.5">
-                  <Badge tono={TONOS_ROL[usuario.rol] ?? 'neutro'}>{nombreRol(usuario.rol)}</Badge>
-                  <Badge tono={usuario.activo ? 'ok' : 'peligro'}>
-                    {usuario.activo ? 'Activo' : 'Inactivo'}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Button
-                  variante="secundario"
-                  onClick={() => {
-                    setEnEdicion(usuario)
-                    setErrorAccion('')
-                    setFormularioAbierto(true)
-                  }}
-                >
-                  Editar
-                </Button>
-                <Button variante="fantasma" onClick={() => alternarEstado(usuario)}>
-                  {usuario.activo ? 'Desactivar' : 'Activar'}
-                </Button>
-                <Button
-                  variante="fantasma"
-                  onClick={() => {
-                    setErrorEliminar('')
-                    setAEliminar(usuario)
-                  }}
-                >
-                  Eliminar
-                </Button>
-              </div>
-            </li>
+              usuario={usuario}
+              onEditar={() => {
+                setEnEdicion(usuario)
+                setErrorAccion('')
+                setFormularioAbierto(true)
+              }}
+              onAlternarEstado={() => alternarEstado(usuario)}
+              onEliminar={() => {
+                setErrorEliminar('')
+                setAEliminar(usuario)
+              }}
+            />
           ))}
         </ul>
+      )}
+
+      {!modoCompleto && paginas > 1 && !error && filtrados.length > 0 && (
+        <Paginacion
+          className="mt-4"
+          pagina={pagina}
+          paginas={paginas}
+          desde={desde}
+          hasta={hasta}
+          total={total}
+          onPagina={setPagina}
+        />
       )}
 
       <Modal

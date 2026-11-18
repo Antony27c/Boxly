@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import AltaClienteGuiada from '@/components/clientes/AltaClienteGuiada'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Confirmacion from '@/components/ui/Confirmacion'
@@ -10,28 +11,55 @@ import Modal from '@/components/ui/Modal'
 import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
 import FormularioVehiculo from '@/components/vehiculos/FormularioVehiculo'
+import TarjetaVehiculo from '@/components/vehiculos/TarjetaVehiculo'
 import { useAuth } from '@/context/AuthContext'
+import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
 import { vehiculosService } from '@/services/vehiculos'
 
 export default function Vehiculos() {
   const { token } = useAuth()
+  const { avisar } = useToast()
+  const navigate = useNavigate()
   const [parametros, setParametros] = useSearchParams()
   const clienteFiltro = parametros.get('cliente') ?? ''
   const [patente, setPatente] = useState('')
   const [enEdicion, setEnEdicion] = useState(null)
   const [formularioAbierto, setFormularioAbierto] = useState(false)
+  const [asistenteAbierto, setAsistenteAbierto] = useState(false)
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
-  const [aviso, setAviso] = useState('')
 
   const cargarVehiculos = useCallback((t) => vehiculosService.listar(t), [])
   const cargarClientes = useCallback((t) => clientesService.listar(t), [])
 
   const { datos: vehiculos, cargando, error, recargar } = useRecurso(cargarVehiculos)
-  const { datos: clientes } = useRecurso(cargarClientes)
+  const {
+    datos: clientes,
+    error: errorClientes,
+    recargar: recargarClientes,
+  } = useRecurso(cargarClientes)
+
+  // ?nuevo=1 abre el formulario de vehículo (o el asistente de cliente +
+  // vehículo si todavía no hay clientes) una vez que cargaron los clientes;
+  // el efecto de abajo limpia el parámetro de la URL.
+  const quiereNuevo = parametros.get('nuevo') === '1'
+  const clientesListos = clientes !== null || Boolean(errorClientes)
+  if (quiereNuevo && clientesListos && !formularioAbierto && !asistenteAbierto) {
+    if ((clientes ?? []).length === 0) setAsistenteAbierto(true)
+    else {
+      setEnEdicion(null)
+      setFormularioAbierto(true)
+    }
+  }
+  useEffect(() => {
+    if (!quiereNuevo || !clientesListos) return
+    const proximos = new URLSearchParams(parametros)
+    proximos.delete('nuevo')
+    setParametros(proximos, { replace: true })
+  }, [quiereNuevo, clientesListos, parametros, setParametros])
 
   const clientesPorId = useMemo(() => {
     const mapa = new Map()
@@ -63,13 +91,40 @@ export default function Vehiculos() {
     setFormularioAbierto(true)
   }
 
+  // El asistente avisó que cargó un cliente (con o sin vehículo): refrescar
+  // las dos listas y ofrecer el siguiente paso.
+  async function alTerminarAsistente({ cliente, vehiculo }) {
+    await Promise.all([recargar(), recargarClientes()])
+    avisar(
+      vehiculo ? 'Cliente y vehículo cargados.' : 'Cliente cargado.',
+      vehiculo
+        ? undefined
+        : {
+            accion: {
+              texto: 'Agregar vehículo',
+              onClick: () => navigate(`/vehiculos?cliente=${cliente.id}&nuevo=1`),
+            },
+          },
+    )
+  }
+
   async function guardar(datosVehiculo) {
     if (enEdicion) {
       await vehiculosService.actualizar(enEdicion.id, datosVehiculo, token)
-      setAviso('Vehículo actualizado.')
+      avisar('Vehículo actualizado.')
     } else {
-      await vehiculosService.crear(datosVehiculo, token)
-      setAviso('Vehículo dado de alta.')
+      const nuevo = await vehiculosService.crear(datosVehiculo, token)
+      avisar(
+        'Vehículo dado de alta.',
+        nuevo?.id
+          ? {
+              accion: {
+                texto: 'Recibir auto',
+                onClick: () => navigate(`/ordenes?ingreso=1&vehiculo=${nuevo.id}`),
+              },
+            }
+          : undefined,
+      )
     }
     setFormularioAbierto(false)
     setEnEdicion(null)
@@ -82,7 +137,7 @@ export default function Vehiculos() {
     try {
       await vehiculosService.eliminar(aEliminar.id, token)
       setAEliminar(null)
-      setAviso('Vehículo eliminado.')
+      avisar('Vehículo eliminado.')
       await recargar()
     } catch (problema) {
       setErrorEliminar(problema.message)
@@ -91,7 +146,8 @@ export default function Vehiculos() {
     }
   }
 
-  const sinClientes = (clientes ?? []).length === 0
+  const sinClientes = clientes?.length === 0
+  const hayFiltros = patente.trim() !== '' || clienteFiltro !== ''
 
   return (
     <div className="animate-bay-in">
@@ -107,12 +163,12 @@ export default function Vehiculos() {
 
       {sinClientes && (
         <div className="mt-4">
-          <Alert tipo="info">
-            Para cargar un vehículo primero necesitás un cliente.{' '}
-            <Link to="/clientes" className="text-amber hover:underline">
-              Ir a Clientes
-            </Link>
-          </Alert>
+          <p className="text-sm text-muted">
+            Cada vehículo pertenece a un cliente: primero hay que cargarlo.
+          </p>
+          <Button className="mt-3" onClick={() => setAsistenteAbierto(true)}>
+            Cargar cliente y vehículo
+          </Button>
         </div>
       )}
 
@@ -120,7 +176,7 @@ export default function Vehiculos() {
         <Field
           label="Buscar por patente o modelo"
           type="search"
-          placeholder="AC482KL"
+          placeholder="Ej.: AC482KL"
           value={patente}
           onChange={(e) => setPatente(e.target.value)}
         />
@@ -138,13 +194,13 @@ export default function Vehiculos() {
         />
       </div>
 
-      {aviso && (
+      {errorClientes && (
         <div className="mt-4">
-          <Alert tipo="ok">{aviso}</Alert>
+          <Alert>{errorClientes}</Alert>
         </div>
       )}
 
-      {cargando ? (
+      {cargando && !vehiculos ? (
         <Loader texto="Cargando vehículos…" />
       ) : error ? (
         <div className="mt-6 space-y-4">
@@ -156,68 +212,57 @@ export default function Vehiculos() {
       ) : filtrados.length === 0 ? (
         <div className="mt-6">
           <Vacio
-            titulo="Sin vehículos para mostrar"
-            mensaje="Ajustá los filtros o cargá una unidad nueva para verla en el listado."
-            accion={!sinClientes && <Button onClick={abrirNuevo}>Nuevo vehículo</Button>}
+            titulo={
+              sinClientes ? 'Primero hace falta un cliente' : hayFiltros ? 'Sin resultados' : 'Todavía no hay vehículos'
+            }
+            mensaje={
+              sinClientes
+                ? 'Los vehículos cuelgan de un cliente. El asistente los carga a los dos juntos, en un par de minutos.'
+                : hayFiltros
+                  ? 'Ningún vehículo coincide con la búsqueda o el cliente elegido.'
+                  : 'Acá va la ficha de cada auto del taller: patente, marca, modelo y de quién es.'
+            }
+            accion={
+              sinClientes ? (
+                <Button onClick={() => setAsistenteAbierto(true)}>Cargar cliente y vehículo</Button>
+              ) : hayFiltros ? (
+                <Button
+                  variante="secundario"
+                  onClick={() => {
+                    setPatente('')
+                    cambiarCliente('')
+                  }}
+                >
+                  Limpiar filtros
+                </Button>
+              ) : (
+                <Button onClick={abrirNuevo}>Nuevo vehículo</Button>
+              )
+            }
           />
         </div>
       ) : (
-        <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul
+          className={`mt-6 grid gap-4 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
+            cargando ? 'opacity-60' : ''
+          }`}
+        >
           {filtrados.map((vehiculo) => {
             const cliente = clientesPorId.get(vehiculo.cliente_id)
             return (
-              <li
+              <TarjetaVehiculo
                 key={vehiculo.id}
-                className="flex flex-col rounded-box border border-graphite-700 bg-graphite-800 p-5"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-mono text-lg font-semibold tracking-wider text-amber">
-                      {vehiculo.patente}
-                    </p>
-                    <p className="mt-1">
-                      <span className="text-sm text-muted">{vehiculo.marca}</span>{' '}
-                      <span className="text-lg font-bold tracking-tight">{vehiculo.modelo}</span>
-                    </p>
-                    <p className="text-sm text-muted">
-                      {[vehiculo.anio, vehiculo.color].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                </div>
-
-                <dl className="mt-4 space-y-1 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted">Cliente</dt>
-                    <dd className="text-right">
-                      {cliente ? `${cliente.apellido}, ${cliente.nombre}` : '—'}
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="mt-5 flex flex-wrap gap-2 pt-1">
-                  <Link to={`/vehiculos/${vehiculo.id}`}>
-                    <Button variante="secundario">Ver ficha</Button>
-                  </Link>
-                  <Button
-                    variante="fantasma"
-                    onClick={() => {
-                      setEnEdicion(vehiculo)
-                      setFormularioAbierto(true)
-                    }}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    variante="fantasma"
-                    onClick={() => {
-                      setErrorEliminar('')
-                      setAEliminar(vehiculo)
-                    }}
-                  >
-                    Eliminar
-                  </Button>
-                </div>
-              </li>
+                vehiculo={vehiculo}
+                cliente={cliente}
+                onEditar={() => {
+                  setEnEdicion(vehiculo)
+                  setFormularioAbierto(true)
+                }}
+                onEliminar={() => {
+                  setErrorEliminar('')
+                  setAEliminar(vehiculo)
+                }}
+              />
             )
           })}
         </ul>
@@ -236,6 +281,12 @@ export default function Vehiculos() {
           onCancelar={() => setFormularioAbierto(false)}
         />
       </Modal>
+
+      <AltaClienteGuiada
+        abierto={asistenteAbierto}
+        onCerrar={() => setAsistenteAbierto(false)}
+        onListo={alTerminarAsistente}
+      />
 
       <Confirmacion
         abierto={Boolean(aEliminar)}

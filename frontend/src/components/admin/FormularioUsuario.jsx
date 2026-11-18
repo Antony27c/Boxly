@@ -55,14 +55,14 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
     <form onSubmit={enviar} noValidate className="space-y-4">
       {errorApi && <Alert>{errorApi}</Alert>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label="Nombre"
           value={datos.nombre}
           onChange={(e) => cambiar('nombre', e.target.value)}
           error={errores.nombre}
           disabled={guardando}
-          placeholder="Sofía"
+          placeholder="Ej.: Sofía"
         />
         <Field
           label="Apellido"
@@ -70,7 +70,7 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
           onChange={(e) => cambiar('apellido', e.target.value)}
           error={errores.apellido}
           disabled={guardando}
-          placeholder="Rueda"
+          placeholder="Ej.: Rueda"
         />
         <Field
           label="Correo"

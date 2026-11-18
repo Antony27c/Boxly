@@ -27,8 +27,10 @@ export default function ActivarCuenta() {
   const navigate = useNavigate()
 
   const [cliente, setCliente] = useState(null)
-  const [cargando, setCargando] = useState(true)
-  const [errorEnlace, setErrorEnlace] = useState('')
+  const [cargando, setCargando] = useState(() => Boolean(token))
+  const [errorEnlace, setErrorEnlace] = useState(() =>
+    token ? '' : 'Falta el enlace de activación. Abrilo desde el correo que te mandó el taller.',
+  )
   const [cuentaYaActiva, setCuentaYaActiva] = useState(false)
 
   const [password, setPassword] = useState('')
@@ -39,11 +41,7 @@ export default function ActivarCuenta() {
   const [enviando, setEnviando] = useState(false)
 
   useEffect(() => {
-    if (!token) {
-      setErrorEnlace('Falta el enlace de activación. Abrilo desde el correo que te mandó el taller.')
-      setCargando(false)
-      return
-    }
+    if (!token) return
     let vigente = true
     authApi
       .activacionInfo(token)
@@ -91,7 +89,7 @@ export default function ActivarCuenta() {
           <div className="mt-6 space-y-4">
             <Alert>{errorEnlace}</Alert>
             {cuentaYaActiva && (
-              <Link to="/login" className="inline-block text-amber hover:underline">
+              <Link to="/login" className="inline-block text-amber-texto hover:underline">
                 Ir a iniciar sesión
               </Link>
             )}
@@ -125,6 +123,7 @@ export default function ActivarCuenta() {
               label="Contraseña"
               type="password"
               autoComplete="new-password"
+              icono="llave"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               error={errores.password}
@@ -135,6 +134,7 @@ export default function ActivarCuenta() {
               label="Repetí la contraseña"
               type="password"
               autoComplete="new-password"
+              icono="llave"
               value={repetida}
               onChange={(e) => setRepetida(e.target.value)}
               error={errores.repetida}
