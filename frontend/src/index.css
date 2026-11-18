@@ -3,12 +3,62 @@
 @tailwind utilities;
 
 @layer base {
+  /* Tema claro (por defecto). Valores en canales RGB para usar /opacidad. */
+  :root {
+    color-scheme: light;
+    --c-g900: 241 242 244;
+    --c-g800: 255 255 255;
+    --c-g700: 231 233 237;
+    --c-g600: 220 223 228;
+    --c-g500: 197 201 208;
+    --c-amber: 201 162 39;
+    --c-amber-soft: 226 190 75;
+    --c-amber-deep: 143 112 22;
+    --c-amber-texto: 122 98 17; /* #C9A227 no llega a 4.5:1 sobre fondo claro */
+    --c-ink: 30 33 38;
+    --c-muted: 95 102 114;
+    --c-ok: 30 142 90;
+    --c-danger: 198 55 60;
+    /* Texto sobre fondos de acento: el blanco no llega a 4.5:1 sobre el dorado. */
+    --c-sobre-amber: 30 33 38;
+    --c-sobre-ok: 255 255 255;
+    /* Series categoricas para graficos (validadas con dataviz: orden fijo, nunca ciclar). */
+    --c-serie-1: 42 120 214;
+    --c-serie-2: 235 104 52;
+    --c-serie-3: 27 175 122;
+    --c-serie-4: 237 161 0;
+  }
+
+  /* Tema oscuro: se activa con la clase .dark en <html> (ver TemaContext). */
+  :root.dark {
+    color-scheme: dark;
+    --c-g900: 18 20 24;
+    --c-g800: 27 30 35;
+    --c-g700: 38 42 49;
+    --c-g600: 50 55 65;
+    --c-g500: 72 78 90;
+    --c-amber: 201 162 39;
+    --c-amber-soft: 226 190 75;
+    --c-amber-deep: 226 190 75;
+    --c-amber-texto: 226 194 84;
+    --c-ink: 232 234 237;
+    --c-muted: 156 163 175;
+    --c-ok: 61 190 126;
+    --c-danger: 239 96 101;
+    --c-sobre-amber: 24 26 30;
+    --c-sobre-ok: 18 20 24;
+    --c-serie-1: 57 135 229;
+    --c-serie-2: 217 89 38;
+    --c-serie-3: 25 158 112;
+    --c-serie-4: 201 133 0;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-graphite-900 text-ink font-sans antialiased;
+    @apply bg-graphite-900 text-ink font-sans antialiased transition-colors duration-200;
   }
 
   :focus-visible {
@@ -24,6 +74,34 @@
       #2B2E34 10px 20px
     );
   }
+
+  /* Chapa semilla de melón: semillas alternadas al 4% para que el texto de
+     encima conserve el contraste (muted sobre la chapa sigue arriba de 4.5:1). */
+  .chapa-melon {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cg fill='%23000' fill-opacity='.04'%3E%3Crect x='2' y='4.2' width='6' height='1.6' rx='.8' transform='rotate(45 5 5)'/%3E%3Crect x='12' y='4.2' width='6' height='1.6' rx='.8' transform='rotate(-45 15 5)'/%3E%3Crect x='2' y='14.2' width='6' height='1.6' rx='.8' transform='rotate(-45 5 15)'/%3E%3Crect x='12' y='14.2' width='6' height='1.6' rx='.8' transform='rotate(45 15 15)'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 20px 20px;
+  }
+  .dark .chapa-melon {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cg fill='%23fff' fill-opacity='.035'%3E%3Crect x='2' y='4.2' width='6' height='1.6' rx='.8' transform='rotate(45 5 5)'/%3E%3Crect x='12' y='4.2' width='6' height='1.6' rx='.8' transform='rotate(-45 15 5)'/%3E%3Crect x='2' y='14.2' width='6' height='1.6' rx='.8' transform='rotate(-45 5 15)'/%3E%3Crect x='12' y='14.2' width='6' height='1.6' rx='.8' transform='rotate(45 15 15)'/%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  /* Cuatro remaches en las esquinas, con los colores del tema activo. */
+  .remaches {
+    --remache: radial-gradient(
+      circle at 40% 40%,
+      rgb(var(--c-g800) / 0.9) 0 0.8px,
+      rgb(var(--c-ink) / 0.16) 1.2px 2.3px,
+      transparent 2.8px
+    );
+    background-image: var(--remache), var(--remache), var(--remache), var(--remache);
+    background-size: 6px 6px;
+    background-repeat: no-repeat;
+    background-position:
+      top 9px left 9px,
+      top 9px right 9px,
+      bottom 9px left 9px,
+      bottom 9px right 9px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -33,5 +111,30 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Preferencias de accesibilidad: src/lib/preferencias.js pone estas clases
+   en <html> según lo guardado en localStorage. */
+html.reducir-movimiento,
+html.reducir-movimiento *,
+html.reducir-movimiento *::before,
+html.reducir-movimiento *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+html.texto-grande {
+  font-size: 112.5%;
+}
+
+/* Filas deslizables (chips, pestañas) sin la barra de desplazamiento visible. */
+@layer utilities {
+  .sin-barra {
+    scrollbar-width: none;
+  }
+  .sin-barra::-webkit-scrollbar {
+    display: none;
   }
 }

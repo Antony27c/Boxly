@@ -1,0 +1,73 @@
+/* Detalles de taller del tablero de órdenes. */
+
+/* Los boxes entran uno detrás del otro, con la misma curva que animate-bay-in. */
+@keyframes box-entra {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Guiño al pasar a Listo: la bandera flamea un instante. */
+@keyframes guino-bandera {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: rotate(6deg) scale(1);
+  }
+  70% {
+    transform: rotate(-3deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+
+/* Guiño al pasar a Entregado: la llave llega y se gira como al dar arranque. */
+@keyframes guino-llave {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  45% {
+    opacity: 1;
+    transform: translateX(0) rotate(0);
+  }
+  75% {
+    transform: rotate(-18deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+
+.guino-bandera {
+  transform-origin: 18% 92%;
+}
+
+.guino-llave {
+  transform-origin: 25% 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .box-taller {
+    animation: box-entra 420ms cubic-bezier(0.2, 0.7, 0.3, 1) var(--retraso-box, 0ms) both;
+  }
+  .guino-bandera {
+    animation: guino-bandera 700ms ease-out both;
+  }
+  .guino-llave {
+    animation: guino-llave 800ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+}
+
+html.reducir-movimiento .box-taller {
+  animation-delay: 0ms;
+}

@@ -1,6 +1,8 @@
+import Icono from '@/components/ui/Icono'
+
 const estilos = {
   primario:
-    'bg-amber text-white hover:bg-amber-deep disabled:bg-amber/40 disabled:text-white/70',
+    'bg-amber text-sobre-amber hover:bg-amber-soft disabled:bg-amber/40 disabled:text-sobre-amber/60',
   secundario:
     'bg-graphite-600 text-ink hover:bg-graphite-500 disabled:opacity-50',
   fantasma:
@@ -13,6 +15,7 @@ export default function Button({
   children,
   variante = 'primario',
   cargando = false,
+  icono,
   className = '',
   disabled,
   ...props
@@ -20,10 +23,10 @@ export default function Button({
   return (
     <button
       disabled={disabled || cargando}
-      className={`inline-flex items-center justify-center gap-2 rounded-box px-5 py-2.5 text-sm font-semibold tracking-wide transition-colors disabled:cursor-not-allowed ${estilos[variante]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold tracking-wide transition motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:transform-none ${estilos[variante]} ${className}`}
       {...props}
     >
-      {cargando && <Spinner />}
+      {cargando ? <Spinner /> : icono ? <Icono nombre={icono} className="h-4 w-4" /> : null}
       {children}
     </button>
   )

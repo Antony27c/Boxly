@@ -1,5 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import BanderaCuadros from '@/components/ilustraciones/BanderaCuadros'
+import Cono from '@/components/ilustraciones/Cono'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Loader from '@/components/ui/Loader'
@@ -12,13 +14,15 @@ const ESTADOS = {
     titulo: '¡Pago aprobado!',
     texto: 'Recibimos tu pago. Ya podés pasar a retirar tu vehículo.',
     color: 'border-ok/50 bg-ok/10 text-ok',
-    icono: '✓',
+    Ilustracion: BanderaCuadros,
+    ilustracion: 'bandera',
   },
   rechazado: {
     titulo: 'El pago fue rechazado',
     texto: 'No se pudo completar el cobro. Podés intentarlo de nuevo con otro medio de pago.',
     color: 'border-danger/50 bg-danger/10 text-danger',
-    icono: '✕',
+    Ilustracion: Cono,
+    ilustracion: 'cono',
   },
   pendiente: {
     titulo: 'Pago pendiente',
@@ -39,11 +43,20 @@ export default function ResultadoPago() {
   const paymentId = parametros.get('payment_id') ?? parametros.get('collection_id')
   const [procesando, setProcesando] = useState(false)
   const [errorAccion, setErrorAccion] = useState('')
+  const confirmacionHecha = useRef(null)
 
   const cargar = useCallback(
     (t) => {
       if (!pagoId) return Promise.reject(new Error('Falta el número de pago.'))
-      if (paymentId && /^\d+$/.test(paymentId)) return pagosService.confirmar(pagoId, paymentId, t)
+      if (paymentId && /^\d+$/.test(paymentId)) {
+        const clave = `${pagoId}:${paymentId}`
+        if (confirmacionHecha.current === clave) return pagosService.obtener(pagoId, t)
+        confirmacionHecha.current = clave
+        return pagosService.confirmar(pagoId, paymentId, t).catch((problema) => {
+          if (confirmacionHecha.current === clave) confirmacionHecha.current = null
+          throw problema
+        })
+      }
       return pagosService.obtener(pagoId, t)
     },
     [pagoId, paymentId],
@@ -84,7 +97,7 @@ export default function ResultadoPago() {
       {error ? (
         <div className="space-y-4">
           <Alert>{error}</Alert>
-          <Link to="/portal" className="text-sm text-amber hover:underline">
+          <Link to="/portal" className="text-sm text-amber-texto hover:underline">
             Volver a mis órdenes
           </Link>
         </div>
@@ -93,8 +106,9 @@ export default function ResultadoPago() {
           <div
             className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full border text-2xl font-bold ${info.color}`}
             aria-hidden="true"
+            data-ilustracion={info.ilustracion}
           >
-            {info.icono}
+            {info.Ilustracion ? <info.Ilustracion className="h-10 w-10" /> : info.icono}
           </div>
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">{info.titulo}</h1>
           <p className="mt-2 text-sm text-muted">{info.texto}</p>
@@ -122,7 +136,7 @@ export default function ResultadoPago() {
             </div>
           )}
 
-          {pago.estado === 'pendiente' && simulado && (
+          {import.meta.env.DEV && pago.estado === 'pendiente' && simulado && (
             <div className="mt-6 rounded-box border border-dashed border-graphite-500 p-4">
               <p className="text-xs text-muted">
                 Modo prueba: sin Mercado Pago configurado, simulá el resultado del pago.
@@ -151,7 +165,7 @@ export default function ResultadoPago() {
             )}
             <Link
               to="/portal"
-              className="inline-flex items-center rounded-box px-5 py-2.5 text-sm font-semibold text-muted transition-colors hover:bg-graphite-700 hover:text-ink"
+              className="inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-semibold text-muted transition-colors hover:bg-graphite-700 hover:text-ink"
             >
               Volver a mis órdenes
             </Link>

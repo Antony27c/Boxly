@@ -1,0 +1,26 @@
+/* Luces testigo del Dashboard: un brillo corto y único al encenderse.
+   Con "reducir movimiento" (sistema o preferencia de Boxly) no se anima. */
+@keyframes testigo-brillo {
+  0% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 0 currentColor);
+  }
+  35% {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 0 currentColor);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .testigo-brillo {
+    animation: testigo-brillo 900ms ease-out 1;
+  }
+}
+
+html.reducir-movimiento .testigo-brillo {
+  animation: none;
+}
