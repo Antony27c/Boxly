@@ -1,9 +1,10 @@
-import { createContext, use, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { authService } from '@/services/auth'
-import { setUnaunthorizedHandler } from '../lib/api'
+import { setUnauthorizedHandler } from '../lib/api'
 
 const CLAVE_TOKEN = 'boxly_token'
 const CLAVE_USUARIO = 'boxly_usuario'
+const MAXIMO_DELAY_TIMEOUT = 2 ** 31 - 1
 
 const AuthContext = createContext(null)
 
@@ -20,14 +21,21 @@ function vencimientoDelToken(token) {
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(CLAVE_TOKEN))
   const [usuario, setUsuario] = useState(() => {
-    const guardado = localStorage.getItem(CLAVE_USUARIO)
-    return guardado ? JSON.parse(guardado) : null
+    try {
+      const guardado = localStorage.getItem(CLAVE_USUARIO)
+      return guardado ? JSON.parse(guardado) : null
+    } catch {
+      localStorage.removeItem(CLAVE_USUARIO)
+      return null
+    }
   })
   const [cargandoSesion, setCargandoSesion] = useState(Boolean(localStorage.getItem(CLAVE_TOKEN)))
+  const recienLogueado = useRef(false)
 
   useEffect(() => {
-    if (!token) {
-      setCargandoSesion(false)
+    if (!token) return
+    if (recienLogueado.current) {
+      recienLogueado.current = false
       return
     }
     let vigente = true
@@ -58,6 +66,8 @@ export function AuthProvider({ children }) {
     const datos = await authService.login({ email, password })
     localStorage.setItem(CLAVE_TOKEN, datos.access_token)
     localStorage.setItem(CLAVE_USUARIO, JSON.stringify(datos.usuario))
+    recienLogueado.current = true
+    setCargandoSesion(false)
     setToken(datos.access_token)
     setUsuario(datos.usuario)
     return datos.usuario
@@ -66,19 +76,23 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     localStorage.removeItem(CLAVE_TOKEN)
     localStorage.removeItem(CLAVE_USUARIO)
+    setCargandoSesion(false)
     setToken(null)
     setUsuario(null)
   }, [])
 
   useEffect(() => {
-    setUnaunthorizedHandler(logout)
+    setUnauthorizedHandler(logout)
   }, [logout])
 
   useEffect(() => {
     if (!token) return
     const vence = vencimientoDelToken(token)
     if (!vence) return
-    const temporizador = setTimeout(logout, Math.max(vence - Date.now(), 0))
+    const temporizador = setTimeout(
+      logout,
+      Math.min(Math.max(vence - Date.now(), 0), MAXIMO_DELAY_TIMEOUT),
+    )
     return () => clearTimeout(temporizador)
   }, [token, logout])
 
@@ -90,6 +104,8 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>
 }
 
+// El hook queda junto al provider para no romper los imports existentes.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const contexto = useContext(AuthContext)
   if (!contexto) throw new Error('useAuth debe usarse dentro de <AuthProvider>')

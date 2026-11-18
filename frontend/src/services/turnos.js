@@ -1,39 +1,11 @@
 import { api } from '@/lib/api'
-import { MockError, operar, proximoId } from '@/mocks/db'
-import { usaMock } from '@/services/config'
 
 const RECURSO = '/api/v1/turnos'
-const USAR_MOCK = usaMock('turnos')
 
 export const ESTADOS_TURNO = ['pendiente', 'confirmado', 'en_taller', 'completado', 'cancelado']
 
 // Un turno cada 2 horas (el taller para al mediodía). El backend valida la misma grilla.
 export const HORARIOS = ['08:00', '10:00', '12:00', '14:00', '16:00']
-
-function buscarTurno(datos, id) {
-  const turno = datos.turnos.find((item) => item.id === Number(id))
-  if (!turno) throw new MockError('No encontramos ese turno.', 404)
-  return turno
-}
-
-function validarDisponibilidad(datos, turno, idActual) {
-  const ocupado = datos.turnos.some(
-    (item) =>
-      item.fecha === turno.fecha &&
-      item.hora === turno.hora &&
-      item.estado !== 'cancelado' &&
-      item.id !== Number(idActual),
-  )
-  if (ocupado) throw new MockError('Ese horario ya está ocupado. Elegí otro.', 409)
-}
-
-function normalizar(turno) {
-  return {
-    ...turno,
-    cliente_id: Number(turno.cliente_id),
-    vehiculo_id: Number(turno.vehiculo_id),
-  }
-}
 
 function aPayloadApi(turno) {
   return {
@@ -60,48 +32,23 @@ function desdeApi(item) {
 }
 
 export const turnosService = {
-  listar: (token) =>
-    USAR_MOCK
-      ? operar((datos) => datos.turnos)
-      : api.get(RECURSO, token).then((lista) => lista.map(desdeApi)),
+  // { desde, hasta } en YYYY-MM-DD acotan la semana visible; si el backend
+  // todavía no filtra, la página igual descarta lo que cae fuera en el cliente.
+  listar: ({ desde, hasta } = {}, token) => {
+    const params = new URLSearchParams()
+    if (desde) params.set('desde', desde)
+    if (hasta) params.set('hasta', hasta)
+    const query = params.toString()
+    return api.get(query ? `${RECURSO}?${query}` : RECURSO, token).then((lista) => lista.map(desdeApi))
+  },
 
-  crear: (turno, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const limpio = normalizar(turno)
-          validarDisponibilidad(datos, limpio)
-          const nuevo = { ...limpio, id: proximoId(datos.turnos) }
-          datos.turnos.push(nuevo)
-          return nuevo
-        })
-      : api.post(RECURSO, aPayloadApi(turno), token).then(desdeApi),
+  crear: (turno, token) => api.post(RECURSO, aPayloadApi(turno), token).then(desdeApi),
 
   actualizar: (id, turno, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const actual = buscarTurno(datos, id)
-          const limpio = normalizar(turno)
-          validarDisponibilidad(datos, limpio, id)
-          Object.assign(actual, limpio)
-          return actual
-        })
-      : api.put(`${RECURSO}/${id}`, aPayloadApi(turno), token).then(desdeApi),
+    api.put(`${RECURSO}/${id}`, aPayloadApi(turno), token).then(desdeApi),
 
   cambiarEstado: (id, estado, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const turno = buscarTurno(datos, id)
-          turno.estado = estado
-          return turno
-        })
-      : api.put(`${RECURSO}/${id}/estado`, { estado }, token).then(desdeApi),
+    api.put(`${RECURSO}/${id}/estado`, { estado }, token).then(desdeApi),
 
-  eliminar: (id, token) =>
-    USAR_MOCK
-      ? operar((datos) => {
-          const turno = buscarTurno(datos, id)
-          datos.turnos = datos.turnos.filter((item) => item.id !== turno.id)
-          return null
-        })
-      : api.del(`${RECURSO}/${id}`, token),
+  eliminar: (id, token) => api.del(`${RECURSO}/${id}`, token),
 }

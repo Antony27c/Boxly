@@ -8,7 +8,7 @@ export default function Raiz() {
   const { autenticado, usuario, cargandoSesion } = useAuth()
 
   if (cargandoSesion) return <Loader texto="Verificando sesión…" />
-  if (!autenticado) return <Navigate to="/login" replace />
+  if (!autenticado || !usuario?.rol) return <Navigate to="/login" replace />
 
-  return <Navigate to={inicioSegunRol(usuario?.rol)} replace />
+  return <Navigate to={inicioSegunRol(usuario.rol)} replace />
 }

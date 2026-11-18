@@ -9,7 +9,7 @@ export class ApiError extends Error {
 }
 
 let onNoAutorizado = null
-export function setUnaunthorizedHandler(fn) {
+export function setUnauthorizedHandler(fn) {
   onNoAutorizado = fn
 }
 
@@ -27,7 +27,7 @@ export function urlArchivo(ruta) {
   return `${BASE_URL}${ruta.startsWith('/') ? '' : '/'}${ruta}`
 }
 
-async function request(path, { method = 'GET', body, token, form = false } = {}) {
+async function enviar(path, { method = 'GET', body, token, form = false } = {}) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
 
@@ -50,7 +50,7 @@ async function request(path, { method = 'GET', body, token, form = false } = {})
   }
 
   const texto = await response.text()
-  let datos = null
+  let datos
   try {
     datos = texto ? JSON.parse(texto) : null
   } catch {
@@ -67,11 +67,23 @@ async function request(path, { method = 'GET', body, token, form = false } = {})
     throw new ApiError(mensajeSegunEstado(response.status, detalle), response.status)
   }
 
-  return datos
+  return { datos, headers: response.headers }
+}
+
+async function request(path, opciones = {}) {
+  return (await enviar(path, opciones)).datos
 }
 
 export const api = {
   get: (path, token) => request(path, { token }),
+  /* Para listados paginados: devuelve { items, total } donde total sale del
+     header X-Total-Count (o de la cantidad de items si el header no llega). */
+  getConTotal: async (path, token) => {
+    const { datos, headers } = await enviar(path, { token })
+    const items = Array.isArray(datos) ? datos : []
+    const total = Number.parseInt(headers.get('x-total-count') ?? '', 10)
+    return { items, total: Number.isNaN(total) ? items.length : total }
+  },
   post: (path, body, token) => request(path, { method: 'POST', body, token }),
   put: (path, body, token) => request(path, { method: 'PUT', body, token }),
   patch: (path, body, token) => request(path, { method: 'PATCH', body, token }),

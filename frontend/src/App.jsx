@@ -1,16 +1,19 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
+import { TemaProvider } from '@/context/TemaContext'
+import { ToastProvider } from '@/context/ToastContext'
 import ProtectedRoute from '@/routes/ProtectedRoute'
 import { ROLES_ADMIN, ROLES_CLIENTE, ROLES_MOSTRADOR, ROLES_TALLER } from '@/routes/navegacion'
 import AppLayout from '@/layouts/AppLayout'
 import Login from '@/pages/Login'
 import ActivarCuenta from '@/pages/ActivarCuenta'
-import Inicio from '@/pages/Inicio'
+import Hoy from '@/pages/Hoy'
 import Clientes from '@/pages/Clientes'
 import Vehiculos from '@/pages/Vehiculos'
 import VehiculoDetalle from '@/pages/VehiculoDetalle'
 import Turnos from '@/pages/Turnos'
 import Ordenes from '@/pages/Ordenes'
+import OrdenDetalle from '@/pages/OrdenDetalle'
 import Inventario from '@/pages/Inventario'
 import Usuarios from '@/pages/Usuarios'
 import Horarios from '@/pages/Horarios'
@@ -20,18 +23,23 @@ import Raiz from '@/routes/Raiz'
 import Portal from '@/pages/Portal'
 import ResultadoPago from '@/pages/ResultadoPago'
 import NoEncontrado from '@/pages/NoEncontrado'
+import Ayuda from '@/pages/Ayuda'
+import Configuracion from '@/pages/Configuracion'
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <TemaProvider>
+        <ToastProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/activar" element={<ActivarCuenta />} />
 
           <Route element={<ProtectedRoute roles={ROLES_TALLER} />}>
             <Route element={<AppLayout />}>
-              <Route path="/inicio" element={<Inicio />} />
+              <Route path="/hoy" element={<Hoy />} />
+              <Route path="/inicio" element={<Navigate to="/hoy" replace />} />
             </Route>
           </Route>
 
@@ -55,6 +63,7 @@ export default function App() {
               <Route path="/vehiculos" element={<Vehiculos />} />
               <Route path="/vehiculos/:id" element={<VehiculoDetalle />} />
               <Route path="/ordenes" element={<Ordenes />} />
+              <Route path="/ordenes/:id" element={<OrdenDetalle />} />
               <Route path="/inventario" element={<Inventario />} />
               <Route path="/horarios" element={<Horarios />} />
             </Route>
@@ -63,15 +72,30 @@ export default function App() {
           <Route element={<ProtectedRoute roles={ROLES_ADMIN} />}>
             <Route element={<AppLayout />}>
               <Route path="/usuarios" element={<Usuarios />} />
+              <Route path="/admin" element={<Navigate to="/usuarios" replace />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute roles={ROLES_MOSTRADOR} />}>
+            <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/finanzas" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/admin" element={<Navigate to="/usuarios" replace />} />
+            </Route>
+          </Route>
+
+          {/* Ayuda y Configuración: cualquier usuario con sesión (personal o cliente). */}
+          <Route element={<ProtectedRoute roles={[...ROLES_TALLER, ...ROLES_CLIENTE]} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/ayuda" element={<Ayuda />} />
+              <Route path="/configuracion" element={<Configuracion />} />
             </Route>
           </Route>
 
           <Route path="/" element={<Raiz />} />
           <Route path="*" element={<NoEncontrado />} />
         </Routes>
+        </ToastProvider>
+        </TemaProvider>
       </AuthProvider>
     </BrowserRouter>
   )
