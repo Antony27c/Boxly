@@ -12,6 +12,13 @@ backend/static/
 frontend/node_modules/
 frontend/dist/
 
+# Secretos y salidas locales (en cualquier carpeta)
+.env
+backups/
+*.log
+coverage/
+__pycache__/
+
 # OS / IDE
 .DS_Store
 Thumbs.db

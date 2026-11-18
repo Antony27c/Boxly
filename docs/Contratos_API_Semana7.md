@@ -3,7 +3,9 @@
 **Proyecto:** Boxly – Sistema de Gestión de Taller Mecánico Automotriz  
 **Sprint:** Semana 7 · **Tarea:** Definir contratos de API de la semana  
 **Responsable:** Antonio Chocobar (Scrum Master)  
-**Versión:** 1.0 · **Fecha:** 10/2026
+**Versión:** 1.1 · **Fecha:** 2026-11-17
+
+> **Actualización 1.1:** se agregó la sección 7 con los contratos de la Fase 1 ya implementados (activación de cuenta, turnos cada 2 h, cobro, notificaciones, portal y endurecimiento de seguridad). El checklist pasó a la sección 8. Donde el código difiere de una sección vieja, manda la sección 7 y el código.
 
 ---
 
@@ -43,8 +45,10 @@ Aplican a todos los endpoints, nuevos y existentes.
 | Fechas | ISO 8601. Órdenes e historial sin zona (`"2026-09-02T10:15:00"`); turnos con zona. Filtros por rango con fecha simple: `?desde=2026-07-01&hasta=2026-09-30` (ambos inclusive) |
 | Montos | Llegan como **string decimal** (`"185000.00"`), porque Pydantic serializa `Decimal` así. El frontend usa `Number()` como ya hace en `desdeApi` |
 | Listas | Array plano, sin paginación |
-| Errores | `{"detail": "mensaje", "code": 400}`. Validación: `422` con `{"detail": "Error de validación", "code": 422, "errores": [{"campo": "...", "mensaje": "..."}]}` |
-| Códigos | `400` regla de negocio · `401` sin sesión · `403` rol sin permiso · `404` no existe **o no es tuyo** · `409` duplicado o conflicto · `422` validación |
+| Errores | `{"detail": "mensaje", "code": 400}`. Validación: `422` con `{"detail": "Error de validación", "code": 422, "errores": [{"campo": "...", "mensaje": "..."}]}`. Conflicto de integridad (único/FK): `409` |
+| Rate limit | `POST /auth/login` 5/minuto y `POST /auth/activacion` 10/minuto por IP (slowapi, `RATE_LIMIT_ENABLED=false` lo apaga). Al superarlo: `429` `{"detail": "Demasiados intentos. Probá de nuevo en un minuto."}` |
+| Documentación | `/docs`, `/redoc` y `/openapi.json` solo existen con `ENVIRONMENT=dev`; en producción responden 404 |
+| Códigos | `400` regla de negocio · `401` sin sesión · `403` rol sin permiso · `404` no existe **o no es tuyo** · `409` duplicado o conflicto · `422` validación · `429` rate limit |
 
 > Para el cliente y el mecánico, un recurso que existe pero no les pertenece responde **404**, no 403, para no revelar que existe.
 
@@ -536,6 +540,8 @@ Devuelve el pago actualizado.
 
 ## 6. Datos para los mocks (`frontend/src/mocks/db.js`)
 
+> **Nota (2026-11):** los mocks se están eliminando del frontend; esta sección queda solo como referencia histórica de las formas de datos.
+
 Los mocks guardan los datos **con la forma que usa el frontend**, como hoy: estados con nombre (`"En diagnóstico"`). Los services traducen desde y hacia la API. Colecciones a sumar en `SEMILLA`:
 
 ```js
@@ -579,7 +585,122 @@ En mock:
 
 ---
 
-## 7. Checklist del día 5 (integración)
+## 7. Contratos de la Fase 1 (implementados)
+
+Lo que sigue describe el comportamiento **real y ya implementado** del backend. Tiene prioridad sobre las secciones 5.x donde difieran.
+
+### 7.1 Activación de cuenta del cliente (invitación por email)
+
+Flujo: recepción o administración da de alta un `Cliente` con email → el backend le manda un correo con un enlace `{FRONTEND_URL}/activar?token=...`. El token es un JWT de un solo propósito (`proposito: "activar_cuenta"`), vale **72 horas** y queda invalidado si el cliente ya activó o si el taller cambió el email del cliente.
+
+- Al crear el cliente (`POST /clientes`, A+R) la invitación sale **en segundo plano** si el cliente tiene email y todavía no tiene cuenta. El alta no se frena por SMTP.
+- `POST /clientes/{cliente_id}/invitacion` (A+R): manda o **reenvía** la invitación. Es el "reenviar verificación" del frontend. `200` `{"detail": "Invitación enviada."}`; `400` si el cliente no tiene email, `409` si ya activó su cuenta o el email está en uso por otro usuario, y `502` si SMTP falla.
+- `GET /auth/activacion?token=...` (**público**): datos que el cliente confirma antes de crear su contraseña. La DNI viaja enmascarada.
+
+```json
+{ "nombre": "Juan", "apellido": "Perez", "email": "juan.perez@gmail.com", "dni": "••••••22" }
+```
+
+Errores: `400` `"El enlace venció o no es válido. Pedile al taller que te envíe otra invitación."` · `409` si la cuenta ya fue activada o el email ya está en uso por otra cuenta.
+
+- `POST /auth/activacion` (**público**, 10 req/min): el cliente confirma sus datos, elige su contraseña y queda **con la sesión iniciada** (devuelve `TokenResponse`, 201).
+
+```json
+{ "token": "eyJ...", "password": "Taller2026", "confirmo_datos": true }
+```
+
+`confirmo_datos` tiene que ser `true` (si no, `422`). La contraseña sigue la regla general: 8–72 caracteres combinando letras y números.
+
+### 7.2 Login y sesión (endurecido)
+
+- `POST /auth/login`: **5 req/min por IP** → `429` al superarlo. El error por credenciales es siempre el mismo `401` `"Email o contraseña incorrectos"`, exista o no el email (la verificación tarda lo mismo en ambos casos). Usuario desactivado → `403`.
+- La respuesta y `GET /auth/me` devuelven `usuario` con `rol` y `cliente_id` (este último solo para el rol cliente).
+- **Tokens:** el JWT lleva el claim `tv` (token_version). Cambiar la contraseña del usuario (o desactivarlo) invalida todas las sesiones anteriores → `401` en el próximo request.
+- `CLIENTE_PASSWORD_DNI=true` (solo demo): si el email corresponde a un `Cliente` sin cuenta y la contraseña es su DNI/CUIT, se crea la cuenta en el momento y entra como `rol: "cliente"`. Nunca en producción.
+
+### 7.3 Turnos cada 2 horas
+
+Los turnos solo se agendan en punto y en la grilla **08:00, 10:00, 12:00, 14:00, 16:00**:
+
+- `POST /turnos` y `PUT /turnos/{id}` con `fecha_hora` fuera de la grilla (otro horario, minutos o segundos ≠ 0) → `422` `"Los turnos se dan cada 2 horas. Horarios disponibles: 08:00, 10:00, 12:00, 14:00, 16:00."`
+- Un turno viejo cargado fuera de la grilla se puede seguir editando **mientras no se le cambie la hora**.
+- Horario ocupado (otro turno no cancelado en la misma `fecha_hora`) → `400` `"Ese horario ya está ocupado. Elegí otro."`
+- `mecanico_id` es opcional en crear/editar; si viene tiene que ser un usuario con rol mecánico activo (`400` si no).
+- Estados del turno: `pendiente`, `confirmado`, `en_taller`, `completado`, `cancelado`, `asistio` (`PUT /turnos/{id}/estado`).
+
+### 7.4 Emisión y aprobación de cobro
+
+Antes de que el cliente pueda pagar online, el taller tiene que **aprobar el cobro**, que es lo que fija `costo_final`. `OrdenResponse` suma estos campos:
+
+```json
+{
+  "costo_final": "112000.00",
+  "cobro_estado": "aprobado",
+  "monto_propuesto": "110000.00",
+  "cobro_propuesto_por_nombre": "Mecanico, Mario",
+  "cobro_aprobado_por_nombre": "Recepcion, Rosa",
+  "cobro_aprobado_en": "2026-11-10T15:30:00"
+}
+```
+
+Regla común (`_validar_cobrable`): la orden tiene que estar `listo` o `entregado` y **no** puede estar pagada (`pagada: true`). Si no: `400` `"El cobro se emite cuando la orden está lista o entregada"` o `409` `"La orden ya está pagada"`.
+
+**`POST /ordenes/{id}/cobro`** — body `{ "monto": 112000.00 }` (`monto` opcional en el schema pero la regla exige indicarlo: sin monto → `422` "Indicá el monto a cobrar"):
+
+| Quién llama | Efecto |
+|---|---|
+| Mecánico (solo su orden) | **Propone**: `cobro_estado: "pendiente"`, guarda `monto_propuesto` y `cobro_propuesto_por_id`. Si el cobro ya estaba aprobado → `409` |
+| Administrador o Recepción | **Aprueba directo**: `costo_final = monto`, `cobro_estado: "aprobado"`, `cobro_aprobado_por_id` y `cobro_aprobado_en` |
+
+**`POST /ordenes/{id}/cobro/aprobar`** — solo A+R. Aprueba la propuesta pendiente: usa `monto` del body o, si no viene, `monto_propuesto`. `400` si no hay propuesta que aprobar.
+
+Al aprobarse el cobro se dispara un email al cliente ("cobro") y queda comprobante en `notificaciones` (ver 7.5). Sin `costo_final` aprobado, `POST /pagos/ordenes/{id}` responde `400` y `puede_pagar` es `false`.
+
+### 7.5 Notificaciones por email y su registro
+
+Cada aviso que el backend intenta mandar al cliente queda registrado en la tabla `notificaciones` (ver `docs/DER.md` §3.14): `tipo` (`cambio_estado` o `cobro`), `estado_orden`, `destinatario`, `asunto`, `resultado` (`enviado` | `fallido` | `omitido`), `error` y `enviado_por_id`.
+
+- **Automáticos:** al cambiar el estado de la orden (con el comentario) y al aprobarse el cobro. Salen en segundo plano; si el cliente no tiene email o SMTP no está configurado, el resultado queda `omitido`/`fallido` y **no rompe** la operación.
+- **`GET /ordenes/{id}/notificaciones`** (personal; el mecánico solo en sus órdenes): historial de comprobantes.
+
+```json
+[
+  { "id": 4, "orden_id": 2, "tipo": "cambio_estado", "estado_orden": "listo", "destinatario": "juan@x.com", "asunto": "Tu orden OT-1002 está Listo", "resultado": "enviado", "error": null, "manual": false, "enviado_por_nombre": null, "creado_en": "2026-11-10T16:00:00" }
+]
+```
+
+- **`POST /ordenes/{id}/notificaciones`** (solo administrador): **reenvío manual** del último aviso de estado (si no hay historial usa "Aviso reenviado por el taller"). `201` con el nuevo comprobante (`manual: true`, `enviado_por_nombre` con el admin). `400` si el cliente no tiene email cargado.
+
+### 7.6 Pagos: confirmar y simular (completa 5.11)
+
+- **`POST /pagos/{pago_id}/confirmar`** `{ "payment_id": "1319283712" }` (A o C propio): al volver de Mercado Pago el frontend confirma el resultado. El backend consulta el pago a la API de MP y valida que `external_reference` sea este `pago_id` (`400` si no corresponde). Sin `MP_ACCESS_TOKEN` devuelve el estado actual sin consultar.
+- **`POST /pagos/{pago_id}/simular`** `{ "estado": "aprobado" | "rechazado" }`: solo existe con `DEBUG=true`; en producción responde `404` (no se anuncia). Queda limitado al administrador. Es el plan B para probar el flujo en local sin webhook.
+- **`POST /pagos/webhook`**: además de lo de 5.11, la Fase 1 le suma validación de la firma `x-signature` con `MP_WEBHOOK_SECRET`, filtro `payment_id` numérico y respuesta `200` aunque la consulta a MP falle (para que MP reintente de forma controlada).
+- `crear_pago` sin `MP_ACCESS_TOKEN`: en `DEBUG=true` genera `url_pago` interna para simular; en producción (`DEBUG=false`) responde `503` "Los pagos online no están configurados".
+- `pago.estado` admite además `reembolsado` (CHECK en base): `refunded`/`charged_back` de MP se mapean a `reembolsado`, para que la orden deje de figurar como pagada.
+
+### 7.7 Permisos finales por rol (Fase 1)
+
+| Recurso | A | R | M | C |
+|---|---|---|---|---|
+| Lectura interna (`PersonalUser`) | ✔ | ✔ | Solo lo vinculado a sus órdenes | ✘ |
+| Escritura de clientes/vehículos/turnos/repuestos | ✔ | ✔ | ✘ | ✘ |
+| Crear/eliminar órdenes | ✔ | ✔ | ✘ | ✘ |
+| Cambio de estado de orden y detalles/imágenes | ✔ | ✔ | Solo sus órdenes | ✘ |
+| Emitir cobro | Propone y aprueba | Propone y aprueba | Solo propone (sus órdenes) | ✘ |
+| Aprobar cobro | ✔ | ✔ | ✘ | ✘ |
+| Reenviar notificación de orden | ✔ | ✘ | ✘ | ✘ |
+| Métricas | ✔ | ✘ | ✘ | ✘ |
+| Horarios de mecánicos (escritura) | ✔ | ✘ | ✘ | ✘ |
+| Usuarios (CRUD) | ✔ | ✘ | ✘ | ✘ |
+| Portal (`/mis-*`) y pagos propios | ✘ | ✘ | ✘ | ✔ |
+| Simular pago | Solo `DEBUG=true` | ✘ | ✘ | ✘ |
+
+> El mecánico ve **solo** los clientes, vehículos, turnos y órdenes vinculados a sus trabajos (mismo filtro `filtro_mecanico` que órdenes/vehículos). El cliente del portal con `cliente_id` vacío es rechazado. Recursos ajenos → `404`.
+
+---
+
+## 8. Checklist del día 5 (integración)
 
 - [ ] `alembic upgrade head` crea todas las tablas nuevas: `marcas`, `modelos`, `imagenes_orden`, `pagos`, `horarios_mecanico`, y `usuarios.cliente_id` y `turnos.mecanico_id`.
 - [ ] `scripts/seed_demo.py` carga clientes con usuario, pagos, horarios, imágenes y órdenes repartidas en el trimestre.
