@@ -59,7 +59,7 @@ function montar(props) {
 }
 
 describe('TableroOrdenes', () => {
-  it('agrupa las órdenes por etapa en columnas con contador', () => {
+  it('agrupa las órdenes por etapa y despliega la activa con su contador', () => {
     montar({
       usuario: { id: 1, rol: 'recepcion' },
       ordenes: [
@@ -76,21 +76,26 @@ describe('TableroOrdenes', () => {
       ],
     })
 
+    // Arranca en la primera etapa con órdenes.
     const porIngresar = screen.getByRole('region', { name: 'Por ingresar' })
-    const ingresado = screen.getByRole('region', { name: 'Ingresado' })
-    const diagnostico = screen.getByRole('region', { name: 'En diagnóstico' })
-
     expect(within(porIngresar).getByText('AB123CD')).toBeInTheDocument()
     expect(within(porIngresar).getByText('Service')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver Ingresado' }))
+    const ingresado = screen.getByRole('region', { name: 'Ingresado' })
     expect(within(ingresado).getByText('CD456EF')).toBeInTheDocument()
     expect(within(ingresado).getByText('Revisión')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver En diagnóstico' }))
+    const diagnostico = screen.getByRole('region', { name: 'En diagnóstico' })
     expect(within(diagnostico).getByText('Frenos')).toBeInTheDocument()
     expect(within(diagnostico).getByText('Mario')).toBeInTheDocument()
-    // Cada columna muestra su contador.
-    expect(within(porIngresar).getByText('1')).toBeInTheDocument()
+
+    // La lista de etapas muestra el contador de cada una.
+    expect(screen.getByRole('button', { name: 'Ver Por ingresar' })).toHaveTextContent('1')
   })
 
-  it('cada columna es un box numerado del taller, sin cambiar su nombre accesible', () => {
+  it('cada etapa es un box numerado del taller, sin cambiar su nombre accesible', () => {
     montar({
       usuario: { id: 1, rol: 'recepcion' },
       ordenes: [orden({ id: 1, estado: 'Pendiente', vehiculo_id: 1 })],
@@ -98,6 +103,7 @@ describe('TableroOrdenes', () => {
 
     const etapas = ['Por ingresar', 'Ingresado', 'En diagnóstico', 'Esperando repuestos', 'Listo']
     etapas.forEach((nombre, indice) => {
+      fireEvent.click(screen.getByRole('button', { name: `Ver ${nombre}` }))
       const box = within(screen.getByRole('region', { name: nombre })).getByText(`BOX ${indice + 1}`)
       // El número de box es decorativo: lo que se anuncia es el nombre de la etapa.
       expect(box.closest('[aria-hidden="true"]')).not.toBeNull()
@@ -130,12 +136,14 @@ describe('TableroOrdenes', () => {
       ],
     })
 
+    fireEvent.click(screen.getByRole('button', { name: 'Ver En diagnóstico' }))
     const diagnostico = screen.getByRole('region', { name: 'En diagnóstico' })
     expect(within(diagnostico).getByText('Frenos')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Sin asignar' }))
 
     expect(within(diagnostico).queryByText('Frenos')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ver Por ingresar' }))
     expect(
       within(screen.getByRole('region', { name: 'Por ingresar' })).getByText('Service'),
     ).toBeInTheDocument()

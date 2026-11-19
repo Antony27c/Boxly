@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ColumnaEtapa, { IconoInfo } from '@/components/ordenes/ColumnaEtapa'
 import TarjetaOrden from '@/components/ordenes/TarjetaOrden'
+import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
+import Icono from '@/components/ui/Icono'
 import Field from '@/components/ui/Field'
 import Vacio from '@/components/ui/Vacio'
 import { ROLES_MECANICO } from '@/routes/navegacion'
@@ -99,10 +101,11 @@ function Deslizable({ className = '', contenedorClassName = '', children, ...pro
   )
 }
 
-// Tablero de órdenes por etapas. En escritorio muestra las columnas lado a
-// lado (con scroll horizontal propio si no entran); en celular, pestañas por
-// etapa y se ve una columna a la vez. ?estado= de la URL preselecciona la
-// pestaña en celular y filtra a una sola columna en escritorio.
+// Tablero de órdenes por etapas. En escritorio muestra la lista de etapas a
+// la izquierda: al posar el mouse sobre una etapa, el panel de la derecha se
+// despliega con sus órdenes ocupando el resto de la pantalla. En celular hay
+// pestañas por etapa y se ve un panel a la vez. ?estado= de la URL
+// preselecciona la etapa activa en ambos.
 export default function TableroOrdenes({
   ordenes = [],
   vehiculosPorId,
@@ -120,6 +123,9 @@ export default function TableroOrdenes({
 }) {
   const [busqueda, setBusqueda] = useState(busquedaInicial)
   const [pestanaLocal, setPestanaLocal] = useState(null)
+  const temporizadorHover = useRef(null)
+
+  useEffect(() => () => clearTimeout(temporizadorHover.current), [])
 
   const esMecanico = ROLES_MECANICO.includes(usuario?.rol)
   // "Mías" solo existe para el mecánico; si llega por URL a otro rol se ignora.
@@ -185,9 +191,17 @@ export default function TableroOrdenes({
     : cerradas
 
   function elegirPestana(estado) {
+    clearTimeout(temporizadorHover.current)
     setPestanaLocal(estado)
     // Si la URL traía una etapa, se limpia para que la pestaña elegida mande.
     if (etapaUrl) onEstadoUrl?.('')
+  }
+
+  // Pequeña espera al posar el mouse para que no cambie de etapa si el
+  // puntero cruza la lista camino al panel desplegado.
+  function elegirPestanaAlPosar(estado) {
+    clearTimeout(temporizadorHover.current)
+    temporizadorHover.current = setTimeout(() => elegirPestana(estado), 120)
   }
 
   function alternarCerradas() {
@@ -196,16 +210,6 @@ export default function TableroOrdenes({
 
   function cambiarChip(valor) {
     onFiltroUrl?.(filtro === valor ? '' : valor)
-  }
-
-  const columnas = etapaUrl
-    ? COLUMNAS_TABLERO.filter((columna) => columna.estado === etapaUrl)
-    : COLUMNAS_TABLERO
-
-  function clasesColumna(estado) {
-    if (etapaUrl) return estado === etapaUrl ? '' : 'hidden'
-    // Sin filtro de etapa: en celular solo se ve la pestaña activa.
-    return estado === etapaActiva ? '' : 'max-md:hidden'
   }
 
   const propsTarjeta = { vehiculosPorId, clientesPorId, usuario, onAccion, onEditar, onEliminar }
@@ -346,20 +350,56 @@ export default function TableroOrdenes({
             )}
           </div>
 
-          <div className="mt-4 flex gap-4 overflow-x-auto sin-barra pb-2 md:mt-5">
-            {columnas.map((columna) => (
+          <div className="mt-4 flex gap-4 md:mt-5">
+            {/* Lista de etapas (escritorio): al posar el mouse sobre una, el
+                panel de la derecha despliega las órdenes de esa etapa. */}
+            <div
+              role="group"
+              aria-label="Elegir etapa"
+              className="hidden w-60 shrink-0 flex-col gap-2 self-start md:flex"
+            >
+              {COLUMNAS_TABLERO.map((columna) => {
+                const activa = columna.estado === etapaActiva
+                const cantidad = porEtapa.get(columna.estado).length
+                return (
+                  <button
+                    key={columna.estado}
+                    type="button"
+                    aria-label={`Ver ${columna.titulo}`}
+                    aria-pressed={activa}
+                    onMouseEnter={() => elegirPestanaAlPosar(columna.estado)}
+                    onFocus={() => elegirPestana(columna.estado)}
+                    onClick={() => elegirPestana(columna.estado)}
+                    className={`flex items-center gap-3 rounded-box border px-3 py-3 text-left transition-colors duration-300 ${
+                      activa
+                        ? 'border-amber bg-amber/10 text-ink'
+                        : 'border-graphite-600 text-muted hover:border-graphite-500 hover:text-ink'
+                    }`}
+                  >
+                    <Icono nombre={columna.icono} className="h-5 w-5 shrink-0 text-amber-texto" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                      {columna.titulo}
+                    </span>
+                    <Badge tono="neutro">{cantidad}</Badge>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Panel desplegado: key={etapaActiva} lo remonta en cada cambio
+                y la animación de entrada del box se repite. */}
+            {etapaActivaInfo && (
               <ColumnaEtapa
-                key={columna.estado}
-                estado={columna.estado}
-                titulo={columna.titulo}
-                icono={columna.icono}
-                numero={COLUMNAS_TABLERO.indexOf(columna) + 1}
-                textoVacio={columna.textoVacio}
-                ordenes={porEtapa.get(columna.estado)}
-                className={clasesColumna(columna.estado)}
+                key={etapaActiva}
+                estado={etapaActivaInfo.estado}
+                titulo={etapaActivaInfo.titulo}
+                icono={etapaActivaInfo.icono}
+                numero={COLUMNAS_TABLERO.indexOf(etapaActivaInfo) + 1}
+                textoVacio={etapaActivaInfo.textoVacio}
+                ordenes={porEtapa.get(etapaActiva) ?? []}
                 {...propsTarjeta}
               />
-            ))}
+            )}
           </div>
         </>
       )}
