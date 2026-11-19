@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -70,10 +70,14 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
   )
 }
 
-function TarjetaVehiculo({ vehiculo }) {
+function TarjetaVehiculo({ vehiculo, seleccionado, onAlternar, ordenPagable, pagando, onPagar }) {
   const activa = vehiculo.orden_activa
+  const lista = activa?.estado === 'listo'
   return (
-    <Ficha acento={activa ? 'amber' : 'ok'}>
+    <Ficha
+      acento={lista ? 'ok' : activa ? 'amber' : 'ok'}
+      className={seleccionado ? '!border-amber/60 ring-1 ring-amber/60' : ''}
+    >
       <FichaCabecera
         antetitulo={vehiculo.marca}
         titulo={vehiculo.modelo}
@@ -83,6 +87,7 @@ function TarjetaVehiculo({ vehiculo }) {
         <Chips>
           {vehiculo.anio && <Chip mono>{vehiculo.anio}</Chip>}
           {vehiculo.color && <Chip color={vehiculo.color}>{vehiculo.color}</Chip>}
+          {lista && <Chip tono="ok">Lista para retirar</Chip>}
           {vehiculo.ordenes_total > 0 && (
             <Chip>
               {vehiculo.ordenes_total} {vehiculo.ordenes_total === 1 ? 'orden' : 'órdenes'} en el taller
@@ -104,14 +109,47 @@ function TarjetaVehiculo({ vehiculo }) {
       ) : (
         <FichaSeccion className="text-sm text-muted">Sin trabajos en curso</FichaSeccion>
       )}
+
+      <FichaPie>
+        <Button
+          variante="secundario"
+          className="!py-2"
+          aria-pressed={seleccionado}
+          onClick={() => onAlternar(vehiculo.id)}
+        >
+          {seleccionado ? 'Ocultar órdenes' : 'Ver órdenes'}
+        </Button>
+        {ordenPagable && (
+          <Button
+            cargando={pagando}
+            className="ml-auto !py-2"
+            onClick={() => onPagar(ordenPagable)}
+          >
+            Pagar {pesos(ordenPagable.costo_final)}
+          </Button>
+        )}
+      </FichaPie>
     </Ficha>
   )
 }
+
+// Las etapas del taller en orden de trabajo: las órdenes del vehículo
+// elegido se agrupan bajo estos encabezados.
+const ORDEN_ETAPAS = [
+  'pendiente',
+  'ingresado',
+  'en_diagnostico',
+  'esperando_repuestos',
+  'listo',
+  'entregado',
+  'cancelado',
+]
 
 export default function Portal() {
   const { token, usuario } = useAuth()
   const [pagandoId, setPagandoId] = useState(null)
   const [errorPago, setErrorPago] = useState('')
+  const [vehiculoSelId, setVehiculoSelId] = useState(null)
 
   const cargar = useCallback((t) => portalService.misOrdenes(t), [])
   const cargarVehiculos = useCallback((t) => portalService.misVehiculos(t), [])
@@ -130,8 +168,50 @@ export default function Portal() {
     }
   }
 
-  const paraPagar = (ordenes ?? []).filter(puedePagar)
-  const resto = (ordenes ?? []).filter((orden) => !puedePagar(orden))
+  function alternarVehiculo(id) {
+    setVehiculoSelId((actual) => (actual === id ? null : id))
+  }
+
+  // Primero los vehículos listos para retirar; después el resto del titular.
+  const listos = (vehiculos ?? []).filter((v) => v.orden_activa?.estado === 'listo')
+  const vehiculoSel = (vehiculos ?? []).find((v) => v.id === vehiculoSelId) ?? null
+
+  // Órdenes pagables por vehículo: la tarjeta ofrece el pago directo.
+  const pagablesPorVehiculo = useMemo(() => {
+    const mapa = new Map()
+    for (const orden of ordenes ?? []) {
+      if (puedePagar(orden)) mapa.set(orden.vehiculo_id, orden)
+    }
+    return mapa
+  }, [ordenes])
+
+  // Órdenes del vehículo elegido, agrupadas por etapa del taller.
+  const gruposPorEtapa = useMemo(() => {
+    if (!vehiculoSelId) return []
+    const propias = (ordenes ?? []).filter((o) => o.vehiculo_id === vehiculoSelId)
+    return ORDEN_ETAPAS.map((estado) => ({
+      estado,
+      titulo: nombreEstado(estado),
+      ordenes: propias
+        .filter((o) => o.estado === estado)
+        .sort((a, b) => (b.fecha_ingreso ?? '').localeCompare(a.fecha_ingreso ?? '')),
+    })).filter((grupo) => grupo.ordenes.length > 0)
+  }, [ordenes, vehiculoSelId])
+
+  const tarjetaVehiculo = (vehiculo) => {
+    const ordenPagable = pagablesPorVehiculo.get(vehiculo.id) ?? null
+    return (
+      <TarjetaVehiculo
+        key={vehiculo.id}
+        vehiculo={vehiculo}
+        seleccionado={vehiculo.id === vehiculoSelId}
+        onAlternar={alternarVehiculo}
+        ordenPagable={ordenPagable}
+        pagando={ordenPagable ? pagandoId === ordenPagable.id : false}
+        onPagar={pagar}
+      />
+    )
+  }
 
   return (
     <div className="animate-bay-in">
@@ -151,16 +231,31 @@ export default function Portal() {
           <Alert>{errorVehiculos}</Alert>
         </div>
       ) : (
-        vehiculos?.length > 0 && (
-          <section className="mt-6">
-            <h2 className="font-semibold">Mis vehículos</h2>
-            <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {vehiculos.map((vehiculo) => (
-                <TarjetaVehiculo key={vehiculo.id} vehiculo={vehiculo} />
-              ))}
-            </ul>
-          </section>
-        )
+        <>
+          {listos.length > 0 && (
+            <section className="mt-6">
+              <h2 className="font-semibold">Listos para retirar</h2>
+              <p className="text-sm text-muted">
+                Ya podés pasar a buscarlos — o pagar online desde sus órdenes.
+              </p>
+              <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {listos.map(tarjetaVehiculo)}
+              </ul>
+            </section>
+          )}
+
+          {vehiculos?.length > 0 && (
+            <section className="mt-6">
+              <h2 className="flex items-center gap-2 font-semibold">
+                Mis vehículos
+                <Badge tono="neutro">{vehiculos.length}</Badge>
+              </h2>
+              <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {vehiculos.map(tarjetaVehiculo)}
+              </ul>
+            </section>
+          )}
+        </>
       )}
 
       {cargando && !ordenes ? (
@@ -176,36 +271,42 @@ export default function Portal() {
         <div className="mt-6">
           <Vacio titulo="Sin órdenes" mensaje="Todavía no tenés órdenes de trabajo en el taller." />
         </div>
+      ) : vehiculoSel ? (
+        <section
+          className={`mt-8 ${cargando ? 'transition-opacity opacity-60' : 'transition-opacity'}`}
+        >
+          <h2 className="font-semibold">Órdenes de {vehiculoSel.patente}</h2>
+          {gruposPorEtapa.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">
+              Este vehículo no tiene órdenes de trabajo.
+            </p>
+          ) : (
+            gruposPorEtapa.map((grupo) => (
+              <div key={grupo.estado} className="mt-5">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-muted">
+                  {grupo.titulo}
+                  <Badge tono="neutro">{grupo.ordenes.length}</Badge>
+                </h3>
+                <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {grupo.ordenes.map((orden) => (
+                    <TarjetaOrden
+                      key={orden.id}
+                      orden={orden}
+                      pagando={pagandoId === orden.id}
+                      onPagar={pagar}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+        </section>
       ) : (
-        <div className={cargando ? 'transition-opacity opacity-60' : 'transition-opacity'}>
-          {paraPagar.length > 0 && (
-            <section className="mt-6">
-              <h2 className="font-semibold">Listas para pagar</h2>
-              <p className="text-sm text-muted">El pago se hace de forma segura con Mercado Pago.</p>
-              <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-                {paraPagar.map((orden) => (
-                  <TarjetaOrden
-                    key={orden.id}
-                    orden={orden}
-                    pagando={pagandoId === orden.id}
-                    onPagar={pagar}
-                  />
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {resto.length > 0 && (
-            <section className="mt-8">
-              <h2 className="font-semibold">Mis órdenes</h2>
-              <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-                {resto.map((orden) => (
-                  <TarjetaOrden key={orden.id} orden={orden} />
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
+        vehiculos?.length > 0 && (
+          <p className="mt-8 text-sm text-muted">
+            Tocá «Ver órdenes» en un vehículo para ver sus trabajos por etapa.
+          </p>
+        )
       )}
     </div>
   )
