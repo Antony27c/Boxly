@@ -65,10 +65,10 @@ export function IconoInfo({ estado, titulo, tooltipAlaDerecha = false }) {
   )
 }
 
-// Una columna del tablero: encabezado con contador y ayuda de la etapa,
-// y las tarjetas de esa etapa (o un texto corto si está vacía). En escritorio
-// se dibuja como un box del taller: líneas amarillas del piso a los costados
-// y el número de box pintado en el encabezado (decorativo).
+// Panel de la etapa activa: en escritorio ocupa el espacio libre a la
+// derecha de la lista de etapas y muestra las tarjetas en grilla; en celular
+// ocupa todo el ancho bajo las pestañas. El tablero lo remonta al cambiar de
+// etapa (key={etapa}), así la animación de entrada se repite en cada cambio.
 export default function ColumnaEtapa({
   estado,
   titulo,
@@ -87,8 +87,7 @@ export default function ColumnaEtapa({
   return (
     <section
       aria-label={titulo}
-      style={numero ? { '--retraso-box': `${(numero - 1) * 50}ms` } : undefined}
-      className={`box-taller flex w-full shrink-0 flex-col md:w-80 md:rounded-box md:border-x-2 md:border-dashed md:border-amber/30 md:px-2 md:pb-2 ${className}`}
+      className={`box-taller min-w-0 flex-1 md:rounded-box md:border-2 md:border-dashed md:border-amber/30 md:p-4 ${className}`}
     >
       {numero && (
         <div aria-hidden="true" className="mb-1.5 flex items-center gap-2 px-1 max-md:hidden">
@@ -110,7 +109,7 @@ export default function ColumnaEtapa({
       {ordenes.length === 0 ? (
         <p className="px-1 text-sm text-muted">{textoVacio}</p>
       ) : (
-        <ul className="space-y-4">
+        <ul className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 2xl:grid-cols-3">
           {ordenes.map((orden) => {
             const vehiculo = vehiculosPorId?.get(orden.vehiculo_id)
             const cliente = vehiculo ? clientesPorId?.get(vehiculo.cliente_id) : null
