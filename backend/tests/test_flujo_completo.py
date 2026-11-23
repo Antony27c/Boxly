@@ -1,7 +1,8 @@
 """Flujo end-to-end del taller por la API (TestClient).
 
-Recepción agenda y abre la orden, el mecánico la repara y la deja lista,
-recepción emite el cobro y administración lo aprueba, el cliente paga desde
+Recepción agenda y abre la orden, el mecánico la repara y la deja lista
+(cargando la mano de obra sin precio, a cotizar), recepción cotiza esa
+línea, emite el cobro y administración lo aprueba, el cliente paga desde
 el portal (simulado en dev) y recepción entrega. Incluye la devolución de
 stock al cancelar una orden con repuestos.
 """
@@ -140,11 +141,16 @@ def test_flujo_completo_del_taller(api, datos, monkeypatch):
     r = api.get(f"/api/v1/repuestos/{repuesto_id}", headers=h_recep)
     assert r.json()["stock"] == 8  # 10 - 2
 
+    # El mecánico no carga precios (S3): el repuesto toma el del inventario
+    # y la mano de obra queda "a cotizar" para que recepción la cotice.
     r = api.post(f"/api/v1/ordenes/{orden_id}/detalles", headers=h_mec, json={
         "descripcion": "Mano de obra diagnosis", "cantidad": 1,
-        "precio_unitario": "8000.00",
     })
     assert r.status_code == 201, r.text
+    detalle_mo = r.json()
+    assert detalle_mo["precio_unitario"] is None
+    assert detalle_mo["a_cotizar"] is True
+    detalle_mo_id = detalle_mo["id"]
 
     for estado, comentario in [
         ("ingresado", "Vehículo recibido en el taller"),
@@ -160,7 +166,36 @@ def test_flujo_completo_del_taller(api, datos, monkeypatch):
     estados_historial = {h["estado_nuevo"] for h in r.json()}
     assert {"ingresado", "en_diagnostico", "listo"} <= estados_historial
 
-    # 4) Recepción emite el cobro y administración lo aprueba.
+    # 4) Con la mano de obra a cotizar no se puede emitir el cobro (409) y
+    #    el portal marca el total como parcial. Recepción cotiza la línea.
+    r = api.post(f"/api/v1/ordenes/{orden_id}/cobro", headers=h_recep,
+                 json={"monto": "11000.00"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "Hay trabajos sin cotizar"
+
+    r = api.get(f"/api/v1/mis-ordenes/{orden_id}", headers=h_cliente)
+    assert r.status_code == 200
+    portal_orden = r.json()
+    assert portal_orden["lineas_a_cotizar"] == 1
+    assert portal_orden["total_parcial"] is True
+    assert portal_orden["total"] == "3000.00"  # solo el repuesto cotizado
+
+    r = api.patch(
+        f"/api/v1/ordenes/{orden_id}/detalles/{detalle_mo_id}",
+        headers=h_recep, json={"precio_unitario": "8000.00"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["a_cotizar"] is False
+    assert r.json()["subtotal"] == "8000.00"
+
+    r = api.get(f"/api/v1/mis-ordenes/{orden_id}", headers=h_cliente)
+    assert r.status_code == 200
+    portal_orden = r.json()
+    assert portal_orden["lineas_a_cotizar"] == 0
+    assert portal_orden["total_parcial"] is False
+    assert portal_orden["total"] == "11000.00"
+
+    # 5) Recepción emite el cobro y administración lo aprueba.
     r = api.post(f"/api/v1/ordenes/{orden_id}/cobro", headers=h_recep,
                  json={"monto": "11000.00"})
     assert r.status_code == 200, r.text
@@ -171,7 +206,7 @@ def test_flujo_completo_del_taller(api, datos, monkeypatch):
                  json={"monto": "11000.00"})
     assert r.status_code == 200, r.text
 
-    # 5) El cliente ve la orden en el portal, crea el pago y el admin lo
+    # 6) El cliente ve la orden en el portal, crea el pago y el admin lo
     #    simula aprobado (solo en dev+debug): la orden queda pagada.
     r = api.get("/api/v1/mis-ordenes", headers=h_cliente)
     assert r.status_code == 200
@@ -198,7 +233,7 @@ def test_flujo_completo_del_taller(api, datos, monkeypatch):
     r = api.get(f"/api/v1/ordenes/{orden_id}", headers=h_recep)
     assert r.json()["pagada"] is True
 
-    # 6) Recepción la pasa a entregado (fecha_entrega se setea sola) y la
+    # 7) Recepción la pasa a entregado (fecha_entrega se setea sola) y la
     #    orden queda cerrada: ya no admite otro cambio de estado.
     r = _cambiar_estado(api, h_recep, orden_id, "entregado",
                         "Cliente retira el vehículo")

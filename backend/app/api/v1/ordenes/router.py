@@ -7,7 +7,7 @@ from app.models.usuario import RolUsuario, Usuario
 from app.schemas.orden import CobroRequest, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate, OrdenResponse
 from .service import orden_service
 from app.schemas.usuario import MessageResponse
-from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse
+from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse,DetallePrecioUpdate
 from app.schemas.imagen_orden import ImagenOrdenResponse
 
 
@@ -82,7 +82,15 @@ def listar_detalles(orden_id: int, db: DbSession,usuario:PersonalUser):
 @router.post("/{orden_id}/detalles", response_model=DetalleOrdenResponse, status_code=status.HTTP_201_CREATED)
 def agregar_detalle(orden_id:int, datos:DetalleOrdenCreate, db:DbSession, usuario:PersonalUser):
     orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
-    return orden_service.agregar_detalle(db, orden_id, datos, usuario_id=usuario.id)
+    return orden_service.agregar_detalle(db, orden_id, datos, usuario=usuario)
+
+@router.patch("/{orden_id}/detalles/{detalle_id}", response_model=DetalleOrdenResponse)
+def cotizar_detalle(
+    orden_id: int, detalle_id: int, datos: DetallePrecioUpdate,
+    db: DbSession, usuario: RecepcionUser,
+):
+    orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
+    return orden_service.cotizar_detalle(db, orden_id, detalle_id, datos, usuario_id=usuario.id)
 
 @router.delete("/{orden_id}/detalles/{detalle_id}", response_model=MessageResponse)
 def quitar_detalle(orden_id: int, detalle_id:int, db:DbSession, usuario: PersonalUser):

@@ -15,6 +15,7 @@ from app.models.horario_mecanico import HorarioMecanico
 from app.models.notificacion import Notificacion
 from app.models.auditoria import Auditoria
 from app.models.configuracion_taller import ConfiguracionTaller
+from app.models.solicitud_contacto import SolicitudContacto
 __all__ = [
     "Plan",
     "PagoSuscripcion",
@@ -38,4 +39,5 @@ __all__ = [
     "Notificacion",
     "Auditoria",
     "ConfiguracionTaller",
+    "SolicitudContacto",
 ]

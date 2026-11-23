@@ -17,7 +17,7 @@ from app.models.usuario import RolUsuario, Usuario, es_admin
 from app.models.vehiculo import Vehiculo
 from app.models.detalle_orden import DetalleOrden
 from app.models.repuesto import Repuesto
-from app.schemas.detalle_orden import DetalleOrdenCreate, DetalleOrdenResponse
+from app.schemas.detalle_orden import DetalleOrdenCreate, DetalleOrdenResponse, DetallePrecioUpdate
 from .repository import orden_repository 
 from app.models.imagen_orden import ImagenOrden
 from app.schemas.imagen_orden import ImagenOrdenResponse
@@ -77,25 +77,17 @@ class OrdenService:
         self, db: Session, orden_id: int, monto, usuario: Usuario,
         background_tasks: BackgroundTasks | None = None,
     ) -> Orden:
-        es_mecanico = usuario.rol == RolUsuario.mecanico
-        orden = self.obtener_detalle_orden(db, orden_id, usuario.id if es_mecanico else None)
+        if usuario.rol == RolUsuario.mecanico:
+            raise HTTPException(status_code=403, detail="El mecánico no emite cobros")
+        orden = self.obtener_detalle_orden(db, orden_id)
         self._validar_cobrable(orden)
+        if any(d.precio_unitario is None for d in orden.detalles):
+            raise HTTPException(status_code=409, detail="Hay trabajos sin cotizar")
         if monto is None:
             raise HTTPException(status_code=422, detail="Indicá el monto a cobrar")
-        if es_mecanico:
-            if orden.cobro_estado == "aprobado":
-                raise HTTPException(
-                    status_code=409,
-                    detail="El cobro ya fue aprobado. Si hay que cambiar el monto, pedíselo a recepción",
-                )
-            orden.monto_propuesto = monto
-            orden.cobro_estado = "pendiente"
-            orden.cobro_propuesto_por_id = usuario.id
-        else:
-            self._aprobar_cobro(orden, monto, usuario.id)
+        self._aprobar_cobro(orden, monto, usuario.id)
         orden = orden_repository.guardar_cambios(db, orden)
-        if orden.cobro_estado == "aprobado":
-            self._avisar_cobro(orden, background_tasks)
+        self._avisar_cobro(orden, background_tasks)
         return orden
 
     def aprobar_cobro(
@@ -407,7 +399,12 @@ class OrdenService:
 
     def _a_response_detalle(self, detalle:DetalleOrden) -> DetalleOrdenResponse:
         item= DetalleOrdenResponse.model_validate(detalle)
-        item.subtotal=detalle.cantidad * detalle.precio_unitario
+        item.a_cotizar = detalle.precio_unitario is None
+        item.subtotal = (
+            detalle.cantidad * detalle.precio_unitario
+            if detalle.precio_unitario is not None
+            else None
+        )
         if detalle.repuesto:
             item.repuesto_nombre = detalle.repuesto.nombre
         return item
@@ -417,9 +414,15 @@ class OrdenService:
             self._a_response_detalle(d)
             for d in orden_repository.listar_detalles(db, orden_id)
         ]
-    def agregar_detalle(self, db:Session, orden_id:int, datos: DetalleOrdenCreate, usuario_id:int) -> DetalleOrdenResponse:
+    def agregar_detalle(
+        self, db: Session, orden_id: int, datos: DetalleOrdenCreate,
+        usuario: Usuario,
+    ) -> DetalleOrdenResponse:
         orden= self.obtener_detalle_orden(db, orden_id)
         self._validar_orden_editable(orden)
+        es_mecanico = usuario.rol == RolUsuario.mecanico
+        if es_mecanico and datos.precio_unitario is not None:
+            raise HTTPException(status_code=403, detail="El mecánico no carga precios")
 
         repuesto= None
         if datos.repuesto_id is not None:
@@ -430,7 +433,9 @@ class OrdenService:
         if not descripcion:
             raise HTTPException(status_code=422, detail="Las lineas de mano de obra necesitan descripcion",)
         precio = datos.precio_unitario if datos.precio_unitario is not None else (repuesto.precio if repuesto else None)
-        if precio is None:
+        # La mano de obra del mecánico queda sin precio ("a cotizar"); recepción
+        # y administración la siguen cargando con precio obligatorio.
+        if precio is None and not (es_mecanico and repuesto is None):
             raise HTTPException(status_code=422, detail="las lineas de mano de obra necesitan precio unitario",)
         if repuesto is not None:
             descuento = db.execute(
@@ -454,12 +459,37 @@ class OrdenService:
         orden_repository.guardar_historial(
             db,
             orden_id=orden.id,
-            usuario_id= usuario_id,
+            usuario_id= usuario.id,
             estado_anterior=orden.estado,
             estado_nuevo=orden.estado,
             comentario=f"Linea agregada:{datos.cantidad} x {descripcion}",
-        )   
+        )
         return self._a_response_detalle(orden_repository.guardar_detalle(db,detalle))
+
+    def cotizar_detalle(
+        self, db: Session, orden_id: int, detalle_id: int,
+        datos: DetallePrecioUpdate, usuario_id: int,
+    ) -> DetalleOrdenResponse:
+        """Cotiza o corrige el precio de una línea (administración y recepción)."""
+        orden = self.obtener_detalle_orden(db, orden_id)
+        self._validar_orden_editable(orden)
+        detalle = orden_repository.obtener_detalle(db, orden_id, detalle_id)
+        if detalle is None:
+            raise HTTPException(status_code=404, detail="Linea no encontrada en esta Orden")
+        detalle.precio_unitario = datos.precio_unitario
+        orden_repository.guardar_historial(
+            db,
+            orden_id=orden.id,
+            usuario_id=usuario_id,
+            estado_anterior=orden.estado,
+            estado_nuevo=orden.estado,
+            comentario=(
+                f"Linea cotizada: {detalle.cantidad} x {detalle.descripcion} "
+                f"a ${datos.precio_unitario}"
+            ),
+        )
+        return self._a_response_detalle(orden_repository.guardar_detalle(db, detalle))
+
     def quitar_detalle( self, db:Session, orden_id: int, detalle_id:int, usuario_id:int) -> None:
         orden= self.obtener_detalle_orden(db, orden_id)
         self._validar_orden_editable(orden)

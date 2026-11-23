@@ -16,6 +16,7 @@ _LOADERS_ORDEN = (
     joinedload(Orden.cobro_propuesto_por),
     joinedload(Orden.cobro_aprobado_por),
     selectinload(Orden.pagos),
+    selectinload(Orden.detalles),
 )
 
 class OrdenRepository:

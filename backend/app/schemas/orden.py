@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from typing import Optional
 from datetime import datetime
@@ -73,6 +73,18 @@ class OrdenResponse(OrdenBase):
     fecha_ingreso: datetime
     fecha_estimada_entrega: Optional[datetime]= None
     fecha_entrega: Optional[datetime]= None
+    lineas_a_cotizar: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _contar_a_cotizar(cls, data):
+        """Cuenta las líneas sin precio; `detalles` viene eager-loaded."""
+        detalles = getattr(data, "detalles", None)
+        if detalles is not None:
+            data.lineas_a_cotizar = sum(
+                1 for d in detalles if getattr(d, "precio_unitario", 0) is None
+            )
+        return data
 
 class HistorialResponse(BaseModel):
     model_config= ConfigDict(from_attributes=True)

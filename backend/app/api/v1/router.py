@@ -22,6 +22,7 @@ from app.api.v1.publico.router import router as publico_router
 from app.api.v1.suscripcion.router import router as suscripcion_router
 from app.api.v1.suscripcion_mp.router import router as suscripcion_mp_router
 from app.api.v1.plataforma_suscripciones.router import router as plataforma_suscripciones_router
+from app.api.v1.plataforma_solicitudes.router import router as plataforma_solicitudes_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/api/v1")
@@ -46,3 +47,4 @@ api_router.include_router(suscripcion_router, prefix="/api/v1")
 api_router.include_router(suscripcion_mp_router, prefix="/api/v1")
 api_router.include_router(plataforma_suscripciones_router, prefix="/api/v1")
 api_router.include_router(publico_router, prefix="/api/v1")
+api_router.include_router(plataforma_solicitudes_router, prefix="/api/v1")
