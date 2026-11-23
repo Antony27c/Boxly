@@ -12,7 +12,7 @@ import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { ROLES_ADMIN, ROLES_MECANICO, tieneAcceso } from '@/routes/navegacion'
-import { accionPrincipal, estadoCobro, ordenesService } from '@/services/ordenes'
+import { accionEjecutable, estadoCobro, ordenesService } from '@/services/ordenes'
 import { repuestosService } from '@/services/repuestos'
 import { turnosService } from '@/services/turnos'
 import { clientesService } from '@/services/clientes'
@@ -150,7 +150,7 @@ function Bloque({ titulo, icono, destino, cantidad, vacio, delay, children }) {
 
 function FilaOrden({ orden, rol, detalle = '' }) {
   const navigate = useNavigate()
-  const accion = accionPrincipal(orden, rol)
+  const accion = accionEjecutable(orden, rol)
   return (
     <Ficha acento={acentoOrden(orden)} className={FILA}>
       <Link to={`/ordenes/${orden.id}`} className="min-w-0 flex-1 py-2.5 pl-4 pr-1">
@@ -427,7 +427,7 @@ function prioridadMiTrabajo(orden) {
 
 function FilaTrabajo({ orden, rol }) {
   const navigate = useNavigate()
-  const accion = accionPrincipal(orden, rol)
+  const accion = accionEjecutable(orden, rol)
   return (
     <Ficha acento={acentoOrden(orden)} className={FILA}>
       <button

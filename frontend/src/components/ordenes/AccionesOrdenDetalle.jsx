@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useId, useState } from 'react'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Loader from '@/components/ui/Loader'
@@ -15,15 +15,30 @@ import { ordenesService } from '@/services/ordenes'
  * una fila: es la barra fija de celular.
  */
 export function BotonesAccion({ accion, onElegir, apilado = false, className = '' }) {
+  const idMotivo = useId()
   if (!accion) return null
   const extras = [accion.secundaria, accion.trabajo].filter(Boolean)
+  // Acción que todavía no se puede hacer (ej.: cobrar con líneas a cotizar):
+  // botón deshabilitado y el motivo a la vista, asociado al botón.
+  const deshabilitada = Boolean(accion.deshabilitada)
+  const motivo = deshabilitada && accion.motivo && (
+    <p id={idMotivo} className="w-full text-sm text-muted">
+      {accion.motivo}
+    </p>
+  )
+  const propsPrincipal = {
+    onClick: () => onElegir(accion),
+    disabled: deshabilitada,
+    'aria-describedby': motivo ? idMotivo : undefined,
+  }
 
   if (apilado) {
     return (
       <div className={`flex flex-col gap-2 ${className}`}>
-        <Button className="min-h-12 w-full" onClick={() => onElegir(accion)}>
+        <Button className="min-h-12 w-full" {...propsPrincipal}>
           {accion.texto}
         </Button>
+        {motivo}
         {extras.length > 0 && (
           <div className="flex gap-2">
             {extras.map((extra) => (
@@ -44,12 +59,13 @@ export function BotonesAccion({ accion, onElegir, apilado = false, className = '
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      <Button onClick={() => onElegir(accion)}>{accion.texto}</Button>
+      <Button {...propsPrincipal}>{accion.texto}</Button>
       {extras.map((extra) => (
         <Button key={extra.texto} variante="secundario" onClick={() => onElegir(extra)}>
           {extra.texto}
         </Button>
       ))}
+      {motivo}
     </div>
   )
 }

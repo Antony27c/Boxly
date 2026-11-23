@@ -29,6 +29,9 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
   const [guardando, setGuardando] = useState(false)
 
   const soloLectura = situacion === 'pagada' || (!esMostrador && situacion === 'aprobado')
+  // Con líneas a cotizar el backend rechaza el cobro (409, S3): se avisa
+  // antes en vez de dejar que el intento falle.
+  const hayACotizar = Number(orden.lineas_a_cotizar ?? 0) > 0
 
   // Línea del total del ticket según en qué quedó el cobro (sin cobro no hay total).
   const total =
@@ -132,7 +135,16 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
 
       {error && <Alert>{error}</Alert>}
 
-      {soloLectura ? (
+      {hayACotizar ? (
+        <div className="space-y-4">
+          <Alert tipo="info">Cotizá los trabajos pendientes antes de cobrar.</Alert>
+          <div className="flex justify-end">
+            <Button type="button" variante="secundario" onClick={onCancelar}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      ) : soloLectura ? (
         <>
           {situacion === 'aprobado' && (
             <Alert tipo="info">Si hay que cambiar el monto, pedíselo a recepción.</Alert>

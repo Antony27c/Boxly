@@ -140,4 +140,13 @@ describe('OrdenDetalle', () => {
     )
     expect(await screen.findByText(/no hay fotos cargadas/i)).toBeInTheDocument()
   })
+
+  it('el mecánico no ve la pestaña ni las acciones de cobro en una orden lista', async () => {
+    ordenes.obtener.mockResolvedValue({ ...ORDEN, estado: 'Listo' })
+    montar()
+
+    expect(await screen.findByRole('tab', { name: 'Trabajo' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Cobro' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cobro/i })).not.toBeInTheDocument()
+  })
 })

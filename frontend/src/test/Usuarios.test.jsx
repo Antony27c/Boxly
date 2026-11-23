@@ -16,6 +16,9 @@ const cuentas = vi.hoisted(() => ({
   restablecerPassword: vi.fn(),
   cerrarSesiones: vi.fn(),
 }))
+const limite = vi.hoisted(() => ({
+  obtener: vi.fn(),
+}))
 const auth = vi.hoisted(() => ({
   usuario: {
     id: 9,
@@ -31,6 +34,10 @@ vi.mock('@/services/usuarios', async (importOriginal) => {
   return { ...real, usuariosService: usuarios }
 })
 vi.mock('@/services/cuentas', () => ({ cuentasService: cuentas }))
+vi.mock('@/services/limitePersonal', async (importOriginal) => {
+  const real = await importOriginal()
+  return { ...real, limitePersonalService: limite }
+})
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     token: 'tok',
@@ -119,6 +126,13 @@ describe('Usuarios', () => {
     cuentas.restablecerPassword.mockResolvedValue({ password_temporal: 'Tmp1234ab' })
     cuentas.cerrarSesiones.mockResolvedValue({
       detail: 'Se cerraron las sesiones de nico@taller.com',
+    })
+    // Plan sin límite por defecto: estos tests no ejercitan el tope (eso va en
+    // LimitePersonal.test.jsx).
+    limite.obtener.mockResolvedValue({
+      plan: { codigo: 'taller_plus', nombre: 'Taller+', max_personal: null },
+      personal_activo: 4,
+      max_personal: null,
     })
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn().mockResolvedValue(undefined) },

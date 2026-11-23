@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
-import TarjetaOrden from '@/components/ordenes/TarjetaOrden'
+import TarjetaOrden, { BannerCobro } from '@/components/ordenes/TarjetaOrden'
 
 const VEHICULO = { id: 7, patente: 'AB123CD', marca: 'Fiat', modelo: 'Cronos', cliente_id: 1 }
 const CLIENTE = { id: 1, nombre: 'Ana', apellido: 'Pérez' }
@@ -126,6 +126,35 @@ describe('TarjetaOrden', () => {
     montar({ usuario: RECEPCION, orden: orden({ estado: 'Listo' }) })
     fireEvent.click(screen.getByRole('button', { name: /Acciones de la orden/ }))
     expect(screen.queryByRole('menuitem', { name: 'Eliminar' })).not.toBeInTheDocument()
+  })
+
+  it('con líneas a cotizar la tarjeta lista ofrece cotizar en vez de cobrar', () => {
+    const onAccion = vi.fn()
+    montar({ orden: orden({ estado: 'Listo', lineas_a_cotizar: 1 }), onAccion })
+
+    expect(screen.queryByRole('button', { name: /Emitir cobro/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Cotizar trabajos/ }))
+    expect(onAccion).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), { tipo: 'abrir', texto: 'Cotizar trabajos' })
+  })
+
+  it('el banner de cobro queda deshabilitado con el motivo mientras haya líneas a cotizar', () => {
+    const onAbrir = vi.fn()
+    render(<BannerCobro orden={orden({ estado: 'Listo', lineas_a_cotizar: 2 })} esMostrador onAbrir={onAbrir} />)
+
+    const boton = screen.getByRole('button', { name: 'Generar cobro' })
+    expect(boton).toBeDisabled()
+    expect(boton).toHaveAccessibleDescription(
+      'Cotizá los trabajos pendientes antes de cobrar. Faltan 2 líneas.',
+    )
+    fireEvent.click(boton)
+    expect(onAbrir).not.toHaveBeenCalled()
+  })
+
+  it('el banner de cobro se habilita cuando no quedan líneas a cotizar', () => {
+    render(<BannerCobro orden={orden({ estado: 'Listo', lineas_a_cotizar: 0 })} esMostrador onAbrir={() => {}} />)
+
+    expect(screen.getByText('Todavía no se emitió el cobro.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Generar cobro' })).toBeEnabled()
   })
 
   it('la patente se muestra como patente Mercosur y el link la anuncia', () => {

@@ -1,10 +1,11 @@
+import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import MenuAccionesOrden from '@/components/ordenes/MenuAccionesOrden'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { BOTON_PIE, Chip, Chips, Ficha, FichaCabecera, FichaPersona, FichaPie, FichaSeccion } from '@/components/ui/Ficha'
 import Patente from '@/components/ui/Patente'
-import { accionPrincipal, estadoCobro } from '@/services/ordenes'
+import { MOTIVO_A_COTIZAR, accionEjecutable, estadoCobro } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 const TONOS = {
@@ -36,11 +37,17 @@ const COBROS = {
 }
 
 export function BannerCobro({ orden, esMostrador, onAbrir }) {
+  const idMensaje = useId()
   const cobro = estadoCobro(orden)
   if (!cobro || cobro === 'pagada') return null
+  // Con líneas a cotizar el backend rechaza el cobro (409, S3).
+  const aCotizar = Number(orden.lineas_a_cotizar ?? 0)
+  const bloqueado = cobro === 'sin_cobro' && aCotizar > 0
   const textos = {
     sin_cobro: {
-      mensaje: 'Todavía no se emitió el cobro.',
+      mensaje: bloqueado
+        ? `${MOTIVO_A_COTIZAR} ${aCotizar === 1 ? 'Falta 1 línea' : `Faltan ${aCotizar} líneas`}.`
+        : 'Todavía no se emitió el cobro.',
       boton: esMostrador ? 'Generar cobro' : 'Emitir cobro',
       destacado: true,
     },
@@ -63,8 +70,15 @@ export function BannerCobro({ orden, esMostrador, onAbrir }) {
         textos.destacado ? 'border-amber/50 bg-amber/10' : 'border-ok/40 bg-ok/10'
       }`}
     >
-      <span className={textos.destacado ? 'text-amber-deep' : 'text-ok'}>{textos.mensaje}</span>
-      <Button variante={textos.destacado ? 'primario' : 'fantasma'} onClick={onAbrir}>
+      <span id={idMensaje} className={textos.destacado ? 'text-amber-deep' : 'text-ok'}>
+        {textos.mensaje}
+      </span>
+      <Button
+        variante={textos.destacado ? 'primario' : 'fantasma'}
+        onClick={onAbrir}
+        disabled={bloqueado}
+        aria-describedby={bloqueado ? idMensaje : undefined}
+      >
         {textos.boton}
       </Button>
     </div>
@@ -86,7 +100,7 @@ export default function TarjetaOrden({
   onEditar,
   onEliminar,
 }) {
-  const accion = accionPrincipal(orden, usuario?.rol)
+  const accion = accionEjecutable(orden, usuario?.rol)
   const codigo = orden.codigo ?? `#${orden.id}`
   const cobro = COBROS[estadoCobro(orden)]
 

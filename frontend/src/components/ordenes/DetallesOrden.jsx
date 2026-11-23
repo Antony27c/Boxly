@@ -1,13 +1,15 @@
 import { useCallback, useMemo, useState } from 'react'
 import Alert from '@/components/ui/Alert'
 import Autocomplete from '@/components/ui/Autocomplete'
+import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
 import Select from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
-import { ordenesService, sePuedeEditarDetalle } from '@/services/ordenes'
+import { ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
+import { lineaACotizar, ordenesService, sePuedeEditarDetalle } from '@/services/ordenes'
 import { repuestosService } from '@/services/repuestos'
 import { pesos } from '@/utils/formato'
 
@@ -19,9 +21,14 @@ const VACIO = {
   precio_unitario: '',
 }
 
-export default function DetallesOrden({ orden }) {
-  const { token } = useAuth()
+// onCambio: avisa a la página que cambiaron las líneas (el total, las líneas a
+// cotizar y con eso si se puede cobrar), para que vuelva a leer la orden.
+export default function DetallesOrden({ orden, onCambio }) {
+  const { token, usuario } = useAuth()
   const editable = sePuedeEditarDetalle(orden)
+  // S3: el mecánico no carga precios; administración y recepción cotizan.
+  const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
+  const puedeCotizar = editable && tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
 
   const cargarDetalles = useCallback((t) => ordenesService.detalles(orden.id, t), [orden.id])
   const cargarRepuestos = useCallback(
@@ -38,6 +45,9 @@ export default function DetallesOrden({ orden }) {
   const [guardando, setGuardando] = useState(false)
   const [quitando, setQuitando] = useState(null)
   const [textoRepuesto, setTextoRepuesto] = useState('')
+  const [cotizando, setCotizando] = useState(null)
+  const [precioCotizar, setPrecioCotizar] = useState('')
+  const [guardandoCotizar, setGuardandoCotizar] = useState(null)
 
   const opcionesRepuesto = useMemo(
     () =>
@@ -58,6 +68,7 @@ export default function DetallesOrden({ orden }) {
     () => (detalles ?? []).reduce((suma, item) => suma + Number(item.subtotal ?? 0), 0),
     [detalles],
   )
+  const lineasACotizar = useMemo(() => (detalles ?? []).filter(lineaACotizar).length, [detalles])
 
   function cambiar(campo, valor) {
     setDatos((previo) => {
@@ -83,10 +94,14 @@ export default function DetallesOrden({ orden }) {
     } else if (!datos.descripcion.trim()) {
       encontrados.descripcion = 'Describí el trabajo.'
     }
-    if (String(datos.precio_unitario).trim() === '') {
-      encontrados.precio_unitario = 'Ingresá el precio.'
-    } else if (Number.isNaN(Number(datos.precio_unitario)) || Number(datos.precio_unitario) < 0) {
-      encontrados.precio_unitario = 'El precio debe ser un número mayor o igual a 0.'
+    // El mecánico no valida precio: no lo carga (el repuesto toma el del
+    // inventario y la mano de obra queda a cotizar por recepción).
+    if (!esMecanico) {
+      if (String(datos.precio_unitario).trim() === '') {
+        encontrados.precio_unitario = 'Ingresá el precio.'
+      } else if (Number.isNaN(Number(datos.precio_unitario)) || Number(datos.precio_unitario) < 0) {
+        encontrados.precio_unitario = 'El precio debe ser un número mayor o igual a 0.'
+      }
     }
     return encontrados
   }
@@ -106,13 +121,14 @@ export default function DetallesOrden({ orden }) {
           repuesto_id: datos.tipo === 'repuesto' ? datos.repuesto_id : null,
           descripcion: datos.tipo === 'trabajo' ? datos.descripcion : '',
           cantidad: datos.cantidad,
-          precio_unitario: datos.precio_unitario,
+          ...(esMecanico ? {} : { precio_unitario: datos.precio_unitario }),
         },
         token,
       )
       setDatos(VACIO)
       setTextoRepuesto('')
       await recargar()
+      onCambio?.()
     } catch (problema) {
       setErrorApi(problema.message)
     } finally {
@@ -126,10 +142,39 @@ export default function DetallesOrden({ orden }) {
     try {
       await ordenesService.quitarDetalle(orden.id, detalle.id, token)
       await recargar()
+      onCambio?.()
     } catch (problema) {
       setErrorApi(problema.message)
     } finally {
       setQuitando(null)
+    }
+  }
+
+  function abrirCotizar(detalle) {
+    setCotizando(detalle.id)
+    setPrecioCotizar('')
+    setErrorApi('')
+  }
+
+  async function cotizar(evento, detalle) {
+    evento.preventDefault()
+    const precio = Number(precioCotizar)
+    if (precioCotizar.trim() === '' || Number.isNaN(precio) || precio < 0) {
+      setErrorApi('Ingresá un precio válido (un número mayor o igual a 0).')
+      return
+    }
+    setGuardandoCotizar(detalle.id)
+    setErrorApi('')
+    try {
+      await ordenesService.cotizarDetalle(orden.id, detalle.id, precio, token)
+      setCotizando(null)
+      setPrecioCotizar('')
+      await recargar()
+      onCambio?.()
+    } catch (problema) {
+      setErrorApi(problema.message)
+    } finally {
+      setGuardandoCotizar(null)
     }
   }
 
@@ -157,38 +202,86 @@ export default function DetallesOrden({ orden }) {
         </p>
       ) : (
         <ul className="space-y-3">
-          {detalles.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-start justify-between gap-3 rounded-box border border-graphite-700 p-3 text-sm"
-            >
-              <div>
-                <p className="font-medium">{item.descripcion}</p>
-                <p className="mt-0.5 text-muted">
-                  {item.repuesto_id ? 'Repuesto' : 'Mano de obra'} · {item.cantidad} ×{' '}
-                  {pesos(item.precio_unitario)}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="font-medium">{pesos(item.subtotal)}</span>
-                {editable && (
-                  <Button
-                    variante="fantasma"
-                    cargando={quitando === item.id}
-                    disabled={guardando}
-                    onClick={() => quitar(item)}
+          {detalles.map((item) => {
+            const pendiente = lineaACotizar(item)
+            return (
+              <li
+                key={item.id}
+                className="rounded-box border border-graphite-700 p-3 text-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{item.descripcion}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted">
+                      {item.repuesto_id ? 'Repuesto' : 'Mano de obra'} · {item.cantidad}
+                      {pendiente ? (
+                        ' · precio a definir'
+                      ) : (
+                        ` × ${pesos(item.precio_unitario)}`
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {pendiente ? (
+                      <Badge tono="ambar">A cotizar</Badge>
+                    ) : (
+                      <span className="font-medium">{pesos(item.subtotal)}</span>
+                    )}
+                    {puedeCotizar && pendiente && cotizando !== item.id && (
+                      <Button variante="fantasma" onClick={() => abrirCotizar(item)}>
+                        Cotizar
+                      </Button>
+                    )}
+                    {editable && (
+                      <Button
+                        variante="fantasma"
+                        cargando={quitando === item.id}
+                        disabled={guardando}
+                        onClick={() => quitar(item)}
+                      >
+                        Quitar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {cotizando === item.id && (
+                  <form
+                    onSubmit={(evento) => cotizar(evento, item)}
+                    noValidate
+                    className="mt-3 flex flex-wrap items-end gap-2 border-t border-graphite-700 pt-3"
                   >
-                    Quitar
-                  </Button>
+                    <Field
+                      label="Precio a cotizar"
+                      inputMode="decimal"
+                      value={precioCotizar}
+                      onChange={(e) => setPrecioCotizar(e.target.value)}
+                      disabled={guardandoCotizar === item.id}
+                      placeholder="15000"
+                      className="w-full sm:w-44"
+                    />
+                    <Button type="submit" cargando={guardandoCotizar === item.id}>
+                      Guardar precio
+                    </Button>
+                    <Button
+                      type="button"
+                      variante="fantasma"
+                      onClick={() => setCotizando(null)}
+                      disabled={guardandoCotizar === item.id}
+                    >
+                      Cancelar
+                    </Button>
+                  </form>
                 )}
-              </div>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       )}
 
       <div className="flex justify-between border-t border-graphite-700 pt-3 text-sm">
-        <span className="text-muted">Total de líneas</span>
+        <span className="text-muted">
+          {lineasACotizar > 0 ? `Total parcial · ${lineasACotizar} a cotizar` : 'Total de líneas'}
+        </span>
         <span className="font-semibold">{pesos(totalLineas)}</span>
       </div>
 
@@ -241,16 +334,25 @@ export default function DetallesOrden({ orden }) {
               error={errores.cantidad}
               disabled={guardando}
             />
-            <Field
-              label="Precio unitario"
-              inputMode="decimal"
-              value={datos.precio_unitario}
-              onChange={(e) => cambiar('precio_unitario', e.target.value)}
-              error={errores.precio_unitario}
-              disabled={guardando}
-              ayuda={datos.tipo === 'repuesto' ? 'Se completa solo; podés cambiarlo.' : undefined}
-              placeholder="15000"
-            />
+            {esMecanico ? (
+              <div className="self-end pb-1">
+                <p className="text-xs font-medium text-muted">Precio</p>
+                <p className="mt-1 text-sm text-ink">
+                  {datos.tipo === 'repuesto' ? 'Precio del inventario' : 'Queda a cotizar por recepción'}
+                </p>
+              </div>
+            ) : (
+              <Field
+                label="Precio unitario"
+                inputMode="decimal"
+                value={datos.precio_unitario}
+                onChange={(e) => cambiar('precio_unitario', e.target.value)}
+                error={errores.precio_unitario}
+                disabled={guardando}
+                ayuda={datos.tipo === 'repuesto' ? 'Se completa solo; podés cambiarlo.' : undefined}
+                placeholder="15000"
+              />
+            )}
           </div>
           <div className="flex justify-end">
             <Button type="submit" cargando={guardando}>

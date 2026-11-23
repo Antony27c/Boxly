@@ -5,6 +5,8 @@ import Field from '@/components/ui/Field'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const VACIO = { nombre: '', admin_nombre: '', admin_apellido: '', admin_email: '' }
+// Mismos topes que el backend (app/schemas/plataforma.py).
+const MAX = { nombre: 120, persona: 80, email: 254 }
 
 function validar(datos) {
   const errores = {}
@@ -19,9 +21,17 @@ function validar(datos) {
 }
 
 /* Formulario de alta de taller: nombre del taller y los datos del primer
-   administrador (recibe una contraseña temporal que se muestra una vez). */
-export default function FormularioTaller({ onGuardar, onCancelar }) {
-  const [datos, setDatos] = useState(VACIO)
+   administrador (recibe una contraseña temporal que se muestra una vez).
+   `inicial` precarga los campos (alta desde una solicitud de demo); como el
+   Modal desmonta el formulario al cerrar, cada apertura arranca de cero. */
+export default function FormularioTaller({ onGuardar, onCancelar, inicial }) {
+  const [datos, setDatos] = useState(() => ({
+    ...VACIO,
+    nombre: inicial?.nombre ?? '',
+    admin_nombre: inicial?.admin_nombre ?? '',
+    admin_apellido: inicial?.admin_apellido ?? '',
+    admin_email: inicial?.admin_email ?? '',
+  }))
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -66,6 +76,7 @@ export default function FormularioTaller({ onGuardar, onCancelar }) {
         onChange={(e) => cambiar('nombre', e.target.value)}
         error={errores.nombre}
         disabled={guardando}
+        maxLength={MAX.nombre}
         placeholder="Ej.: Taller El Rayo"
       />
 
@@ -81,6 +92,7 @@ export default function FormularioTaller({ onGuardar, onCancelar }) {
             onChange={(e) => cambiar('admin_nombre', e.target.value)}
             error={errores.admin_nombre}
             disabled={guardando}
+            maxLength={MAX.persona}
             placeholder="Ej.: Ana"
           />
           <Field
@@ -89,6 +101,7 @@ export default function FormularioTaller({ onGuardar, onCancelar }) {
             onChange={(e) => cambiar('admin_apellido', e.target.value)}
             error={errores.admin_apellido}
             disabled={guardando}
+            maxLength={MAX.persona}
             placeholder="Ej.: Gómez"
           />
           <Field
@@ -99,6 +112,7 @@ export default function FormularioTaller({ onGuardar, onCancelar }) {
             onChange={(e) => cambiar('admin_email', e.target.value)}
             error={errores.admin_email}
             disabled={guardando}
+            maxLength={MAX.email}
             placeholder="admin@eltaller.com"
           />
         </div>

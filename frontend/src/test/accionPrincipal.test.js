@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accionPrincipal } from '@/services/ordenes'
+import { MOTIVO_A_COTIZAR, accionEjecutable, accionPrincipal } from '@/services/ordenes'
 
 const orden = (extra) => ({ id: 1, estado: 'Pendiente', mecanico_id: null, mecanico: '', ...extra })
 
@@ -36,6 +36,24 @@ describe('accionPrincipal', () => {
     const o = orden({ estado: 'Listo', cobro_estado: null })
     expect(accionPrincipal(o, 'recepcion')).toMatchObject({ tipo: 'cobro', texto: 'Emitir cobro' })
     expect(accionPrincipal(o, 'mecanico')).toMatchObject({ texto: 'Proponer cobro' })
+  })
+
+  it('listo con líneas a cotizar: el cobro queda deshabilitado con el motivo y se ofrece cotizar', () => {
+    const o = orden({ estado: 'Listo', cobro_estado: null, lineas_a_cotizar: 2 })
+    expect(accionPrincipal(o, 'recepcion')).toMatchObject({
+      tipo: 'cobro',
+      texto: 'Emitir cobro',
+      deshabilitada: true,
+      motivo: MOTIVO_A_COTIZAR,
+      trabajo: { tipo: 'abrir', texto: 'Cotizar trabajos' },
+    })
+    // En tarjetas y filas se ofrece directamente la acción que destraba el cobro.
+    expect(accionEjecutable(o, 'administrador')).toEqual({ tipo: 'abrir', texto: 'Cotizar trabajos' })
+    // Sin líneas a cotizar, el cobro se puede emitir.
+    expect(accionEjecutable(orden({ estado: 'Listo', lineas_a_cotizar: 0 }), 'recepcion')).toMatchObject({
+      texto: 'Emitir cobro',
+    })
+    expect(accionPrincipal(orden({ estado: 'Listo', lineas_a_cotizar: 0 }), 'recepcion').deshabilitada).toBeUndefined()
   })
 
   it('listo con cobro propuesto: el admin aprueba, recepción revisa, el mecánico nada', () => {

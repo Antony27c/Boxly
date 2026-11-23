@@ -84,7 +84,15 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
 
-  const pideMonto = nuevo === 'Listo' && !orden.cobro_estado && !orden.pagada
+  // El monto a cobrar solo lo cargan recepción y administración: el mecánico
+  // no pone precios ni emite cobros (S3, el backend le responde 403). Con
+  // líneas a cotizar el cobro lo rechaza el backend (409): tampoco se pide.
+  const pideMonto =
+    puedeCobrar &&
+    nuevo === 'Listo' &&
+    !orden.cobro_estado &&
+    !orden.pagada &&
+    !(Number(orden.lineas_a_cotizar ?? 0) > 0)
 
   async function enviar(evento) {
     evento.preventDefault()

@@ -2,6 +2,15 @@ import { Link } from 'react-router-dom'
 import { Chip, Chips, Ficha, FichaCabecera, FichaSeccion } from '@/components/ui/Ficha'
 import { etiquetaSoporte, haceCuanto, numero } from './formatos'
 
+// Misma tabla de estados que SuscripcionTaller (docs/Suscripciones.md), en
+// versión mínima para el chip: los componentes no comparten exports.
+const ESTADOS_SUSCRIPCION = {
+  al_dia: { texto: 'Al día', tono: 'ok' },
+  gracia: { texto: 'En gracia', tono: 'ambar' },
+  solo_lectura: { texto: 'Solo lectura', tono: 'peligro' },
+  suspendida: { texto: 'Suspendida por falta de pago', tono: 'peligro' },
+}
+
 // En el resumen `personal` es un entero (personal activo); por las dudas se
 // tolera { total, activos } o la lista del detalle.
 function personalDe(taller) {
@@ -27,6 +36,15 @@ function Dato({ etiqueta, children }) {
 export default function TarjetaTaller({ taller }) {
   const suspendido = taller.estado === 'suspendido'
   const soporte = taller.soporte_vigente_hasta ? etiquetaSoporte(taller.soporte_vigente_hasta) : null
+  // El resumen trae plan_codigo y suscripcion_estado (S1); el chip de
+  // suscripción solo aparece cuando el taller no está al día.
+  const suscripcion =
+    taller.suscripcion_estado && taller.suscripcion_estado !== 'al_dia'
+      ? (ESTADOS_SUSCRIPCION[taller.suscripcion_estado] ?? {
+          texto: taller.suscripcion_estado,
+          tono: 'neutro',
+        })
+      : null
 
   return (
     <Ficha
@@ -43,6 +61,14 @@ export default function TarjetaTaller({ taller }) {
         }
       >
         <Chips>
+          {taller.plan_codigo && (
+            <Chip mono>Plan {String(taller.plan_codigo).replace(/_/g, ' ')}</Chip>
+          )}
+          {suscripcion && (
+            <Chip tono={suscripcion.tono} icono="alerta">
+              {suscripcion.texto}
+            </Chip>
+          )}
           {soporte && (
             <Chip tono="ok" icono="llave">
               Soporte hasta {soporte}

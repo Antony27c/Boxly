@@ -290,4 +290,23 @@ describe('Hoy — mecánico', () => {
 
     expect(await screen.findByText('No tenés órdenes asignadas')).toBeInTheDocument()
   })
+
+  it('el mecánico no ve el botón de cobro en una orden lista sin cobro', async () => {
+    ordenes.listar.mockResolvedValue([
+      {
+        ...ORDEN_LISTA,
+        id: 30,
+        estado: 'Listo',
+        mecanico_id: 5,
+        vehiculo_patente: 'GG777HH',
+        cobro_estado: null,
+        costo_final: null,
+        pagada: false,
+      },
+    ])
+    montar()
+
+    expect(await screen.findByRole('button', { name: /GG777HH/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cobro/i })).not.toBeInTheDocument()
+  })
 })

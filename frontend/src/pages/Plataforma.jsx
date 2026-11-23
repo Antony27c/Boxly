@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import FormularioTaller from '@/components/plataforma/FormularioTaller'
 import PasswordTemporal from '@/components/plataforma/PasswordTemporal'
 import TarjetaTaller from '@/components/plataforma/TarjetaTaller'
@@ -26,14 +27,61 @@ const ESTADOS = [
 // persona deje de escribir antes de pedir de nuevo.
 const ESPERA_BUSQUEDA_MS = 350
 
+// Alta de taller desde una solicitud de demo (L4 → L6):
+// /plataforma?nuevo=1&nombre=<taller>&admin_nombre=<nombre completo>&admin_email=<email>
+const PARAMS_ALTA = ['nuevo', 'nombre', 'admin_nombre', 'admin_email']
+// Mismos topes que el backend (app/schemas/plataforma.py).
+const MAX_TALLER = 120
+const MAX_PERSONA = 80
+const MAX_EMAIL = 254
+
+// Los valores vienen de la URL: se recortan al largo máximo y se colapsan los
+// espacios. React escapa el texto, así que nada se interpreta como HTML.
+function limpio(valor, maximo) {
+  return (valor ?? '').replace(/\s+/g, ' ').trim().slice(0, maximo)
+}
+
+// La solicitud trae el nombre completo en admin_nombre y el alta pide nombre y
+// apellido por separado: primera palabra al nombre, el resto al apellido.
+function partirAdmin(completo) {
+  const texto = (completo ?? '').replace(/\s+/g, ' ').trim()
+  const corte = texto.indexOf(' ')
+  if (corte === -1) return { nombre: texto.slice(0, MAX_PERSONA), apellido: '' }
+  return {
+    nombre: texto.slice(0, corte).slice(0, MAX_PERSONA),
+    apellido: texto.slice(corte + 1).trim().slice(0, MAX_PERSONA),
+  }
+}
+
+function armarPrecarga(parametros) {
+  const { nombre: adminNombre, apellido: adminApellido } = partirAdmin(parametros.get('admin_nombre'))
+  const precarga = {
+    nombre: limpio(parametros.get('nombre'), MAX_TALLER),
+    admin_nombre: adminNombre,
+    admin_apellido: adminApellido,
+    admin_email: limpio(parametros.get('admin_email'), MAX_EMAIL).toLowerCase(),
+  }
+  return Object.values(precarga).every((valor) => valor === '') ? null : precarga
+}
+
+// El nombre puede venir ya con "Taller" adelante ("Taller El Rayo"): no
+// duplicar la palabra en el aviso de taller creado.
+function tituloTallerCreado(nombre) {
+  return /^taller(es)?\b/i.test(nombre.trim()) ? `${nombre} creado` : `Taller ${nombre} creado`
+}
+
 export default function Plataforma() {
   const { token } = useAuth()
+  const [parametros, setParametros] = useSearchParams()
   const [busqueda, setBusqueda] = useState('')
   const [termino, setTermino] = useState('')
   const [estado, setEstado] = useState('')
   const { pagina, setPagina, offset, limite, paginas, desde, hasta, total, setTotal, reiniciar } =
     usePaginacion()
-  const [altaAbierta, setAltaAbierta] = useState(false)
+  // El alta está abierta si la abrió la persona o si la URL trae nuevo=1 (el
+  // botón "Crear taller" de una solicitud de demo llega con los datos).
+  const [altaManual, setAltaManual] = useState(false)
+  const altaAbierta = parametros.get('nuevo') === '1' || altaManual
   const [temporal, setTemporal] = useState(null)
 
   useEffect(() => {
@@ -56,9 +104,32 @@ export default function Plataforma() {
   )
   const { datos: talleres, cargando, error, recargar } = useRecurso(cargarTalleres)
 
+  // Saca de la URL los parámetros del alta desde solicitud (si están).
+  function limpiarParametrosAlta() {
+    if (!PARAMS_ALTA.some((clave) => parametros.has(clave))) return
+    setParametros(
+      (previos) => {
+        const nuevos = new URLSearchParams(previos)
+        for (const clave of PARAMS_ALTA) nuevos.delete(clave)
+        return nuevos
+      },
+      { replace: true },
+    )
+  }
+
+  function abrirAlta() {
+    setAltaManual(true)
+  }
+
+  function cerrarAlta() {
+    setAltaManual(false)
+    limpiarParametrosAlta()
+  }
+
   async function guardarTaller(datos) {
     const respuesta = await plataformaService.crearTaller(datos, token)
-    setAltaAbierta(false)
+    setAltaManual(false)
+    limpiarParametrosAlta()
     // La contraseña temporal se muestra una sola vez y no se puede volver a ver.
     setTemporal({
       nombre: respuesta?.taller?.nombre ?? datos.nombre,
@@ -76,7 +147,7 @@ export default function Plataforma() {
         titulo="Talleres"
         descripcion="Los talleres que usan Boxly. Tocá uno para ver su personal y sus accesos de soporte."
         icono="herramienta"
-        acciones={<Button onClick={() => setAltaAbierta(true)}>Nuevo taller</Button>}
+        acciones={<Button onClick={abrirAlta}>Nuevo taller</Button>}
       />
 
       <div className="mt-6 grid gap-4 sm:max-w-2xl sm:grid-cols-2">
@@ -116,7 +187,7 @@ export default function Plataforma() {
                 ? 'Probá con otro nombre o estado.'
                 : 'Desde acá das de alta un taller nuevo con su primer administrador.'
             }
-            accion={<Button onClick={() => setAltaAbierta(true)}>Nuevo taller</Button>}
+            accion={<Button onClick={abrirAlta}>Nuevo taller</Button>}
           />
         </div>
       ) : (
@@ -151,14 +222,18 @@ export default function Plataforma() {
         abierto={altaAbierta}
         titulo="Nuevo taller"
         descripcion="Se crea el taller con su configuración inicial y su primer administrador."
-        onCerrar={() => setAltaAbierta(false)}
+        onCerrar={cerrarAlta}
       >
-        <FormularioTaller onGuardar={guardarTaller} onCancelar={() => setAltaAbierta(false)} />
+        <FormularioTaller
+          inicial={parametros.get('nuevo') === '1' ? armarPrecarga(parametros) : null}
+          onGuardar={guardarTaller}
+          onCancelar={cerrarAlta}
+        />
       </Modal>
 
       <PasswordTemporal
         abierto={Boolean(temporal)}
-        titulo={temporal?.nombre ? `Taller ${temporal.nombre} creado` : 'Taller creado'}
+        titulo={temporal?.nombre ? tituloTallerCreado(temporal.nombre) : 'Taller creado'}
         descripcion={
           temporal?.email ? `Contraseña temporal del administrador ${temporal.email}.` : undefined
         }

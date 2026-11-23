@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import FormularioUsuario from '@/components/admin/FormularioUsuario'
 import TarjetaUsuario from '@/components/admin/TarjetaUsuario'
 import Alert from '@/components/ui/Alert'
@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
 import { cuentasService } from '@/services/cuentas'
+import { esErrorDeLimite, limitePersonalService } from '@/services/limitePersonal'
 import { ROLES, requiereSuperadmin, usuariosService } from '@/services/usuarios'
 
 export default function Usuarios() {
@@ -39,6 +40,7 @@ export default function Usuarios() {
   const [cerrandoSesiones, setCerrandoSesiones] = useState(false)
   const [aviso, setAviso] = useState('')
   const [errorAccion, setErrorAccion] = useState('')
+  const [avisoLimite, setAvisoLimite] = useState('')
 
   // Con búsqueda o filtro de rol se trabaja con la lista completa (los
   // filtros son del lado del cliente); si no, se pagina en el servidor.
@@ -59,6 +61,12 @@ export default function Usuarios() {
     [modoCompleto, limite, offset, setTotal],
   )
   const { datos: usuarios, cargando, error, recargar } = useRecurso(cargarUsuarios)
+
+  // Tope de personal del plan (docs/Suscripciones.md, S8): si la suscripción no
+  // responde (por ejemplo el superadmin, que no tiene taller) no se muestra nada
+  // y el servidor sigue siendo la última palabra con su 409.
+  const cargarLimite = useCallback((t) => limitePersonalService.obtener(t), [])
+  const { datos: suscripcion, recargar: recargarLimite } = useRecurso(cargarLimite)
 
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase()
@@ -83,6 +91,23 @@ export default function Usuarios() {
     ? `${activos} ${activos === 1 ? 'usuario activo' : 'usuarios activos'}.`
     : `${total} ${total === 1 ? 'usuario' : 'usuarios'} en total.`
 
+  const tope =
+    suscripcion && suscripcion.personal_activo != null
+      ? {
+          activo: suscripcion.personal_activo,
+          maximo: suscripcion.max_personal ?? null,
+          plan: suscripcion.plan?.nombre,
+        }
+      : null
+  const limiteAlcanzado = tope?.maximo != null && tope.activo >= tope.maximo
+  const textoLimite = tope
+    ? tope.maximo == null
+      ? `Personal: ${tope.activo} · plan sin límite`
+      : `Personal: ${tope.activo} de ${tope.maximo}${
+          tope.plan ? ` en tu plan ${tope.plan}` : ''
+        }`
+    : ''
+
   // ?nuevo=1 (por ejemplo desde la checklist de primeros pasos) abre el
   // formulario de alta una vez; el efecto de abajo limpia el parámetro.
   const quiereNuevo = parametros.get('nuevo') === '1'
@@ -100,31 +125,59 @@ export default function Usuarios() {
   function abrirNuevo() {
     setEnEdicion(null)
     setErrorAccion('')
+    setAvisoLimite('')
     setFormularioAbierto(true)
   }
 
   async function guardar(datosUsuario) {
-    if (enEdicion) {
-      await usuariosService.actualizar(enEdicion.id, datosUsuario, token)
-      setAviso('Usuario actualizado.')
-    } else {
-      await usuariosService.crear(datosUsuario, token)
-      setAviso('Usuario dado de alta.')
+    try {
+      if (enEdicion) {
+        await usuariosService.actualizar(enEdicion.id, datosUsuario, token)
+        setAviso('Usuario actualizado.')
+      } else {
+        await usuariosService.crear(datosUsuario, token)
+        setAviso('Usuario dado de alta.')
+      }
+    } catch (problema) {
+      // Tope de personal del plan: se muestra a nivel página con el link a los
+      // planes; el resto de los errores siguen yendo al formulario.
+      if (esErrorDeLimite(problema)) {
+        setAvisoLimite(problema.message)
+        setFormularioAbierto(false)
+        setEnEdicion(null)
+        await recargarLimite()
+        return
+      }
+      throw problema
     }
     setFormularioAbierto(false)
     setEnEdicion(null)
     await recargar()
+    await recargarLimite()
   }
 
   async function alternarEstado(usuario) {
     setErrorAccion('')
     setAviso('')
+    setAvisoLimite('')
+    // Reactivar suma personal activo: con el plan lleno no se puede (el servidor
+    // también lo rechaza con 409 por si el contador local quedó viejo).
+    if (!usuario.activo && limiteAlcanzado) {
+      setAvisoLimite('Llegaste al límite de tu plan')
+      return
+    }
     try {
       await usuariosService.cambiarEstado(usuario.id, !usuario.activo, token)
       setAviso(usuario.activo ? 'Usuario desactivado.' : 'Usuario activado.')
       await recargar()
+      await recargarLimite()
     } catch (problema) {
-      setErrorAccion(problema.message)
+      if (esErrorDeLimite(problema)) {
+        setAvisoLimite(problema.message)
+        await recargarLimite()
+      } else {
+        setErrorAccion(problema.message)
+      }
     }
   }
 
@@ -136,6 +189,7 @@ export default function Usuarios() {
       setAEliminar(null)
       setAviso('Usuario eliminado.')
       await recargar()
+      await recargarLimite()
     } catch (problema) {
       setErrorEliminar(problema.message)
     } finally {
@@ -199,13 +253,37 @@ export default function Usuarios() {
     }
   }
 
+  // Con el plan lleno el alta de personal queda bloqueada hasta pasar de plan;
+  // las cuentas de cliente no cuentan para el tope y esta pantalla no las crea.
+  const accionesAlta = limiteAlcanzado ? (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <Button disabled>Nuevo usuario</Button>
+      <span className="text-sm text-amber-texto">
+        Llegaste al límite de tu plan ·{' '}
+        <Link to="/suscripcion" className="font-semibold underline">
+          Ver planes
+        </Link>
+      </span>
+    </div>
+  ) : (
+    <Button onClick={abrirNuevo}>Nuevo usuario</Button>
+  )
+
   return (
     <div className="animate-bay-in">
       <EncabezadoPagina
         titulo="Usuarios"
         descripcion={`Usuarios del sistema y permisos de acceso. ${resumen}`}
-        acciones={<Button onClick={abrirNuevo}>Nuevo usuario</Button>}
+        acciones={accionesAlta}
       />
+
+      {tope && (
+        <p className="mt-3 text-sm">
+          <span className={limiteAlcanzado ? 'font-semibold text-amber-texto' : 'text-muted'}>
+            {textoLimite}
+          </span>
+        </p>
+      )}
 
       <div className="mt-6 grid gap-4 sm:max-w-2xl sm:grid-cols-2">
         <Field
@@ -233,6 +311,16 @@ export default function Usuarios() {
           <Alert>{errorAccion}</Alert>
         </div>
       )}
+      {avisoLimite && (
+        <div className="mt-4">
+          <Alert tipo="warning">
+            {avisoLimite}{' '}
+            <Link to="/suscripcion" className="font-semibold underline">
+              Ver planes
+            </Link>
+          </Alert>
+        </div>
+      )}
 
       {cargando && !usuarios ? (
         <Loader texto="Cargando usuarios…" />
@@ -252,7 +340,7 @@ export default function Usuarios() {
                 ? 'Probá con otro nombre, correo o rol.'
                 : 'Desde acá creás los accesos del taller: recepción para el mostrador, mecánicos y administradores.'
             }
-            accion={<Button onClick={abrirNuevo}>Nuevo usuario</Button>}
+            accion={accionesAlta}
           />
         </div>
       ) : (

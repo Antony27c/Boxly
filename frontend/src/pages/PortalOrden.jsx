@@ -11,7 +11,7 @@ import RutaSeguimiento from '@/components/portal/RutaSeguimiento'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import useTaller from '@/hooks/useTaller'
-import { nombreEstado } from '@/services/ordenes'
+import { lineaACotizar, nombreEstado } from '@/services/ordenes'
 import { pagosService, portalService } from '@/services/portal'
 import { pesos } from '@/utils/formato'
 
@@ -22,6 +22,24 @@ const FICHA_QUIETA =
 
 function fecha(iso) {
   return iso ? new Date(iso).toLocaleDateString('es-AR') : '—'
+}
+
+// Con líneas a cotizar se muestra lo ya cotizado (`total` del backend): ni el
+// costo final ni el estimado, que todavía pueden cambiar. Nunca un $ 0.
+function textoTotal(orden, hayACotizar) {
+  if (hayACotizar) return Number(orden.total) > 0 ? pesos(orden.total) : 'A confirmar'
+  const monto = orden.costo_final || orden.costo_estimado
+  return monto ? pesos(monto) : 'A confirmar'
+}
+
+// Por qué todavía no se puede pagar: con la orden lista falta la cotización o el
+// cobro del taller, no que "esté lista".
+function motivoSinPago(orden, hayACotizar) {
+  if (!['listo', 'entregado'].includes(orden.estado)) {
+    return 'El pago se habilita cuando la orden esté lista.'
+  }
+  if (hayACotizar) return 'El pago se habilita cuando el taller cotice los trabajos pendientes.'
+  return 'El pago se habilita cuando el taller emita el cobro.'
 }
 
 export default function PortalOrden() {
@@ -37,6 +55,10 @@ export default function PortalOrden() {
 
   const cargar = useCallback((t) => portalService.miOrden(id, t), [id])
   const { datos: orden, cargando, error, recargar } = useRecurso(cargar)
+
+  // Con líneas a cotizar el total es parcial (S3): no se muestran montos en
+  // esas líneas para que el cliente no lea un $0 como precio final.
+  const hayACotizar = Number(orden?.lineas_a_cotizar ?? 0) > 0
 
   async function pagar() {
     setPagando(true)
@@ -154,14 +176,21 @@ export default function PortalOrden() {
                 </tr>
               </thead>
               <tbody>
-                {detalles.map((detalle) => (
-                  <tr key={detalle.id} className="border-b border-graphite-700 last:border-0">
-                    <td className="py-2">{detalle.repuesto_nombre ?? detalle.descripcion}</td>
-                    <td className="py-2 text-right font-mono">{detalle.cantidad}</td>
-                    <td className="py-2 text-right font-mono">{pesos(detalle.precio_unitario)}</td>
-                    <td className="py-2 text-right font-mono">{pesos(detalle.subtotal)}</td>
-                  </tr>
-                ))}
+                {detalles.map((detalle) => {
+                  const pendiente = lineaACotizar(detalle)
+                  return (
+                    <tr key={detalle.id} className="border-b border-graphite-700 last:border-0">
+                      <td className="py-2">{detalle.repuesto_nombre ?? detalle.descripcion}</td>
+                      <td className="py-2 text-right font-mono">{detalle.cantidad}</td>
+                      <td className="py-2 text-right font-mono">
+                        {pendiente ? 'A cotizar' : pesos(detalle.precio_unitario)}
+                      </td>
+                      <td className="py-2 text-right font-mono">
+                        {pendiente ? '—' : pesos(detalle.subtotal)}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -169,10 +198,15 @@ export default function PortalOrden() {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-graphite-700 pt-4">
           <div>
-            <p className="text-xs text-muted">{orden.costo_final ? 'Total' : 'Presupuesto estimado'}</p>
-            <p className="text-xl font-semibold">
-              {orden.costo_final || orden.costo_estimado ? pesos(orden.costo_final ?? orden.costo_estimado) : 'A confirmar'}
+            <p className="text-xs text-muted">
+              {hayACotizar ? 'Total parcial' : orden.costo_final ? 'Total' : 'Presupuesto estimado'}
             </p>
+            <p className="text-xl font-semibold">
+              {textoTotal(orden, hayACotizar)}
+            </p>
+            {hayACotizar && (
+              <p className="mt-1 text-xs text-muted">Hay trabajos a cotizar; el total puede cambiar.</p>
+            )}
           </div>
           {orden.pagada ? (
             <Badge tono="ok">Pagada</Badge>
@@ -183,7 +217,7 @@ export default function PortalOrden() {
               Pagar {pesos(orden.costo_final)}
             </Button>
           ) : (
-            <span className="text-xs text-muted">El pago se habilita cuando la orden esté lista.</span>
+            <span className="text-xs text-muted">{motivoSinPago(orden, hayACotizar)}</span>
           )}
         </div>
         {orden.pago?.estado === 'rechazado' && !orden.pagada && (

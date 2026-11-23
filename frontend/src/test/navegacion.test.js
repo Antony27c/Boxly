@@ -24,7 +24,7 @@ describe('menuSegunRol', () => {
 
   it('superadmin: solo la plataforma (Talleres y Sistema), sin el menú del taller', () => {
     const { principales, mas } = menuSegunRol('superadmin')
-    expect(rutas(principales)).toEqual(['/plataforma', '/plataforma/planes', '/plataforma/solicitudes', '/plataforma/sistema'])
+    expect(rutas(principales)).toEqual(['/plataforma', '/plataforma/planes', '/plataforma/solicitudes', '/plataforma/encuestas', '/plataforma/sistema'])
     expect(mas).toEqual([])
     expect(inicioSegunRol('superadmin')).toBe('/plataforma')
   })

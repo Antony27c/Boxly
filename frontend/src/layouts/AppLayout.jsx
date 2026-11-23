@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useSoporte } from '@/context/SoporteContext'
+import useSuscripcion from '@/hooks/useSuscripcion'
+import AvisoSuscripcion from '@/components/suscripcion/AvisoSuscripcion'
 import Logo from '@/components/ui/Logo'
 import Icono from '@/components/ui/Icono'
 import MenuUsuario from '@/components/ui/MenuUsuario'
 import MenuDesplegable from '@/components/ui/MenuDesplegable'
 import BarraInferior from '@/components/ui/BarraInferior'
 import BarraLateral from '@/components/ui/BarraLateral'
-import { etiquetaRol, inicioSegunRol, menuSegunRol } from '@/routes/navegacion'
+import { ROLES_ADMIN, ROLES_TALLER, etiquetaRol, inicioSegunRol, menuSegunRol } from '@/routes/navegacion'
 
 function horaCorta(iso) {
   const fecha = new Date(iso)
@@ -44,6 +46,7 @@ function FranjaSoporte({ taller, hasta, onSalir }) {
 export default function AppLayout() {
   const { usuario, logout } = useAuth()
   const soporte = useSoporte()
+  const { suscripcion } = useSuscripcion()
   const navigate = useNavigate()
   const location = useLocation()
   // En modo soporte el menú y el inicio son los del administrador del taller.
@@ -51,9 +54,33 @@ export default function AppLayout() {
   const inicio = inicioSegunRol(rolMenu)
   const { principales, mas } = useMemo(() => menuSegunRol(rolMenu), [rolMenu])
 
+  const esAdmin = ROLES_ADMIN.includes(usuario?.rol ?? '')
+  const esPersonal = ROLES_TALLER.includes(usuario?.rol ?? '')
+  const estadoSuscripcion = suscripcion?.estado ?? null
+  // En suspendida el administrador solo puede usar /suscripcion (y /terminos,
+  // que el backend también exime); el resto del personal ve una pantalla.
+  const suspendida = estadoSuscripcion === 'suspendida' && esPersonal
+  const enPantallaSuscripcion = /^\/(suscripcion|terminos)(\/|$)/.test(location.pathname)
+  const avisoSuscripcion =
+    estadoSuscripcion === 'gracia' || estadoSuscripcion === 'solo_lectura'
+      ? suscripcion
+      : null
+  // Solo lectura por suscripción: mismo fieldset que el modo soporte, salvo en
+  // /suscripcion y /terminos (el backend las exime y son la vía de pago).
+  const soloLecturaUI =
+    estadoSuscripcion === 'solo_lectura' && !enPantallaSuscripcion
+  const deshabilitado = soporte.activo || soloLecturaUI
+  const fijas = (soporte.activo ? 1 : 0) + (avisoSuscripcion ? 1 : 0)
+  const claseRelleno = fijas === 2 ? 'pt-20' : fijas === 1 ? 'pt-10' : ''
+  const claseTope = fijas === 2 ? 'top-20' : fijas === 1 ? 'top-10' : 'top-0'
+
   function cerrarSesion() {
     logout()
     navigate('/login', { replace: true })
+  }
+
+  if (suspendida && esAdmin && !enPantallaSuscripcion) {
+    return <Navigate to="/suscripcion" replace />
   }
 
   const claseEnlace = ({ isActive }) =>
@@ -64,9 +91,16 @@ export default function AppLayout() {
     }`
 
   return (
-    <div className={`min-h-screen bg-graphite-900 ${soporte.activo ? 'pt-10' : ''}`}>
+    <div className={`min-h-screen bg-graphite-900 ${claseRelleno}`}>
       {soporte.activo && (
         <FranjaSoporte taller={soporte.taller} hasta={soporte.hasta} onSalir={soporte.salir} />
+      )}
+      {avisoSuscripcion && (
+        <AvisoSuscripcion
+          suscripcion={avisoSuscripcion}
+          esAdmin={esAdmin}
+          desplazada={soporte.activo}
+        />
       )}
 
       {/* Pantallas grandes: barra lateral fija. Celular y tablet: header arriba + barra inferior. */}
@@ -80,7 +114,7 @@ export default function AppLayout() {
       />
 
       <header
-        className={`sticky ${soporte.activo ? 'top-10' : 'top-0'} z-30 border-b border-graphite-700 bg-graphite-800/95 backdrop-blur lg:hidden`}
+        className={`sticky ${claseTope} z-30 border-b border-graphite-700 bg-graphite-800/95 backdrop-blur lg:hidden`}
       >
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3.5">
           {/* Logo y nombre vuelven al inicio del rol; si ya estás ahí, suben al principio. */}
@@ -133,11 +167,24 @@ export default function AppLayout() {
 
       <main className="mx-auto max-w-6xl px-5 pb-24 pt-8 sm:pb-8 lg:ml-64 lg:mr-0 lg:max-w-none lg:px-10 lg:pt-10">
         <div className="mx-auto max-w-6xl">
-          {/* En modo soporte el contenido queda en solo lectura: el fieldset
-              deshabilita botones y campos, pero los links de navegación
-              (que son <a>) siguen andando. */}
-          <fieldset disabled={soporte.activo} className="m-0 w-full min-w-0 border-0 p-0">
-            <Outlet />
+          {/* En modo soporte o en solo lectura por suscripción el contenido
+              queda deshabilitado: el fieldset apaga botones y campos, pero los
+              links de navegación (que son <a>) siguen andando. Con la
+              suscripción suspendida el resto del personal ve una pantalla. */}
+          <fieldset disabled={deshabilitado} className="m-0 w-full min-w-0 border-0 p-0">
+            {suspendida && !esAdmin ? (
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <Icono nombre="alerta" className="h-10 w-10 text-danger" />
+                <h1 className="text-xl font-bold text-ink">
+                  El taller tiene la suscripción suspendida.
+                </h1>
+                <p className="max-w-md text-sm text-muted">
+                  Hablá con el administrador del taller para regularizar el pago.
+                </p>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </fieldset>
         </div>
       </main>

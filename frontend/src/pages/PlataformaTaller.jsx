@@ -4,6 +4,7 @@ import DatosTaller from '@/components/plataforma/DatosTaller'
 import HistorialAccesos from '@/components/plataforma/HistorialAccesos'
 import ListaPersonal from '@/components/plataforma/ListaPersonal'
 import PasswordTemporal from '@/components/plataforma/PasswordTemporal'
+import SuscripcionTaller from '@/components/plataforma/SuscripcionTaller'
 import { Chip } from '@/components/ui/Ficha'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
@@ -196,6 +197,15 @@ export default function PlataformaTaller() {
         descripcion="El nombre es lo que ven el personal y los clientes del taller."
       >
         <DatosTaller taller={taller} onGuardar={guardarNombre} />
+      </Seccion>
+
+      <Seccion
+        id="taller-suscripcion"
+        icono="dinero"
+        titulo="Suscripción"
+        descripcion="Plan, vencimiento, pagos y cortesías del taller."
+      >
+        <SuscripcionTaller tallerId={taller.id} onCambio={recargar} />
       </Seccion>
 
       <Seccion

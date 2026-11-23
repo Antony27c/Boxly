@@ -3,6 +3,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PortalOrden from '@/pages/PortalOrden'
 import { puedePagar } from '@/services/portal'
+import { pesos } from '@/utils/formato'
+
+// pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
+const monto = (valor) => pesos(valor).replace(/\s/g, ' ')
 
 const portal = vi.hoisted(() => ({
   misVehiculos: vi.fn(),
@@ -123,13 +127,58 @@ describe('PortalOrden', () => {
   })
 
   it('no muestra el botón de pagar cuando la orden no es pagable', async () => {
-    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: false }))
+    portal.miOrden.mockResolvedValue(ordenBase({ estado: 'en_diagnostico', puede_pagar: false }))
     montar()
 
     expect(
       await screen.findByText('El pago se habilita cuando la orden esté lista.'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    [1, 'El pago se habilita cuando el taller cotice los trabajos pendientes.'],
+    [0, 'El pago se habilita cuando el taller emita el cobro.'],
+  ])(
+    'con la orden lista y sin pago explica qué falta (líneas a cotizar: %s)',
+    async (lineasACotizar, mensaje) => {
+      portal.miOrden.mockResolvedValue(
+        ordenBase({ puede_pagar: false, costo_final: null, lineas_a_cotizar: lineasACotizar }),
+      )
+      montar()
+
+      expect(await screen.findByText(mensaje)).toBeInTheDocument()
+      expect(screen.queryByText('El pago se habilita cuando la orden esté lista.')).not.toBeInTheDocument()
+    },
+  )
+
+  it('con líneas a cotizar el total parcial es lo ya cotizado (total del backend)', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        puede_pagar: false,
+        costo_final: null,
+        costo_estimado: '90000.00',
+        lineas_a_cotizar: 1,
+        total_parcial: true,
+        total: '4500.00',
+      }),
+    )
+    montar()
+
+    expect(await screen.findByText('Total parcial')).toBeInTheDocument()
+    expect(screen.getByText(monto(4500))).toBeInTheDocument()
+    // Ni el estimado ni un $ 0: el total todavía puede cambiar.
+    expect(screen.queryByText(monto(90000))).not.toBeInTheDocument()
+    expect(screen.queryByText(monto(0))).not.toBeInTheDocument()
+  })
+
+  it('con líneas a cotizar y nada cotizado el total parcial dice "A confirmar"', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({ puede_pagar: false, costo_final: null, lineas_a_cotizar: 1, total: null }),
+    )
+    montar()
+
+    expect(await screen.findByText('A confirmar')).toBeInTheDocument()
   })
 
   it('muestra Pagada y no el botón cuando la orden ya está paga', async () => {
@@ -163,6 +212,45 @@ describe('PortalOrden', () => {
 
     expect(await screen.findByText('Pagás en el taller')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
+  })
+
+  it('las líneas a cotizar se muestran como "A cotizar" y el total es parcial', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        estado: 'en_diagnostico',
+        puede_pagar: false,
+        lineas_a_cotizar: 1,
+        detalles: [
+          {
+            id: 1,
+            descripcion: 'Cambio de aceite',
+            repuesto_nombre: null,
+            cantidad: 1,
+            precio_unitario: null,
+            a_cotizar: true,
+            subtotal: null,
+          },
+          {
+            id: 2,
+            descripcion: 'Pastillas de freno',
+            repuesto_nombre: 'Pastillas',
+            cantidad: 2,
+            precio_unitario: '10000.00',
+            a_cotizar: false,
+            subtotal: '20000.00',
+          },
+        ],
+      }),
+    )
+    montar()
+
+    expect(await screen.findByText('A cotizar')).toBeInTheDocument()
+    expect(screen.getByText('Total parcial')).toBeInTheDocument()
+    // La línea sin precio nunca muestra $ 0.
+    expect(screen.queryByText(monto(0))).not.toBeInTheDocument()
+    // La línea con precio sí muestra sus montos.
+    expect(screen.getByText(monto(10000))).toBeInTheDocument()
+    expect(screen.getAllByText(monto(20000)).length).toBeGreaterThan(0)
   })
 
   it('al pagar crea el pago y redirige a url_pago', async () => {

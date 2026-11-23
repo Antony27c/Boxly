@@ -46,6 +46,7 @@ const PRINCIPALES_SUPERADMIN = [
   { a: '/plataforma', texto: 'Talleres', icono: 'herramienta' },
   { a: '/plataforma/planes', texto: 'Planes', icono: 'dinero' },
   { a: '/plataforma/solicitudes', texto: 'Solicitudes', icono: 'clientes' },
+  { a: '/plataforma/encuestas', texto: 'Encuestas', icono: 'info' },
   { a: '/plataforma/sistema', texto: 'Sistema', icono: 'dashboard' },
 ]
 
@@ -104,6 +105,7 @@ export const navegacion = [
   { a: '/plataforma/sistema', texto: 'Sistema', roles: ROLES_SUPERADMIN },
   { a: '/plataforma/planes', texto: 'Planes', roles: ROLES_SUPERADMIN },
   { a: '/plataforma/solicitudes', texto: 'Solicitudes', roles: ROLES_SUPERADMIN },
+  { a: '/plataforma/encuestas', texto: 'Encuestas', roles: ROLES_SUPERADMIN },
   { a: '/suscripcion', texto: 'Suscripción', roles: ROLES_ADMIN },
 ]
 

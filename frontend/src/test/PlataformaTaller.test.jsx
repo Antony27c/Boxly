@@ -17,7 +17,19 @@ const plataforma = vi.hoisted(() => ({
 
 const soporte = vi.hoisted(() => ({ entrar: vi.fn() }))
 
+const suscripciones = vi.hoisted(() => ({
+  listarPlanes: vi.fn(),
+  actualizarPlan: vi.fn(),
+  obtenerSuscripcion: vi.fn(),
+  cambiarPlan: vi.fn(),
+  registrarPago: vi.fn(),
+  ajustarVencimiento: vi.fn(),
+}))
+
 vi.mock('@/services/plataforma', () => ({ plataformaService: plataforma }))
+vi.mock('@/services/suscripcionesPlataforma', () => ({
+  suscripcionesPlataformaService: suscripciones,
+}))
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     token: 'tok',
@@ -95,6 +107,19 @@ const DETALLE_SUSPENDIDO = {
   soporte_vigente_hasta: null,
 }
 
+// La sección Suscripción pide su propio recurso (S5).
+const SUSCRIPCION = {
+  plan: { codigo: 'pro', nombre: 'Pro', precio_mensual: 30000, max_personal: 10, activo: true },
+  vence_en: '2026-12-15',
+  estado: 'al_dia',
+  dias_para_vencer: 22,
+  cobro_automatico: true,
+  personal_activo: 3,
+  max_personal: 10,
+  proximo_monto: 30000,
+  pagos: [],
+}
+
 function montar(ruta = '/plataforma/talleres/2') {
   return render(
     <MemoryRouter initialEntries={[ruta]}>
@@ -122,6 +147,8 @@ describe('PlataformaTaller', () => {
     plataforma.actualizarTaller.mockResolvedValue({ ...DETALLE, nombre: 'Taller Norte Sur' })
     plataforma.restablecerPassword.mockResolvedValue({ password_temporal: 'Tmp98765' })
     plataforma.cerrarSesiones.mockResolvedValue({ detail: 'Se cerraron las sesiones.' })
+    suscripciones.obtenerSuscripcion.mockResolvedValue(SUSCRIPCION)
+    suscripciones.listarPlanes.mockResolvedValue([SUSCRIPCION.plan])
   })
 
   it('muestra datos del taller, personal y accesos de soporte', async () => {
@@ -147,6 +174,11 @@ describe('PlataformaTaller', () => {
     expect(screen.getByText(/Revocado/)).toBeInTheDocument()
     expect(screen.getByText(/Revisar el ticket 45/)).toBeInTheDocument()
     expect(screen.getByText(/Admin Norte/)).toBeInTheDocument()
+
+    // Sección Suscripción (S5): plan, estado y vencimiento del taller.
+    expect(screen.getByText('Suscripción')).toBeInTheDocument()
+    expect(await screen.findByText('Al día')).toBeInTheDocument()
+    expect(suscripciones.obtenerSuscripcion).toHaveBeenCalledWith(2, 'tok')
   })
 
   it('suspende el taller solo después de confirmar y explica el efecto', async () => {

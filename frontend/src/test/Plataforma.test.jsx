@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Plataforma from '@/pages/Plataforma'
 
@@ -56,9 +56,16 @@ function tarjeta(nombre) {
   return screen.getByText(nombre).closest('li')
 }
 
-function montar() {
+// Muestra la URL actual para verificar que los parámetros del alta se limpian.
+function SondaUrl() {
+  const location = useLocation()
+  return <div data-testid="url">{`${location.pathname}${location.search}`}</div>
+}
+
+function montar(ruta = '/plataforma') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[ruta]}>
+      <SondaUrl />
       <Plataforma />
     </MemoryRouter>,
   )
@@ -189,5 +196,72 @@ describe('Plataforma', () => {
     montar()
 
     expect(await screen.findByText('Todavía no hay talleres')).toBeInTheDocument()
+  })
+})
+
+describe('Alta de taller desde una solicitud de demo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    plataforma.listarTalleres.mockResolvedValue({ items: [TALLER_1], total: 1 })
+    plataforma.crearTaller.mockResolvedValue({
+      taller: { ...TALLER_2, id: 3, nombre: 'Taller Punta a Punta', estado: 'activo' },
+      admin_email: 'admin@puntapunta.com',
+      password_temporal: 'Xk4p9qLm2vRt',
+    })
+  })
+
+  it('con nuevo=1 y los datos en la URL el alta abre precargada', async () => {
+    montar(
+      '/plataforma?nuevo=1&nombre=Taller%20Punta%20a%20Punta&admin_nombre=Mar%C3%ADa%20Jos%C3%A9%20P%C3%A9rez&admin_email=admin%40puntapunta.com',
+    )
+
+    // El nombre completo de la solicitud se parte: primera palabra al nombre,
+    // el resto al apellido. Todo queda editable.
+    expect(await screen.findByLabelText('Nombre del taller')).toHaveValue('Taller Punta a Punta')
+    expect(screen.getByLabelText('Nombre')).toHaveValue('María')
+    expect(screen.getByLabelText('Apellido')).toHaveValue('José Pérez')
+    expect(screen.getByLabelText('Correo')).toHaveValue('admin@puntapunta.com')
+  })
+
+  it('sin nuevo=1 el alta no se abre sola', async () => {
+    montar('/plataforma')
+    await screen.findByText('Taller El Rayo')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('al cerrar el alta se limpian los parámetros de la URL', async () => {
+    montar('/plataforma?nuevo=1&nombre=Taller%20Sur&admin_email=a%40b.com')
+
+    const dialogo = await screen.findByRole('dialog')
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByTestId('url')).toHaveTextContent('/plataforma')
+  })
+
+  it('los valores larguísimos de la URL se recortan al máximo del formulario', async () => {
+    const nombreLargo = 'T'.repeat(200)
+    const nombreAdmin = `${'A'.repeat(100)} ${'B'.repeat(100)}`
+    montar(
+      `/plataforma?nuevo=1&nombre=${nombreLargo}&admin_nombre=${encodeURIComponent(nombreAdmin)}&admin_email=${'a'.repeat(300)}%40b.com`,
+    )
+
+    expect(await screen.findByLabelText('Nombre del taller')).toHaveValue('T'.repeat(120))
+    expect(screen.getByLabelText('Nombre')).toHaveValue('A'.repeat(80))
+    expect(screen.getByLabelText('Apellido')).toHaveValue('B'.repeat(80))
+    expect(screen.getByLabelText('Correo').value.length).toBeLessThanOrEqual(254)
+  })
+
+  it('el aviso de taller creado no duplica la palabra Taller', async () => {
+    montar(
+      '/plataforma?nuevo=1&nombre=Taller%20Punta%20a%20Punta&admin_nombre=Mar%C3%ADa%20P%C3%A9rez&admin_email=admin%40puntapunta.com',
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Crear taller' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Taller Punta a Punta creado' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Taller Taller/)).not.toBeInTheDocument()
   })
 })

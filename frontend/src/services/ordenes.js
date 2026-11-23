@@ -36,6 +36,12 @@ export const DESCRIPCION_ESTADOS = {
 
 export const ESTADOS_COBRABLES = ['Listo', 'Entregado']
 
+// 'pendiente' ya no se genera: el mecánico no propone cobros desde el commit
+// 2542dd5 (S3). Se deja porque puede haber órdenes viejas con cobro_estado
+// 'pendiente' y monto_propuesto, que recepción o el administrador todavía aprueban
+// con POST /ordenes/{id}/cobro/aprobar. Borrar esta rama (y la de "Revisar/Aprobar
+// cobro" en accionPrincipal, TarjetaOrden, CobroOrden y el filtro "Cobro pendiente")
+// recién cuando una migración resuelva esas órdenes.
 export function estadoCobro(orden) {
   if (orden.pagada) return 'pagada'
   if (orden.cobro_estado === 'aprobado' && Number(orden.costo_final) > 0) return 'aprobado'
@@ -46,6 +52,8 @@ export function estadoCobro(orden) {
 export function proximosEstados(estado) {
   return TRANSICIONES[estado] ?? []
 }
+
+export const MOTIVO_A_COTIZAR = 'Cotizá los trabajos pendientes antes de cobrar.'
 
 const ROL_ADMIN = ['admin', 'administrador']
 const ROL_MOSTRADOR = [...ROL_ADMIN, 'recepcion', 'recepcionista']
@@ -90,9 +98,22 @@ export function accionPrincipal(orden, rol) {
     case 'Listo': {
       const cobro = estadoCobro(orden)
       if (cobro === 'sin_cobro') {
+        // Con líneas a cotizar el backend rechaza el cobro (409, S3): el botón
+        // queda deshabilitado con el motivo y se ofrece ir a cotizar.
+        if (esMostrador && Number(orden.lineas_a_cotizar ?? 0) > 0) {
+          return {
+            tipo: 'cobro',
+            texto: 'Emitir cobro',
+            deshabilitada: true,
+            motivo: MOTIVO_A_COTIZAR,
+            trabajo: { tipo: 'abrir', texto: 'Cotizar trabajos' },
+          }
+        }
         if (esMostrador) return { tipo: 'cobro', texto: 'Emitir cobro' }
+        // "Proponer cobro" no se muestra: accionVisible se lo filtra al mecánico.
         return esMecanico ? { tipo: 'cobro', texto: 'Proponer cobro' } : null
       }
+      // Solo órdenes viejas con cobro propuesto (ver estadoCobro).
       if (cobro === 'pendiente') {
         if (esAdmin) return { tipo: 'cobro', texto: 'Aprobar cobro' }
         return esMostrador ? { tipo: 'cobro', texto: 'Revisar cobro' } : null
@@ -133,6 +154,28 @@ export function sePuedeEliminar(orden) {
 
 export function sePuedeEditarDetalle(orden) {
   return orden?.estado !== 'Entregado' && orden?.estado !== 'Cancelado'
+}
+
+// Línea "a cotizar" (S3): el backend la marca con a_cotizar o con
+// precio_unitario null; en ambos casos no suma al total.
+export function lineaACotizar(detalle) {
+  return detalle?.a_cotizar === true || detalle?.precio_unitario == null
+}
+
+/* La acción principal que se puede mostrar: el mecánico no emite ni propone
+   cobros (el backend le responde 403), así que la acción 'cobro' no se le
+   ofrece aunque accionPrincipal la calcule. */
+export function accionVisible(orden, rol) {
+  const accion = accionPrincipal(orden, rol)
+  if (accion?.tipo === 'cobro' && ROL_MECANICO.includes(rol)) return null
+  return accion
+}
+
+/* Para las tarjetas y filas, donde no entra el motivo de un botón deshabilitado:
+   si la acción no se puede hacer todavía, se ofrece la que la destraba (cotizar). */
+export function accionEjecutable(orden, rol) {
+  const accion = accionVisible(orden, rol)
+  return accion?.deshabilitada ? (accion.trabajo ?? null) : accion
 }
 
 export function imagenDesdeApi(imagen) {
@@ -185,20 +228,25 @@ export const ordenesService = {
 
   detalles: (ordenId, token) => api.get(`${RECURSO}/${ordenId}/detalles`, token),
 
-  agregarDetalle: (ordenId, linea, token) =>
-    api.post(
-      `${RECURSO}/${ordenId}/detalles`,
-      {
-        repuesto_id: linea.repuesto_id ? Number(linea.repuesto_id) : null,
-        descripcion: linea.descripcion?.trim() || null,
-        cantidad: Number(linea.cantidad) || 1,
-        precio_unitario:
-          linea.precio_unitario !== '' && linea.precio_unitario != null
-            ? Number(linea.precio_unitario)
-            : null,
-      },
-      token,
-    ),
+  agregarDetalle: (ordenId, linea, token) => {
+    const cuerpo = {
+      repuesto_id: linea.repuesto_id ? Number(linea.repuesto_id) : null,
+      descripcion: linea.descripcion?.trim() || null,
+      cantidad: Number(linea.cantidad) || 1,
+    }
+    // El mecánico no manda precio (S3): si viene undefined la clave no viaja.
+    if (linea.precio_unitario !== undefined) {
+      cuerpo.precio_unitario =
+        linea.precio_unitario !== '' && linea.precio_unitario != null
+          ? Number(linea.precio_unitario)
+          : null
+    }
+    return api.post(`${RECURSO}/${ordenId}/detalles`, cuerpo, token)
+  },
+
+  // Cotizar o corregir el precio de una línea (administrador o recepción, S3).
+  cotizarDetalle: (ordenId, detalleId, precio, token) =>
+    api.patch(`${RECURSO}/${ordenId}/detalles/${detalleId}`, { precio_unitario: Number(precio) }, token),
 
   quitarDetalle: (ordenId, detalleId, token) =>
     api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),

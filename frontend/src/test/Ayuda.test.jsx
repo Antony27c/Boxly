@@ -170,6 +170,29 @@ describe('Ayuda', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('la respuesta del Dashboard la ven y nombran recepción y administración', () => {
+    // /dashboard es de ROLES_MOSTRADOR: recepción también entra (no es solo admin).
+    auth.usuario = { id: 3, nombre: 'Ana', apellido: 'Gómez', rol: 'recepcion' }
+    montar('/ayuda?p=dashboard')
+
+    expect(screen.getByText(/números del taller, para recepción y administración/i)).toBeInTheDocument()
+  })
+
+  it('como mecánico la ayuda ya no menciona "Proponer cobro"', () => {
+    auth.usuario = { id: 9, nombre: 'Mario', apellido: 'Sosa', rol: 'mecanico' }
+    montar()
+
+    expect(screen.queryByText(/proponer cobro/i)).not.toBeInTheDocument()
+  })
+
+  it('como mecánico la ayuda explica que no carga precios y las líneas quedan a cotizar', () => {
+    auth.usuario = { id: 9, nombre: 'Mario', apellido: 'Sosa', rol: 'mecanico' }
+    montar('/ayuda?p=trabajos-repuestos')
+
+    expect(screen.getByText(/no carga precios/i)).toBeInTheDocument()
+    expect(screen.getByText(/queda "A cotizar" hasta que recepción la cotiza/i)).toBeInTheDocument()
+  })
+
   it('muestra primero las preguntas del rol del usuario', () => {
     auth.usuario = { id: 3, nombre: 'Ana', apellido: 'Gómez', rol: 'recepcion' }
     montar()

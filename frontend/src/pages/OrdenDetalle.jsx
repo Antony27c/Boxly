@@ -19,8 +19,8 @@ import Patente from '@/components/ui/Patente'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
-import { ROLES_ADMIN, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { accionPrincipal, estadoCobro, ordenesService, proximosEstados } from '@/services/ordenes'
+import { ROLES_ADMIN, ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
+import { accionVisible, estadoCobro, ordenesService, proximosEstados } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 const TONOS = {
@@ -67,6 +67,7 @@ export default function OrdenDetalle() {
   const [parametros, setParametros] = useSearchParams()
   const esMostrador = tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
   const esAdmin = tieneAcceso(ROLES_ADMIN, usuario?.rol)
+  const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
 
   const [aCambiar, setACambiar] = useState(null)
   const [conCobro, setConCobro] = useState(null)
@@ -94,9 +95,9 @@ export default function OrdenDetalle() {
   const [accionIniciada, setAccionIniciada] = useState(false)
   if (quiereAccion && orden && !accionIniciada) {
     setAccionIniciada(true)
-    const inicial = accionPrincipal(orden, usuario?.rol)
+    const inicial = accionVisible(orden, usuario?.rol)
     if (inicial?.tipo === 'etapa') setACambiar({ destino: inicial.destino ?? null })
-    else if (inicial?.tipo === 'cobro') setConCobro(orden)
+    else if (inicial?.tipo === 'cobro' && !inicial.deshabilitada) setConCobro(orden)
     else if (inicial?.tipo === 'asignar') setConAsignar(true)
   }
   useEffect(() => {
@@ -128,8 +129,9 @@ export default function OrdenDetalle() {
     )
   }
 
-  const accion = accionPrincipal(orden, usuario?.rol)
-  const mostrarCobro = estadoCobro(orden) !== null
+  const accion = accionVisible(orden, usuario?.rol)
+  // El mecánico no ve el cobro: no puede emitirlo ni proponerlo (S3).
+  const mostrarCobro = estadoCobro(orden) !== null && !esMecanico
   const pestanas = [
     { id: 'trabajo', texto: 'Trabajo' },
     { id: 'fotos', texto: 'Fotos' },
@@ -278,7 +280,16 @@ export default function OrdenDetalle() {
           aria-labelledby="pestana-trabajo"
           className="mt-6 rounded-box border border-graphite-700 bg-graphite-800 p-5"
         >
-          <DetallesOrden key={version} orden={orden} />
+          {/* Sin cambiar version: las líneas ya se recargaron solas; solo se vuelve a
+              leer la orden (total, líneas a cotizar, cobro) y el seguimiento. */}
+          <DetallesOrden
+            key={version}
+            orden={orden}
+            onCambio={() => {
+              recargar()
+              recargarSeguimiento()
+            }}
+          />
         </div>
       )}
 

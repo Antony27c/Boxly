@@ -5,6 +5,8 @@ import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
+import { useAuth } from '@/context/AuthContext'
+import { ROLES_MECANICO, tieneAcceso } from '@/routes/navegacion'
 import { DESCRIPCION_ESTADOS } from '@/services/ordenes'
 import { validarOrden } from '@/utils/validation'
 
@@ -36,6 +38,9 @@ export default function FormularioOrden({
   onGuardar,
   onCancelar,
 }) {
+  const { usuario } = useAuth()
+  // El mecánico no carga precios (S3): el presupuesto estimado no se le muestra.
+  const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
   const [datos, setDatos] = useState(() => {
     if (!orden) return VACIO
     const vehiculo = vehiculos.find((item) => item.id === orden.vehiculo_id)
@@ -202,16 +207,18 @@ export default function FormularioOrden({
             ]}
           />
         )}
-        <Field
-          label="Presupuesto estimado"
-          inputMode="numeric"
-          value={datos.total}
-          onChange={(e) => cambiar('total', e.target.value)}
-          error={errores.total}
-          ayuda="Poné 0 mientras no haya presupuesto. El monto a cobrar se emite desde «Cobro»."
-          disabled={guardando}
-          placeholder="Ej.: 185000"
-        />
+        {!esMecanico && (
+          <Field
+            label="Presupuesto estimado"
+            inputMode="numeric"
+            value={datos.total}
+            onChange={(e) => cambiar('total', e.target.value)}
+            error={errores.total}
+            ayuda="Poné 0 mientras no haya presupuesto. El monto a cobrar se emite desde «Cobro»."
+            disabled={guardando}
+            placeholder="Ej.: 185000"
+          />
+        )}
       </div>
 
       <Textarea

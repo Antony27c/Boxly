@@ -59,6 +59,14 @@ describe('Cobro como ticket de caja', () => {
     expect(container.querySelector('.border-dashed')).not.toBeInTheDocument()
   })
 
+  it('con líneas a cotizar avisa y no deja emitir el cobro', () => {
+    mostrar({ lineas_a_cotizar: 2 })
+    expect(screen.getByText('Cotizá los trabajos pendientes antes de cobrar.')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/monto a cobrar/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cobro|enviar|aprobar/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+  })
+
   it('con datos del taller muestra el encabezado y el pie del ticket', () => {
     taller.datos = {
       nombre: 'Taller El Rayo',
