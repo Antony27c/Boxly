@@ -18,6 +18,10 @@ from app.api.v1.taller.router import router as taller_router
 from app.api.v1.plataforma_talleres.router import router as plataforma_talleres_router
 from app.api.v1.soporte.router import router as soporte_router
 from app.api.v1.terminos.router import router as terminos_router
+from app.api.v1.publico.router import router as publico_router
+from app.api.v1.suscripcion.router import router as suscripcion_router
+from app.api.v1.suscripcion_mp.router import router as suscripcion_mp_router
+from app.api.v1.plataforma_suscripciones.router import router as plataforma_suscripciones_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/api/v1")
@@ -38,3 +42,7 @@ api_router.include_router(taller_router, prefix="/api/v1")
 api_router.include_router(plataforma_talleres_router, prefix="/api/v1")
 api_router.include_router(soporte_router, prefix="/api/v1")
 api_router.include_router(terminos_router, prefix="/api/v1")
+api_router.include_router(suscripcion_router, prefix="/api/v1")
+api_router.include_router(suscripcion_mp_router, prefix="/api/v1")
+api_router.include_router(plataforma_suscripciones_router, prefix="/api/v1")
+api_router.include_router(publico_router, prefix="/api/v1")

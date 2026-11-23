@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
+from app.core.suscripcion import AL_DIA, GRACIA, SUSPENDIDA, estado_suscripcion, ruta_libre
 from app.db.session import SIN_FILTRO_TALLER, SessionLocal, fijar_taller
 from app.models.taller import AccesoSoporte, Taller
 from app.models.usuario import ROLES_PERSONAL, RolUsuario, Usuario
@@ -116,6 +117,7 @@ def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="El taller está suspendido. Comunicate con Boxly.",
             )
+        _verificar_suscripcion(request, user, taller)
     # Modo soporte: el superadmin opera DENTRO del taller que le dio acceso
     # (solo lectura). Marca la request para auditoría y enmascarado.
     taller_soporte = _taller_soporte(request, db, user)
@@ -127,6 +129,35 @@ def get_current_user(
     # (None = plataforma: el superadmin no ve datos de ningún taller).
     fijar_taller(db, user.taller_id)
     return user
+
+
+_METODOS_LECTURA = {"GET", "HEAD", "OPTIONS"}
+
+
+def _verificar_suscripcion(request: Request, user: Usuario, taller: Taller) -> None:
+    """Corta según el estado de pago de la suscripción (docs/Suscripciones.md).
+
+    solo_lectura: nadie del taller escribe. suspendida: solo el administrador, y
+    solo para pagar. Las rutas de suscripción, login y términos quedan libres.
+    """
+    estado = estado_suscripcion(taller.suscripcion_vence_en)
+    if estado in (AL_DIA, GRACIA) or ruta_libre(request.url.path):
+        if estado == SUSPENDIDA and user.rol != RolUsuario.administrador:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="La suscripción del taller está vencida",
+            )
+        return
+    if estado == SUSPENDIDA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La suscripción del taller está vencida",
+        )
+    if request.method not in _METODOS_LECTURA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El taller está en solo lectura por falta de pago de la suscripción",
+        )
 
 
 CurrentUser = Annotated[Usuario, Depends(get_current_user)]

@@ -65,6 +65,10 @@ class Settings(BaseSettings):
 
     mp_access_token: str | None = None
     mp_webhook_secret: str | None = None
+    # Cuenta de Mercado Pago DE BOXLY (distinta de la de los talleres): cobra las
+    # suscripciones mensuales de los talleres (docs/Suscripciones.md, tarea S2).
+    boxly_mp_access_token: str | None = None
+    boxly_mp_webhook_secret: str | None = None
     frontend_url: str = "http://localhost:5173"
     backend_public_url: str | None = None
 

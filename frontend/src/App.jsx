@@ -32,6 +32,9 @@ import PlataformaSistema from '@/pages/PlataformaSistema'
 import Terminos from '@/pages/Terminos'
 import Suscripcion from '@/pages/Suscripcion'
 import PlataformaPlanes from '@/pages/PlataformaPlanes'
+import PlataformaSolicitudes from '@/pages/PlataformaSolicitudes'
+import Landing from '@/pages/Landing'
+import Privacidad from '@/pages/Privacidad'
 import GuardiaTerminos from '@/components/terminos/GuardiaTerminos'
 import { SoporteProvider } from '@/context/SoporteContext'
 
@@ -44,6 +47,8 @@ export default function App() {
         <SoporteProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/boxly" element={<Landing />} />
+          <Route path="/privacidad" element={<Privacidad />} />
           <Route path="/activar" element={<ActivarCuenta />} />
 
           {/* GuardiaTerminos (P8): el admin de un taller sin términos aceptados va a /terminos. */}
@@ -94,6 +99,7 @@ export default function App() {
               <Route path="/plataforma/talleres/:id" element={<PlataformaTaller />} />
               <Route path="/plataforma/sistema" element={<PlataformaSistema />} />
               <Route path="/plataforma/planes" element={<PlataformaPlanes />} />
+              <Route path="/plataforma/solicitudes" element={<PlataformaSolicitudes />} />
             </Route>
           </Route>
 

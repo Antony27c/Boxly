@@ -5,10 +5,22 @@ de sus clientes y Boxly es el encargado del tratamiento. Por eso el superadmin n
 ve datos de clientes salvo con un AccesoSoporte vigente que el taller otorga.
 Contrato completo en docs/Plataforma.md.
 """
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import DDL, CheckConstraint, DateTime, ForeignKey, Integer, String, event, func
+
+from sqlalchemy import (
+    DDL,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    event,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -41,6 +53,17 @@ class Taller(Base):
                    use_alter=True),
         nullable=True,
     )
+
+    # Suscripción (docs/Suscripciones.md). Vencimiento NULL = sin vencimiento (al día).
+    plan_codigo: Mapped[str] = mapped_column(
+        String(20), ForeignKey("planes.codigo", name="fk_talleres_plan_codigo_planes"),
+        nullable=False, default="basico", server_default="basico",
+    )
+    suscripcion_vence_en: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    cobro_automatico: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    mp_preapproval_id: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
 
     @property
     def activo(self) -> bool:
