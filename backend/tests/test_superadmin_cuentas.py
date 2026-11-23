@@ -5,7 +5,7 @@ from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models import Cliente, Usuario
+from app.models import Cliente, Taller, Usuario
 from app.models.usuario import RolUsuario
 
 MSG_SIN_SUPERADMIN = "No se puede crear ni asignar el rol superadmin"
@@ -22,6 +22,8 @@ def datos():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
+        # el límite del plan se prueba en test_suscripciones.py
+        db.get(Taller, 1).plan_codigo = "pro"
         usuarios = {
             "superadmin": Usuario(
                 nombre="Super", apellido="Admin", email="sa@x.com",

@@ -41,6 +41,8 @@ def datos():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
+        # Taller 1 con plan pro: el límite de personal se prueba en test_suscripciones.py
+        db.get(Taller, 1).plan_codigo = "pro"
         norte = Taller(nombre="Taller Norte")
         db.add(norte)
         db.flush()

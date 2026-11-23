@@ -5,7 +5,7 @@ las filas con datos de un taller quedan filtradas, así que los conteos por
 taller usan ``execution_options(sin_filtro_taller=True)`` y agrupan por
 ``taller_id``. Nunca se devuelven filas de clientes: solo agregados.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from app.db.session import SIN_FILTRO_TALLER
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.orden import Orden
+from app.models.suscripcion import DIAS_DE_PRUEBA, PLAN_POR_DEFECTO
 from app.models.taller import AccesoSoporte, Taller
 from app.models.usuario import ROLES_PERSONAL, Usuario
 from app.schemas.paginacion import ParametrosPagina, aplicar, contar
@@ -54,7 +55,12 @@ def get_taller(db: Session, taller_id: int) -> Taller | None:
 
 
 def crear_taller(db: Session, *, nombre: str) -> Taller:
-    taller = Taller(nombre=nombre)
+    # Plan básico con 30 días de prueba (docs/Suscripciones.md).
+    taller = Taller(
+        nombre=nombre,
+        plan_codigo=PLAN_POR_DEFECTO,
+        suscripcion_vence_en=date.today() + timedelta(days=DIAS_DE_PRUEBA),
+    )
     db.add(taller)
     db.flush()
     return taller

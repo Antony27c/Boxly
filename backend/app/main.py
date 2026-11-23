@@ -10,8 +10,9 @@ from sqlalchemy import text
 import app.models  # noqa: F401
 from app.api.v1.router import api_router
 from app.core.auditoria import AuditoriaMiddleware
-from app.core.enmascarado import EnmascaradoSoporteMiddleware
+from app.core.body_limit import LimiteTamanoBody
 from app.core.config import UPLOADS_DIR, get_settings
+from app.core.enmascarado import EnmascaradoSoporteMiddleware
 from app.core.exceptions import register_exception_handlers
 from app.core.logging_config import configurar_logging
 from app.core.rate_limit import configurar_rate_limit
@@ -53,6 +54,9 @@ def create_app() -> FastAPI:
     app.add_middleware(AuditoriaMiddleware)
     # En modo soporte (header X-Taller-Soporte) enmascara DNI, teléfonos y emails.
     app.add_middleware(EnmascaradoSoporteMiddleware)
+    # Límite de tamaño del body (413): se registra último para ser el más externo
+    # y cortar el request antes de que el resto de los middlewares lo procesen.
+    app.add_middleware(LimiteTamanoBody)
 
     register_exception_handlers(app)
     configurar_rate_limit(app)

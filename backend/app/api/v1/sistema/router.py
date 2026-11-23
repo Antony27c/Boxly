@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
@@ -27,7 +27,7 @@ def estado_sistema(db: DbSession, _: SuperAdminUser):
 def respaldo_taller(db: DbSession, _: AdminTallerUser):
     """ZIP con los CSV solo del taller del administrador (sesión ya filtrada)."""
     contenido = sistema_service.generar_respaldo(db)
-    nombre = f"boxly-respaldo-{datetime.now():%Y%m%d-%H%M}.zip"
+    nombre = f"boxly-respaldo-{datetime.now(timezone.utc):%Y%m%d-%H%M}.zip"
     return Response(
         content=contenido,
         media_type="application/zip",

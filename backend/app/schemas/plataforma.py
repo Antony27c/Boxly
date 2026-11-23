@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
@@ -49,6 +49,10 @@ class TallerResumen(BaseModel):
     ultimo_uso: Optional[datetime] = None
     soporte_vigente_hasta: Optional[datetime] = None
     terminos_aceptados_en: Optional[datetime] = None
+    # Suscripción del taller (docs/Suscripciones.md).
+    plan_codigo: str = "basico"
+    suscripcion_estado: str = "al_dia"
+    suscripcion_vence_en: Optional[date] = None
 
 
 class OtorganteSoporte(BaseModel):

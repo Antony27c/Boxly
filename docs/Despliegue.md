@@ -135,3 +135,13 @@ gunicorn app.main:app -k uvicorn.workers.UvicornWorker --forwarded-allow-ips="10
    aunque todo esté bien configurado. La prueba definitiva es en el VPS Linux. En
    Docker Desktop alcanza con confirmar que la IP auditada **no** es `172.28.0.10` ni
    la falsa.
+
+## Pendientes conocidos
+
+- **Preapproval huérfana en Mercado Pago** (`activar_cobro`,
+  `app/api/v1/suscripcion_mp/service.py`): si la respuesta de MP se pierde después
+  de crear la suscripción (timeout o corte de red), el reintento crea otra
+  preapproval y la primera queda viva en MP sin referencia local
+  (`taller.mp_preapproval_id` solo guarda la última). No cobra nada por sí sola
+  hasta que el pagador la autorice, pero conviene un barrido periódico que liste
+  las preapprovals de la cuenta de Boxly y cancele las que no estén en la base.

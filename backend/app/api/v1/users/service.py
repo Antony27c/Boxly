@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.v1.suscripcion.service import personal_activo
 from app.api.v1.users import repository
 from app.core.config import get_settings
 from app.core.security import (
@@ -9,8 +10,10 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.db.session import CLAVE_TALLER
+from app.models import Plan, Taller
 from app.models.cliente import Cliente
-from app.models.usuario import RolUsuario, Usuario
+from app.models.usuario import ROLES_PERSONAL, RolUsuario, Usuario
 from app.schemas.paginacion import ParametrosPagina
 from app.schemas.usuario import (
     ActivacionInfo,
@@ -185,6 +188,26 @@ def _exigir_sin_superadmin(rol: RolUsuario | None) -> None:
         )
 
 
+def _exigir_cupo_personal(db: Session, taller_id: int | None) -> None:
+    """Límite de personal del plan del taller (docs/Suscripciones.md, S1):
+    crear o reactivar personal por encima de ``max_personal`` → 409.
+    Las cuentas de cliente no cuentan y ``max_personal`` null no limita."""
+    if taller_id is None:
+        return
+    taller = db.get(Taller, taller_id)
+    plan = db.get(Plan, taller.plan_codigo) if taller is not None else None
+    if plan is None or plan.max_personal is None:
+        return
+    if personal_activo(db, taller_id) >= plan.max_personal:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Tu plan permite hasta {plan.max_personal} usuarios del personal. "
+                "Pasá a un plan mayor para sumar más."
+            ),
+        )
+
+
 def _validar_no_ultimo_admin(db: Session, user: Usuario, payload: dict) -> None:
     """No se puede dejar el taller sin administrador activo: ni desactivándolo
     ni cambiándole el rol (docs/Plataforma.md, P1). El filtro de taller ya
@@ -209,6 +232,8 @@ def create_usuario(db: Session, data: UsuarioCreate, actor: Usuario) -> UsuarioR
             detail="Ya existe un usuario con ese email",
         )
     cliente_id = _validar_cliente(db, data.rol, data.cliente_id)
+    if data.rol in ROLES_PERSONAL:
+        _exigir_cupo_personal(db, db.info.get(CLAVE_TALLER))
     user = repository.create(
         db,
         nombre=data.nombre,
@@ -265,6 +290,14 @@ def update_usuario(
 
     _exigir_sin_superadmin(payload.get("rol"))
     _validar_no_ultimo_admin(db, user, payload)
+
+    # Reactivar personal (o pasar a un rol del personal estando activo) ocupa
+    # un lugar del plan: si ya contaba, no gasta cupo nuevo.
+    rol_nuevo = payload.get("rol") or user.rol
+    activo_nuevo = payload.get("activo", user.activo)
+    ya_contaba = user.rol in ROLES_PERSONAL and user.activo
+    if rol_nuevo in ROLES_PERSONAL and activo_nuevo and not ya_contaba:
+        _exigir_cupo_personal(db, user.taller_id)
 
     if "email" in payload:
         email = payload["email"].lower().strip()

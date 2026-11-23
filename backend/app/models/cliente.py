@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import DateTime, String, UniqueConstraint, func
+from sqlalchemy import String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.tipos import FechaHoraUTC
 from app.models.taller import TallerMixin
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ class Cliente(TallerMixin, Base):
     email: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     direccion: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        FechaHoraUTC(), server_default=func.now(), nullable=False
     )
 
     vehiculos: Mapped[List["Vehiculo"]] = relationship(back_populates="cliente")

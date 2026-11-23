@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.error
 import urllib.request
 from decimal import Decimal
@@ -48,6 +49,9 @@ def crear_preferencia(
 
 
 def obtener_preferencia(token: str, preference_id: str) -> dict:
+    # El id va dentro de la ruta de la API: solo caracteres seguros.
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", preference_id or ""):
+        raise MercadoPagoError("preference_id inválido")
     return _request("GET", f"/checkout/preferences/{preference_id}", token)
 
 

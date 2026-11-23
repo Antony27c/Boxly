@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.plataforma_talleres import repository
 from app.api.v1.users import repository as users_repository
 from app.core.security import hash_password
+from app.core.suscripcion import estado_suscripcion
 from app.db.session import fijar_taller
 from app.models import AccesoSoporte, ConfiguracionTaller, Taller, Usuario
 from app.models.usuario import RolUsuario
@@ -85,6 +86,9 @@ def _resumen(db: Session, taller: Taller, conteos: dict[int, dict]) -> TallerRes
         ultimo_uso=c.get("ultimo_uso"),
         soporte_vigente_hasta=c.get("soporte_vigente_hasta"),
         terminos_aceptados_en=taller.terminos_aceptados_en,
+        plan_codigo=taller.plan_codigo,
+        suscripcion_estado=estado_suscripcion(taller.suscripcion_vence_en),
+        suscripcion_vence_en=taller.suscripcion_vence_en,
     )
 
 

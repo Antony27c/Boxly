@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.tipos import FechaHoraUTC
 
 
 class Auditoria(Base):
@@ -18,7 +19,7 @@ class Auditoria(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+        FechaHoraUTC(), server_default=func.now(), nullable=False, index=True
     )
     usuario_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("usuarios.id", name="fk_auditoria_usuario_id_usuarios", ondelete="SET NULL"),

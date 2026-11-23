@@ -8,13 +8,11 @@ Contrato completo en docs/Plataforma.md.
 from datetime import date, datetime
 from typing import Optional
 
-
 from sqlalchemy import (
     DDL,
     Boolean,
     CheckConstraint,
     Date,
-    DateTime,
     ForeignKey,
     Integer,
     String,
@@ -24,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.tipos import FechaHoraUTC
 
 # Taller que se crea en la migración con los datos que había antes del multi-taller.
 # También es el que usan los scripts y los tests cuando no hay un taller en contexto.
@@ -40,13 +39,13 @@ class Taller(Base):
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="activo")
     creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        FechaHoraUTC(), server_default=func.now(), nullable=False
     )
-    suspendido_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspendido_en: Mapped[Optional[datetime]] = mapped_column(FechaHoraUTC(), nullable=True)
     # Aceptación de los términos y del acuerdo de tratamiento de datos (tarea P8).
     terminos_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     terminos_aceptados_en: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        FechaHoraUTC(), nullable=True
     )
     terminos_aceptados_por_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("usuarios.id", name="fk_talleres_terminos_por_usuarios", ondelete="SET NULL",
@@ -107,10 +106,10 @@ class AccesoSoporte(Base):
     )
     motivo: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     desde: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        FechaHoraUTC(), server_default=func.now(), nullable=False
     )
-    hasta: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revocado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    hasta: Mapped[datetime] = mapped_column(FechaHoraUTC(), nullable=False)
+    revocado_en: Mapped[Optional[datetime]] = mapped_column(FechaHoraUTC(), nullable=True)
     revocado_por_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("usuarios.id", name="fk_accesos_soporte_revocado_por_usuarios",
                    ondelete="SET NULL"),

@@ -10,6 +10,8 @@ automático de taller NO lo alcanza: toda consulta filtra por taller_id a mano.
 import hashlib
 import hmac
 import logging
+import re
+import time
 import uuid
 from calendar import monthrange
 from datetime import date, timedelta
@@ -87,6 +89,10 @@ def activar_cobro(db: Session, usuario: Usuario) -> dict:
             status.HTTP_409_CONFLICT, "El taller ya tiene el cobro automático activo"
         )
     back_url = f"{settings.frontend_url.rstrip('/')}/suscripcion"
+    # Pendiente conocido: si la respuesta de MP se pierde después de crear la
+    # preapproval (timeout, corte de red), un reintento crea OTRA en MP y la
+    # primera queda huérfana (existe en MP pero no en taller.mp_preapproval_id).
+    # No se resuelve acá; ver docs/Despliegue.md, "Pendientes conocidos".
     try:
         preapproval = cliente_mp.crear_preapproval(
             token,
@@ -128,15 +134,40 @@ def cancelar_cobro(db: Session, usuario: Usuario) -> None:
 # --- Webhook (sin usuario) ------------------------------------------------------
 
 
+# Ventana de validez del timestamp de x-signature (segundos Unix). Solo se exige
+# en producción; en desarrollo se aceptan firmas de prueba con ts arbitrario.
+VENTANA_FIRMA_WEBHOOK_SEG = 300
+
+# El id de la notificación (preapproval o authorized_payment) va dentro de la
+# ruta de la API de MP: solo caracteres seguros, con tope de largo.
+_ID_NOTIFICACION = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _ts_fresco(ts: str) -> bool:
+    """El ts de x-signature de MP viene en segundos Unix (algunos avisos, en ms)."""
+    try:
+        valor = int(str(ts).strip())
+    except (TypeError, ValueError):
+        return False
+    if valor > 10**12:
+        valor //= 1000
+    return abs(time.time() - valor) <= VENTANA_FIRMA_WEBHOOK_SEG
+
+
 def verificar_firma_webhook(
     data_id: str | None, x_signature: str | None, x_request_id: str | None
 ) -> None:
     """Valida el header x-signature igual que el webhook de pagos, pero con el
     secreto de la cuenta de Boxly. Sin secreto configurado no hay con qué
-    verificar: se avisa y se sigue (solo tiene sentido en desarrollo).
+    verificar: en producción se rechaza; en desarrollo se avisa y se sigue.
     """
-    secret = get_settings().boxly_mp_webhook_secret
+    settings = get_settings()
+    secret = settings.boxly_mp_webhook_secret
     if not secret:
+        if settings.environment == "prod":
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "Firma de webhook inválida"
+            )
         logger.warning(
             "Webhook de suscripción recibido sin BOXLY_MP_WEBHOOK_SECRET: "
             "no se valida la firma"
@@ -149,6 +180,11 @@ def verificar_firma_webhook(
             partes[clave.strip()] = valor.strip()
     ts, v1 = partes.get("ts"), partes.get("v1")
     if not ts or not v1 or not x_request_id:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "Firma de webhook inválida"
+        )
+    if settings.environment == "prod" and not _ts_fresco(ts):
+        # Una firma válida pero vieja no se puede reenviar: el ts es parte del manifest.
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "Firma de webhook inválida"
         )
@@ -314,7 +350,7 @@ def procesar_notificacion(db: Session, tipo: str | None, data_id: str | None) ->
     """
     settings = get_settings()
     token = settings.boxly_mp_access_token
-    if not token or not data_id:
+    if not token or not data_id or not _ID_NOTIFICACION.fullmatch(data_id):
         return
     if tipo in _TIPOS_PREAPPROVAL:
         _procesar_preapproval(db, token, data_id)

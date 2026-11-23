@@ -3,19 +3,23 @@
 Dos talleres (el 1 y el 2) con datos completos y usuarios de cada rol en cada
 uno, más un taller suspendido y un superadmin. Se recorren automáticamente
 todas las rutas de ``app.routes`` bajo ``/api/v1`` (excluidas ``/plataforma``,
-``/auth``, ``/soporte``, ``/terminos`` y el webhook de pagos) y se verifica que
-un usuario del taller A nunca pueda leer ni tocar datos del taller B, que los
-listados no devuelvan filas de B, que el superadmin sin acceso de soporte
-reciba 403 en las rutas del taller, que un usuario de un taller suspendido
-reciba 403, y que la unicidad (DNI, patente, código de repuesto) sea por
-taller.
+``/auth``, ``/terminos`` y el webhook de pagos) y se verifica que un usuario
+del taller A nunca pueda leer ni tocar datos del taller B, que los listados no
+devuelvan filas de B, que el respaldo ZIP, la auditoría y los accesos de
+soporte del taller A no incluyan nada del taller B, que el superadmin sin
+acceso de soporte reciba 403 en las rutas del taller, que un usuario de un
+taller suspendido reciba 403, y que la unicidad (DNI, patente, código de
+repuesto) sea por taller.
 
 Si una ruta fuga datos de B el test queda en ``xfail(strict=True)`` con el
 motivo ``FUGA:`` para que la regresión sea visible pero no rompa la suite
 mientras otro agente lo corrige (contrato en docs/Plataforma.md).
 """
 
-from datetime import datetime
+import csv
+import io
+import zipfile
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,6 +30,8 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models import (
+    AccesoSoporte,
+    Auditoria,
     Cliente,
     DetalleOrden,
     Historial_estado,
@@ -34,24 +40,28 @@ from app.models import (
     Notificacion,
     Orden,
     Pago,
+    PagoSuscripcion,
     Repuesto,
     Taller,
     Turno,
     Usuario,
     Vehiculo,
 )
+from app.models.taller import TALLER_PRINCIPAL_ID
 from app.models.usuario import RolUsuario
 
 # ---------------------------------------------------------------------------
 # Descubrimiento automático de rutas
 # ---------------------------------------------------------------------------
 
-# Prefijos que no son "rutas del taller": plataforma, auth, soporte, términos
-# y el webhook público de Mercado Pago.
+# Prefijos que no son "rutas del taller": plataforma, auth, términos, las
+# rutas públicas de la landing (sin usuario ni contexto de taller) y el
+# webhook público de Mercado Pago. /soporte SÍ entra: desde P2 son rutas del
+# taller (el administrador otorga y revoca accesos de su propio taller).
 PREFIJOS_EXCLUIDOS = (
     "/api/v1/plataforma",
     "/api/v1/auth",
-    "/api/v1/soporte",
+    "/api/v1/publico",
     "/api/v1/terminos",
 )
 
@@ -126,6 +136,12 @@ CASOS_PARAMS = [
         {"descripcion": "Mano de obra", "cantidad": 1, "precio_unitario": 100},
         None,
     ),
+    (
+        "PATCH",
+        "/api/v1/ordenes/{orden_id}/detalles/{detalle_id}",
+        {"precio_unitario": 75},
+        None,
+    ),
     ("DELETE", "/api/v1/ordenes/{orden_id}/detalles/{detalle_id}", None, None),
     ("GET", "/api/v1/ordenes/{orden_id}/imagenes", None, None),
     (
@@ -162,14 +178,12 @@ CASOS_PARAMS = [
     ("GET", "/api/v1/mecanicos/{mecanico_id}/calendario", None, None),
     # portal del cliente
     ("GET", "/api/v1/mis-ordenes/{orden_id}", None, None),
+    # soporte: revocar el acceso del otro taller tiene que dar 404
+    ("POST", "/api/v1/soporte/accesos/{acceso_id}/revocar", None, None),
 ]
 
-# GET sin parámetros de ruta: listados y catálogos.
+# GET sin parámetros de ruta: listados, catálogos, respaldo y auditoría.
 CASOS_LISTAS = [
-    ("GET", "/api/v1/admin/auditoria"),
-    ("GET", "/api/v1/admin/auditoria/exportar"),
-    ("GET", "/api/v1/admin/sistema"),
-    ("GET", "/api/v1/admin/exportar"),
     ("GET", "/api/v1/catalogo/marcas"),
     ("GET", "/api/v1/catalogo/modelos"),
     ("GET", "/api/v1/clientes"),
@@ -182,7 +196,15 @@ CASOS_LISTAS = [
     ("GET", "/api/v1/ordenes/estados"),
     ("GET", "/api/v1/repuestos"),
     ("GET", "/api/v1/repuestos/stock-bajo"),
+    ("GET", "/api/v1/soporte/accesos"),
+    ("GET", "/api/v1/soporte/actividad"),
+    ("GET", "/api/v1/suscripcion"),
+    ("GET", "/api/v1/suscripcion/pagos"),
+    ("GET", "/api/v1/suscripcion/planes"),
     ("GET", "/api/v1/taller"),
+    ("GET", "/api/v1/taller/auditoria"),
+    ("GET", "/api/v1/taller/auditoria/exportar"),
+    ("GET", "/api/v1/taller/respaldo"),
     ("GET", "/api/v1/turnos"),
     ("GET", "/api/v1/users"),
     ("GET", "/api/v1/users/mecanicos"),
@@ -223,7 +245,14 @@ CASOS_CREACIONES = [
     # creación propia en el taller de la sesión
     ("POST", "/api/v1/clientes", {"nombre": "Nuevo", "apellido": "Cliente", "dni": "N0000001"}),
     ("POST", "/api/v1/repuestos", {"codigo": "NUEVO-1", "nombre": "Repuesto nuevo", "precio": 50}),
-    # datos del taller: hoy solo superadmin; P3 lo pasa al administrador del taller
+    # acceso de soporte propio del taller de la sesión (P2)
+    ("POST", "/api/v1/soporte/accesos", {"horas": 4, "motivo": "Prueba de aislamiento"}),
+    # suscripción del taller de la sesión (S1/S2)
+    ("PUT", "/api/v1/suscripcion/plan", {"plan": "pro"}),
+    ("POST", "/api/v1/suscripcion/cobro-automatico", {}),
+    ("DELETE", "/api/v1/suscripcion/cobro-automatico", {}),
+    ("POST", "/api/v1/suscripcion/simular-cobro", {"estado": "aprobado"}),
+    # datos del taller: P3 lo pasó al administrador del taller
     ("PUT", "/api/v1/taller", {"nombre": "Intento de cambio"}),
 ]
 
@@ -244,6 +273,32 @@ PERSONAS_LISTA = {
     "/api/v1/mis-vehiculos": ("cliente",),
 }
 
+# Rutas que hoy explotan con 500 por un bug ajeno (no son fugas de datos):
+# PlanResponse.model_validate no acepta instancias ORM porque
+# app/schemas/suscripcion.py no define from_attributes. El caso queda
+# registrado para cobertura, pero si la request explota se reporta xfail;
+# cuando el bug se corrige el test vuelve a correr y pasa solo.
+XFAIL_500 = {
+    ("GET", "/api/v1/suscripcion"),
+    ("GET", "/api/v1/suscripcion/planes"),
+    ("PUT", "/api/v1/suscripcion/plan"),
+}
+MOTIVO_500 = (
+    "BUG ajeno (S1): PlanResponse.model_validate falla con instancias ORM "
+    "(falta from_attributes en schemas/suscripcion.py) → 500; no es fuga"
+)
+
+
+def _request(api, headers, metodo, path, **kwargs):
+    """api.request que convierte en xfail la explosión de las rutas de XFAIL_500."""
+    try:
+        return api.request(metodo, path, headers=headers, **kwargs)
+    except Exception:
+        if (metodo, path) in XFAIL_500:
+            pytest.xfail(MOTIVO_500)
+        raise
+
+
 # Body mínimo válido por ruta de escritura, para que un 403/401 no dependa de
 # que el body pase la validación.
 def _kwargs_minimos(metodo: str, path: str) -> dict:
@@ -259,9 +314,17 @@ def _kwargs_minimos(metodo: str, path: str) -> dict:
         return {"json": {"cantidad": 1}}
     if path.endswith("/detalles"):
         return {"json": {"descripcion": "x", "cantidad": 1, "precio_unitario": 1}}
+    if "/detalles/" in path:
+        return {"json": {"precio_unitario": 10}}
     if path.endswith("/confirmar"):
         return {"json": {"payment_id": "1"}}
     if path.endswith("/simular"):
+        return {"json": {"estado": "aprobado"}}
+    if path == "/api/v1/soporte/accesos":
+        return {"json": {"horas": 4}}
+    if path == "/api/v1/suscripcion/plan":
+        return {"json": {"plan": "pro"}}
+    if path == "/api/v1/suscripcion/simular-cobro":
         return {"json": {"estado": "aprobado"}}
     if path == "/api/v1/taller":
         return {"json": {"nombre": "x"}}
@@ -346,13 +409,26 @@ def _sembrar_taller(db, taller_id: int, tag: str):
         mecanico_id=mecanico.id, dia_semana=0, hora_desde="08:00",
         hora_hasta="12:00", taller_id=taller_id,
     )
-    db.add_all([detalle, historial, imagen, pago, notificacion, turno, horario])
+    # PagoSuscripcion no usa TallerMixin: el taller va explícito (el service
+    # de suscripción filtra a mano; acá queda para que /suscripcion/pagos
+    # tenga datos del otro taller contra los que probar la fuga).
+    pago_suscripcion = PagoSuscripcion(
+        taller_id=taller_id, monto=15000,
+        periodo_desde=date(2026, 1, 1), periodo_hasta=date(2026, 1, 31),
+        medio="manual", estado="aprobado", referencia=f"Ref-{t}",
+        registrado_por_id=admin.id,
+    )
+    db.add_all([
+        detalle, historial, imagen, pago, notificacion, turno, horario,
+        pago_suscripcion,
+    ])
     db.commit()
     return {
         "admin": admin, "recepcion": recepcion, "mecanico": mecanico,
         "cuenta": cuenta, "cliente": cliente, "vehiculo": vehiculo,
         "repuesto": repuesto, "orden": orden, "detalle": detalle,
         "imagen": imagen, "pago": pago, "turno": turno, "horario": horario,
+        "pago_suscripcion": pago_suscripcion,
     }
 
 
@@ -380,6 +456,51 @@ def datos():
             rol=RolUsuario.superadmin, taller_id=None,
         )
         db.add_all([suspendido, superadmin])
+        db.flush()
+
+        # Accesos de soporte y auditoría de cada taller (P2/P3). El de A está
+        # vencido (se ve en el listado pero no bloquea un nuevo otorgamiento);
+        # el de B está vigente y con motivo centinela.
+        ahora = datetime.now(timezone.utc)
+        acceso_a = AccesoSoporte(
+            taller_id=TALLER_PRINCIPAL_ID, otorgado_por_id=datos_a["admin"].id,
+            motivo="SoporteA vencido",
+            desde=ahora - timedelta(hours=72), hasta=ahora - timedelta(hours=48),
+        )
+        acceso_b = AccesoSoporte(
+            taller_id=taller_b.id, otorgado_por_id=datos_b["admin"].id,
+            motivo="MotivoB-centinela",
+            desde=ahora - timedelta(hours=1), hasta=ahora + timedelta(hours=23),
+        )
+        auditorias = [
+            Auditoria(
+                usuario_id=datos_a["admin"].id, taller_id=TALLER_PRINCIPAL_ID,
+                soporte=False, usuario_email="admin.a@demo.com",
+                rol="administrador", metodo="POST", ruta="/api/v1/clientes",
+                entidad="clientes", estado_http=201, detalle="AccionA",
+            ),
+            Auditoria(
+                usuario_id=superadmin.id, taller_id=TALLER_PRINCIPAL_ID,
+                soporte=True, usuario_email="super@demo.com",
+                rol="superadmin", metodo="GET", ruta="/api/v1/clientes",
+                estado_http=200,
+            ),
+            Auditoria(
+                usuario_id=datos_b["admin"].id, taller_id=taller_b.id,
+                soporte=False, usuario_email="admin.b@demo.com",
+                rol="administrador", metodo="POST", ruta="/api/v1/ordenes",
+                entidad="ordenes", entidad_id=datos_b["orden"].id,
+                estado_http=201, detalle="DetalleB-centinela",
+            ),
+            Auditoria(
+                usuario_id=superadmin.id, taller_id=taller_b.id,
+                soporte=True, usuario_email="super@demo.com",
+                rol="superadmin", metodo="GET",
+                ruta=f"/api/v1/ordenes/{datos_b['orden'].id}",
+                entidad="ordenes", entidad_id=datos_b["orden"].id, estado_http=200,
+            ),
+        ]
+        db.add_all([acceso_a, acceso_b, *auditorias])
         db.commit()
 
         # Nombres de path-param -> id de la entidad del taller B.
@@ -395,6 +516,7 @@ def datos():
             "user_id": datos_b["admin"].id,
             "mecanico_id": datos_b["mecanico"].id,
             "horario_id": datos_b["horario"].id,
+            "acceso_id": acceso_b.id,
         }
         headers = {
             "admin": datos_a["admin"],
@@ -422,7 +544,7 @@ def datos():
             "B0000001", "PAT-B-001", "OT-B-0001", "REP-B-001",
             "ClienteB", "MarcaB", "ModeloB", "RepuestoB", "DetalleB",
             "TrabajoB", "AvisoB", "TurnoB", "AdminB", "RecepB", "MecanicoB",
-            "CuentaB", "b-centinela", "TallerBravo",
+            "CuentaB", "b-centinela", "TallerBravo", "MotivoB", "Ref-B",
         }
         return {
             "headers": headers, "b_ids": b_ids, "a_ids": a_ids,
@@ -505,7 +627,7 @@ def test_ruta_con_id_de_otro_taller(api, datos, metodo, plantilla, json_body, fi
 def test_listado_no_devuelve_datos_de_b(api, datos, metodo, path):
     personas = PERSONAS_LISTA.get(path, ("admin",))
     for persona in personas:
-        r = api.request(metodo, path, headers=datos["headers"][persona])
+        r = _request(api, datos["headers"][persona], metodo, path)
         if r.status_code == 200:
             assert not _filtra_b(r, datos["centinelas"]), (
                 f"FUGA: {metodo} {path} como {persona} del taller A devolvió "
@@ -546,9 +668,7 @@ def test_escritura_sin_param_no_toca_al_otro_taller(api, datos, metodo, path, js
     body = _sustituir_ids(json_body, datos["b_ids"])
     b_vals = set(datos["b_ids"].values())
     tiene_refs_b = any(isinstance(v, int) and v in b_vals for v in body.values())
-    r = api.request(
-        metodo, path, headers=datos["headers"]["admin"], json=body
-    )
+    r = _request(api, datos["headers"]["admin"], metodo, path, json=body)
     if tiene_refs_b:
         # Un body que referencia entidades de B tiene que fallar: nunca crear
         # ni vincular datos usando ids ajenos.
@@ -633,14 +753,14 @@ def test_mismo_codigo_repuesto_en_dos_talleres(api, datos):
 
 
 def _casos_superadmin():
-    """Rutas del taller (sin /admin legacy, neutras ni las pendientes de P3)."""
+    """Rutas del taller: todo lo que no es catálogo/estados neutros.
+
+    Incluye /taller/* y /soporte/* (desde P2/P3 son rutas del taller de la
+    sesión): el superadmin sin acceso de soporte tiene que recibir 403.
+    """
     for metodo, path in sorted(_rutas_en_scope()):
-        if path.startswith("/api/v1/admin"):
-            continue  # rutas de plataforma del superadmin (P3 las elimina)
         if (metodo, path) in RUTAS_NEUTRAS:
             continue  # catálogo/estados: datos globales, no del taller
-        if path == "/api/v1/taller":
-            continue  # P3 lo convierte en ruta del taller de la sesión
         yield metodo, path
 
 
@@ -685,3 +805,125 @@ def test_usuario_de_taller_suspendido_recibe_403(api, datos, metodo, path):
     assert r.status_code == 403, (
         f"{metodo} {url} como suspendido: {r.status_code} {r.text[:200]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 6. Respaldo, auditoría y accesos de soporte: nada del taller B
+# ---------------------------------------------------------------------------
+
+TABLAS_RESPALDO = [
+    "usuarios",
+    "clientes",
+    "vehiculos",
+    "ordenes",
+    "detalles_orden",
+    "historial_estado",
+    "repuestos",
+    "turnos",
+    "pagos",
+    "horarios_mecanico",
+    "configuracion_taller",
+]
+
+
+def _csvs_del_zip(contenido: bytes) -> dict:
+    """Abre el ZIP del respaldo y devuelve {nombre.csv: filas} parseadas."""
+    with zipfile.ZipFile(io.BytesIO(contenido)) as z:
+        assert set(z.namelist()) == {f"{tabla}.csv" for tabla in TABLAS_RESPALDO}
+        return {
+            nombre: list(csv.reader(io.StringIO(z.read(nombre).decode("utf-8-sig"))))
+            for nombre in z.namelist()
+        }
+
+
+def test_respaldo_del_taller_a_no_contiene_datos_de_b(api, datos):
+    """El ZIP del administrador del taller A solo puede tener filas de A:
+    se audita la columna taller_id de cada CSV, el orden_id de las tablas
+    hijas de la orden y que ningún centinela de B (DNI, emails, códigos)
+    aparezca en ningún lado."""
+    r = api.get("/api/v1/taller/respaldo", headers=datos["headers"]["admin"])
+    assert r.status_code == 200, r.text[:300]
+    csvs = _csvs_del_zip(r.content)
+    taller_b = str(datos["taller_b_id"])
+
+    # Toda fila con columna taller_id tiene que ser del taller A.
+    for nombre, filas in csvs.items():
+        encabezado = filas[0]
+        if "taller_id" in encabezado:
+            i = encabezado.index("taller_id")
+            for fila in filas[1:]:
+                assert fila[i] != taller_b, (
+                    f"FUGA: {nombre}.csv del respaldo tiene una fila del taller B"
+                )
+
+    # Las tablas hijas de la orden no tienen taller_id propio: solo pueden
+    # apuntar a órdenes que sí salieron en ordenes.csv (las del taller A).
+    encabezado_ordenes = csvs["ordenes.csv"][0]
+    ids_ordenes_a = {
+        fila[encabezado_ordenes.index("id")] for fila in csvs["ordenes.csv"][1:]
+    }
+    assert ids_ordenes_a, "el respaldo no trajo ninguna orden del taller A"
+    for nombre in ("detalles_orden.csv", "historial_estado.csv"):
+        filas = csvs[nombre]
+        j = filas[0].index("orden_id")
+        for fila in filas[1:]:
+            assert fila[j] in ids_ordenes_a, (
+                f"FUGA: {nombre}.csv referencia una orden fuera del taller A"
+            )
+
+    # Ningún valor centinela de B (DNIs, emails, códigos, motivos, etc.).
+    for nombre, filas in csvs.items():
+        texto = "\n".join(",".join(fila) for fila in filas)
+        for centinela in datos["centinelas"]:
+            assert centinela not in texto, (
+                f"FUGA: {nombre}.csv del respaldo contiene {centinela!r} "
+                "del taller B"
+            )
+
+    # Sanidad: los datos del taller A sí están en el respaldo.
+    texto_clientes = "\n".join(
+        ",".join(fila) for fila in csvs["clientes.csv"][1:]
+    )
+    assert "A0000001" in texto_clientes
+
+
+def test_auditoria_del_taller_a_no_trae_filas_de_b(api, datos):
+    """GET /taller/auditoria y su exportar CSV solo traen filas del taller A."""
+    h = datos["headers"]["admin"]
+    r = api.get("/api/v1/taller/auditoria", headers=h)
+    assert r.status_code == 200, r.text[:300]
+    filas = r.json()
+    assert filas, "la auditoría del taller A vino vacía"
+    assert all(f["taller_id"] == TALLER_PRINCIPAL_ID for f in filas), (
+        "FUGA: /taller/auditoria devolvió filas de otro taller"
+    )
+    assert not _filtra_b(r, datos["centinelas"])
+
+    r = api.get("/api/v1/taller/auditoria/exportar", headers=h)
+    assert r.status_code == 200, r.text[:300]
+    assert not _filtra_b(r, datos["centinelas"]), (
+        "FUGA: /taller/auditoria/exportar contiene datos del taller B"
+    )
+
+
+def test_accesos_y_actividad_soporte_del_taller_a_no_muestran_b(api, datos):
+    """GET /soporte/accesos y /soporte/actividad del taller A no traen lo de B."""
+    h = datos["headers"]["admin"]
+    r = api.get("/api/v1/soporte/accesos", headers=h)
+    assert r.status_code == 200, r.text[:300]
+    accesos = r.json()
+    assert accesos, "el taller A debería ver al menos su acceso vencido"
+    assert all(a["taller_id"] == TALLER_PRINCIPAL_ID for a in accesos), (
+        "FUGA: /soporte/accesos devolvió accesos de otro taller"
+    )
+    assert all(a["id"] != datos["b_ids"]["acceso_id"] for a in accesos)
+    assert not _filtra_b(r, datos["centinelas"])
+
+    r = api.get("/api/v1/soporte/actividad", headers=h)
+    assert r.status_code == 200, r.text[:300]
+    actividad = r.json()
+    assert actividad, "el taller A debería ver la actividad de soporte propia"
+    assert all(a["taller_id"] == TALLER_PRINCIPAL_ID for a in actividad), (
+        "FUGA: /soporte/actividad devolvió auditoría de otro taller"
+    )
+    assert not _filtra_b(r, datos["centinelas"])

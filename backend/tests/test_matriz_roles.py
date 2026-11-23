@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models import Cliente, Orden, Repuesto, Usuario, Vehiculo
+from app.models import Cliente, Orden, Repuesto, Taller, Usuario, Vehiculo
 from app.models.usuario import RolUsuario
 from app.main import app
 
@@ -26,6 +26,8 @@ def datos():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
+        # el límite del plan se prueba en test_suscripciones.py
+        db.get(Taller, 1).plan_codigo = "pro"
         usuarios = {
             "administrador": Usuario(nombre="Admin", apellido="Taller", email="admin@x.com",
                                      password_hash=hash_password("x"), rol=RolUsuario.administrador),

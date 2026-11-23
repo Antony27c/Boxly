@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import logging
+import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -242,15 +243,38 @@ def _payment_id_ajeno(db: Session, pago: Pago, mp_id: str) -> bool:
     )
 
 
+# Ventana de validez del timestamp de x-signature (segundos Unix). Solo se exige
+# en producción; en desarrollo se aceptan firmas de prueba con ts arbitrario.
+VENTANA_FIRMA_WEBHOOK_SEG = 300
+
+
+def _ts_fresco(ts: str) -> bool:
+    """El ts de x-signature de MP viene en segundos Unix (algunos avisos, en ms)."""
+    try:
+        valor = int(str(ts).strip())
+    except (TypeError, ValueError):
+        return False
+    if valor > 10**12:
+        valor //= 1000
+    return abs(time.time() - valor) <= VENTANA_FIRMA_WEBHOOK_SEG
+
+
 def verificar_firma_webhook(
     payment_id: str | None, x_signature: str | None, x_request_id: str | None
 ) -> None:
     """Valida el header x-signature de Mercado Pago (HMAC-SHA256 del manifest).
 
-    Sin MP_WEBHOOK_SECRET configurado no hay con qué verificar: se avisa y se sigue.
+    Sin MP_WEBHOOK_SECRET configurado no hay con qué verificar: en producción se
+    rechaza; en desarrollo se avisa y se sigue.
     """
-    secret = get_settings().mp_webhook_secret
+    settings = get_settings()
+    secret = settings.mp_webhook_secret
     if not secret:
+        if settings.environment == "prod":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Firma de webhook inválida",
+            )
         logger.warning(
             "Webhook de Mercado Pago recibido sin MP_WEBHOOK_SECRET: no se valida la firma"
         )
@@ -262,6 +286,11 @@ def verificar_firma_webhook(
             partes[clave.strip()] = valor.strip()
     ts, v1 = partes.get("ts"), partes.get("v1")
     if not ts or not v1 or not x_request_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Firma de webhook inválida"
+        )
+    if settings.environment == "prod" and not _ts_fresco(ts):
+        # Una firma válida pero vieja no se puede reenviar: el ts es parte del manifest.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Firma de webhook inválida"
         )

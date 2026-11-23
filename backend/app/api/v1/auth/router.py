@@ -40,7 +40,8 @@ def me(current_user: CurrentUser) -> Usuario:
     response_model=ActivacionInfo,
     summary="Datos del cliente invitado",
 )
-def info_activacion(token: str, db: DbSession) -> ActivacionInfo:
+@limiter.limit("5/minute")
+def info_activacion(request: Request, token: str, db: DbSession) -> ActivacionInfo:
     """Con el enlace del correo: devuelve los datos que el cliente tiene que confirmar."""
     return service.info_activacion(db, token)
 
@@ -51,7 +52,7 @@ def info_activacion(token: str, db: DbSession) -> ActivacionInfo:
     status_code=201,
     summary="Activar la cuenta del cliente",
 )
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 def activar_cuenta(
     request: Request, data: ActivacionRequest, db: DbSession
 ) -> TokenResponse:

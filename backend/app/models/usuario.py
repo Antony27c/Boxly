@@ -2,10 +2,11 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.tipos import FechaHoraUTC
 
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
@@ -62,12 +63,12 @@ class Usuario(Base):
         nullable=True,
     )
     creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        FechaHoraUTC(),
         server_default=func.now(),
         nullable=False,
     )
     actualizado_en: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
+        FechaHoraUTC(),
         onupdate=func.now(),
         nullable=True,
     )

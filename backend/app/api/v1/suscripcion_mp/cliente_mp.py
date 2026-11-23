@@ -6,6 +6,7 @@ recurrentes) que le cobran el plan mensual a cada taller. Mismo estilo de
 cliente que el de pagos: urllib, timeout corto y MercadoPagoError propio.
 """
 import json
+import re
 import urllib.error
 import urllib.request
 from decimal import Decimal
@@ -15,6 +16,13 @@ API_URL = "https://api.mercadopago.com"
 
 class MercadoPagoError(Exception):
     pass
+
+
+def _id_mp(valor: str, que: str) -> str:
+    """Los ids de MP van dentro de la ruta de la API: solo caracteres seguros."""
+    if not isinstance(valor, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", valor):
+        raise MercadoPagoError(f"{que} inválido")
+    return valor
 
 
 def _request(method: str, path: str, token: str, body: dict | None = None) -> dict:
@@ -59,7 +67,7 @@ def crear_preapproval(
 
 
 def obtener_preapproval(token: str, preapproval_id: str) -> dict:
-    return _request("GET", f"/preapproval/{preapproval_id}", token)
+    return _request("GET", f"/preapproval/{_id_mp(preapproval_id, 'preapproval_id')}", token)
 
 
 def actualizar_preapproval(
@@ -80,15 +88,24 @@ def actualizar_preapproval(
         }
     if reason is not None:
         body["reason"] = reason
-    return _request("PUT", f"/preapproval/{preapproval_id}", token, body)
+    return _request(
+        "PUT", f"/preapproval/{_id_mp(preapproval_id, 'preapproval_id')}", token, body
+    )
 
 
 def cancelar_preapproval(token: str, preapproval_id: str) -> dict:
-    return _request("PUT", f"/preapproval/{preapproval_id}", token, {"status": "cancelled"})
+    return _request(
+        "PUT",
+        f"/preapproval/{_id_mp(preapproval_id, 'preapproval_id')}",
+        token,
+        {"status": "cancelled"},
+    )
 
 
 def obtener_pago_autorizado(token: str, authorized_payment_id: str) -> dict:
     """Trae un cobro de una preapproval (autorizado_pago) con su pago asociado."""
-    if not authorized_payment_id:
-        raise MercadoPagoError("authorized_payment_id inválido")
-    return _request("GET", f"/authorized_payments/{authorized_payment_id}", token)
+    return _request(
+        "GET",
+        f"/authorized_payments/{_id_mp(authorized_payment_id, 'authorized_payment_id')}",
+        token,
+    )

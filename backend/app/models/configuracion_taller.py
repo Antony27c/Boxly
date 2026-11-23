@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.tipos import FechaHoraUTC
 
 
 class ConfiguracionTaller(Base):
@@ -34,7 +35,7 @@ class ConfiguracionTaller(Base):
     pie_ticket: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     dias_garantia: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
     actualizado_en: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), onupdate=func.now(), nullable=True
+        FechaHoraUTC(), onupdate=func.now(), nullable=True
     )
     actualizado_por_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey(
