@@ -3,7 +3,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import { TemaProvider } from '@/context/TemaContext'
 import { ToastProvider } from '@/context/ToastContext'
 import ProtectedRoute from '@/routes/ProtectedRoute'
-import { ROLES_ADMIN, ROLES_CLIENTE, ROLES_MOSTRADOR, ROLES_TALLER } from '@/routes/navegacion'
+import { ROLES_ADMIN, ROLES_CLIENTE, ROLES_MOSTRADOR, ROLES_SUPERADMIN, ROLES_TALLER } from '@/routes/navegacion'
 import AppLayout from '@/layouts/AppLayout'
 import Login from '@/pages/Login'
 import ActivarCuenta from '@/pages/ActivarCuenta'
@@ -25,6 +25,7 @@ import ResultadoPago from '@/pages/ResultadoPago'
 import NoEncontrado from '@/pages/NoEncontrado'
 import Ayuda from '@/pages/Ayuda'
 import Configuracion from '@/pages/Configuracion'
+import Admin from '@/pages/Admin'
 
 export default function App() {
   return (
@@ -72,7 +73,12 @@ export default function App() {
           <Route element={<ProtectedRoute roles={ROLES_ADMIN} />}>
             <Route element={<AppLayout />}>
               <Route path="/usuarios" element={<Usuarios />} />
-              <Route path="/admin" element={<Navigate to="/usuarios" replace />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute roles={ROLES_SUPERADMIN} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/admin" element={<Admin />} />
             </Route>
           </Route>
 

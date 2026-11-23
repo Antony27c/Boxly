@@ -1,10 +1,16 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CobroOrden from '@/components/ordenes/CobroOrden'
 import { pesos } from '@/utils/formato'
 
 // pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
 const monto = (valor) => pesos(valor).replace(/\s/g, ' ')
+
+const taller = vi.hoisted(() => ({ datos: null }))
+
+vi.mock('@/hooks/useTaller', () => ({
+  default: () => ({ taller: taller.datos, cargando: false, error: '', recargar: vi.fn() }),
+}))
 
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ token: 'tok' }) }))
 
@@ -15,6 +21,10 @@ function mostrar(orden, esMostrador = true) {
 }
 
 describe('Cobro como ticket de caja', () => {
+  beforeEach(() => {
+    taller.datos = null
+  })
+
   it('muestra el presupuesto y el total enviado con montos en mono', () => {
     const { container } = mostrar({ cobro_estado: 'aprobado', costo_final: 185000, cobro_aprobado_por_nombre: 'Ana' })
     expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
@@ -47,5 +57,43 @@ describe('Cobro como ticket de caja', () => {
     const { container } = mostrar({})
     expect(screen.getByText('Todavía no se emitió el cobro de esta orden.')).toBeInTheDocument()
     expect(container.querySelector('.border-dashed')).not.toBeInTheDocument()
+  })
+
+  it('con datos del taller muestra el encabezado y el pie del ticket', () => {
+    taller.datos = {
+      nombre: 'Taller El Rayo',
+      direccion: 'Av. San Martín 1234',
+      telefono: '11-5555-1234',
+      cuit: '30712345678',
+      pie_ticket: 'Gracias por tu visita.',
+      dias_garantia: 90,
+    }
+    mostrar({ cobro_estado: 'aprobado', costo_final: 185000 })
+
+    expect(screen.getByText('Taller El Rayo')).toBeInTheDocument()
+    expect(screen.getByText('Av. San Martín 1234')).toBeInTheDocument()
+    expect(screen.getByText('Tel: 11-5555-1234')).toBeInTheDocument()
+    expect(screen.getByText('CUIT: 30-71234567-8')).toBeInTheDocument()
+    expect(screen.getByText('Gracias por tu visita.')).toBeInTheDocument()
+    expect(screen.getByText('Garantía: 90 días')).toBeInTheDocument()
+  })
+
+  it('con datos parciales del taller solo muestra lo que tiene', () => {
+    taller.datos = { nombre: 'Taller El Rayo', dias_garantia: 1 }
+    const { container } = mostrar({})
+
+    expect(screen.getByText('Taller El Rayo')).toBeInTheDocument()
+    expect(screen.queryByText(/CUIT:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tel:/)).not.toBeInTheDocument()
+    expect(screen.getByText('Garantía: 1 día')).toBeInTheDocument()
+    expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
+  })
+
+  it('sin datos del taller el ticket no muestra encabezado ni pie', () => {
+    const { container } = mostrar({})
+
+    expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
+    expect(screen.queryByText(/Garantía:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/CUIT:/)).not.toBeInTheDocument()
   })
 })

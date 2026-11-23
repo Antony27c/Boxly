@@ -11,6 +11,7 @@ import { pasosDesdeEstado } from '@/components/portal/pasosRuta'
 import RutaSeguimiento from '@/components/portal/RutaSeguimiento'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import useTaller from '@/hooks/useTaller'
 import { nombreEstado } from '@/services/ordenes'
 import { pagosService, portalService, puedePagar } from '@/services/portal'
 import { pesos } from '@/utils/formato'
@@ -147,6 +148,7 @@ const ORDEN_ETAPAS = [
 
 export default function Portal() {
   const { token, usuario } = useAuth()
+  const { taller } = useTaller()
   const [pagandoId, setPagandoId] = useState(null)
   const [errorPago, setErrorPago] = useState('')
   const [vehiculoSelId, setVehiculoSelId] = useState(null)
@@ -219,6 +221,12 @@ export default function Portal() {
         titulo={`Hola, ${usuario?.nombre ?? 'cliente'}`}
         descripcion="Seguí el estado de tus vehículos en el taller y pagá online cuando estén listos."
       />
+
+      {taller?.mensaje_portal?.trim() && (
+        <div className="mt-4">
+          <Alert tipo="info">{taller.mensaje_portal}</Alert>
+        </div>
+      )}
 
       {errorPago && (
         <div className="mt-4">
@@ -307,6 +315,19 @@ export default function Portal() {
             Tocá «Ver órdenes» en un vehículo para ver sus trabajos por etapa.
           </p>
         )
+      )}
+
+      {(taller?.telefono || (taller?.hora_apertura && taller?.hora_cierre)) && (
+        <footer className="mt-10 border-t border-graphite-700 pt-4 text-sm text-muted">
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {taller?.telefono && <span>Tel: {taller.telefono}</span>}
+            {taller?.hora_apertura && taller?.hora_cierre && (
+              <span>
+                Horario de atención: {taller.hora_apertura} a {taller.hora_cierre}
+              </span>
+            )}
+          </p>
+        </footer>
       )}
     </div>
   )

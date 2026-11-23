@@ -55,6 +55,15 @@ def contar_usuarios(
     return contar(db, _stmt_filtrado(solo_activos=solo_activos, rol=rol))
 
 
+def contar_superadmins_activos(db: Session) -> int:
+    """Superadmins con cuenta activa: tiene que quedar al menos uno (docs/SuperAdmin.md)."""
+    stmt = select(func.count(Usuario.id)).where(
+        Usuario.rol == RolUsuario.superadmin,
+        Usuario.activo.is_(True),
+    )
+    return db.scalar(stmt) or 0
+
+
 def create(
     db: Session,
     *,

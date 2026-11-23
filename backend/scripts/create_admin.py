@@ -14,18 +14,30 @@ La carga formal de seeds (BD-03) la completa Pablo Romano.
 
 from __future__ import annotations
 
+import argparse
 import getpass
 import os
 import sys
 
+from app.api.v1.users import repository
 from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.api.v1.users import repository
 from app.models.usuario import RolUsuario
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Crea el primer usuario administrador (o superadmin con --superadmin)."
+    )
+    parser.add_argument(
+        "--superadmin",
+        action="store_true",
+        help="crear el usuario con rol superadmin en vez de administrador",
+    )
+    args = parser.parse_args()
+    rol = RolUsuario.superadmin if args.superadmin else RolUsuario.administrador
+
     Base.metadata.create_all(bind=engine)
 
     email = os.getenv("BOXLY_ADMIN_EMAIL", "admin@boxly.com").lower().strip()
@@ -60,9 +72,9 @@ def main() -> int:
             apellido=apellido,
             email=email,
             password_hash=hash_password(password),
-            rol=RolUsuario.administrador,
+            rol=rol,
         )
-        print("Administrador creado:")
+        print(f"{rol.value.capitalize()} creado:")
         print(f"  id:    {user.id}")
         print(f"  email: {user.email}")
         print(f"  rol:   {user.rol.value}")

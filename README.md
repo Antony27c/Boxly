@@ -281,6 +281,7 @@ Resumen de routers (roles: **A**dministrador, **R**ecepción, **M**ecánico, **C
 
 | Usuario | Rol | Para probar |
 |---|---|---|
+| `superadmin@boxly.com` | Superadmin | Panel de control: cuentas, auditoría y respaldo |
 | `admin@boxly.com` | Administrador | Todo el sistema |
 | `recepcion@boxly.com` | Recepción | Clientes, vehículos, turnos y órdenes |
 | `mecanico@boxly.com` | Mecánico (Mario) | Solo sus órdenes y vehículos |

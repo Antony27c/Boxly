@@ -13,7 +13,7 @@ from app.api.v1.pagos import mercadopago
 from app.core.config import get_settings
 from app.models.orden import Orden
 from app.models.pago import Pago
-from app.models.usuario import RolUsuario, Usuario
+from app.models.usuario import RolUsuario, Usuario, es_admin
 from app.schemas.pago import PagoResponse, PreferenciaPagoResponse
 
 logger = logging.getLogger(__name__)
@@ -318,7 +318,7 @@ def simular_pago(db: Session, usuario: Usuario, pago_id: int, estado: str) -> Pa
     settings = get_settings()
     if not (settings.environment == "dev" and settings.debug):
         raise _no_encontrado("Recurso no encontrado")
-    if usuario.rol != RolUsuario.administrador:
+    if not es_admin(usuario):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tenés permisos para esta acción",

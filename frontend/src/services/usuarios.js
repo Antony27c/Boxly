@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 const RECURSO = '/api/v1/users'
 
 export const ROLES = [
+  { valor: 'superadmin', texto: 'Superadmin' },
   { valor: 'administrador', texto: 'Administrador' },
   { valor: 'recepcion', texto: 'Recepcionista' },
   { valor: 'mecanico', texto: 'Mecánico' },
@@ -10,6 +11,21 @@ export const ROLES = [
 
 export function nombreRol(rol) {
   return ROLES.find((item) => item.valor === rol)?.texto ?? rol
+}
+
+/* Roles que puede asignar quien está logueado: el superadmin puede con todos;
+   cualquier otro rol (administrador) solo con recepción y mecánico. El backend
+   responde 403 si un administrador intenta gestionar cuentas de admin, así que
+   la lista ya viene recortada para no ofrecer lo que va a fallar. */
+export function rolesAsignables(rol) {
+  if (rol === 'superadmin') return ROLES
+  return ROLES.filter((item) => item.valor !== 'superadmin' && item.valor !== 'administrador')
+}
+
+/* true si la cuenta es de un administrador o superadmin: solo la gestiona el
+   superadmin (el resto recibe 403 del servidor). */
+export function requiereSuperadmin(rol) {
+  return rol === 'administrador' || rol === 'admin' || rol === 'superadmin'
 }
 
 /* Arma la query de un listado paginado: limit/offset más filtros extra.

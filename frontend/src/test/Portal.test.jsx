@@ -9,6 +9,11 @@ const portal = vi.hoisted(() => ({
   miOrden: vi.fn(),
 }))
 const pagos = vi.hoisted(() => ({ crear: vi.fn() }))
+const taller = vi.hoisted(() => ({ datos: null }))
+
+vi.mock('@/hooks/useTaller', () => ({
+  default: () => ({ taller: taller.datos, cargando: false, error: '', recargar: vi.fn() }),
+}))
 
 vi.mock('@/services/portal', async (importOriginal) => {
   const real = await importOriginal()
@@ -84,6 +89,7 @@ function montar() {
 describe('Portal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    taller.datos = null
     portal.misVehiculos.mockResolvedValue([])
     portal.misOrdenes.mockResolvedValue([])
   })
@@ -205,6 +211,33 @@ describe('Portal', () => {
       screen.getByText('Todavía no tenés órdenes de trabajo en el taller.'),
     ).toBeInTheDocument()
     expect(screen.queryByText('Mis vehículos')).not.toBeInTheDocument()
+  })
+
+  it('muestra el mensaje del taller como aviso y el contacto al pie', async () => {
+    taller.datos = {
+      nombre: 'Taller El Rayo',
+      telefono: '11-5555-1234',
+      hora_apertura: '08:00',
+      hora_cierre: '18:00',
+      mensaje_portal: 'Traé tu vehículo para una revisión gratis.',
+    }
+    portal.misVehiculos.mockResolvedValue([VEHICULO])
+    portal.misOrdenes.mockResolvedValue([])
+    montar()
+
+    expect(
+      await screen.findByText('Traé tu vehículo para una revisión gratis.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Tel: 11-5555-1234/)).toBeInTheDocument()
+    expect(screen.getByText(/Horario de atención: 08:00 a 18:00/)).toBeInTheDocument()
+  })
+
+  it('sin datos del taller no muestra aviso ni pie de contacto', async () => {
+    montar()
+
+    expect(await screen.findByText('Sin órdenes')).toBeInTheDocument()
+    expect(screen.queryByText(/Horario de atención/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tel:/)).not.toBeInTheDocument()
   })
 
   it('muestra el error y reintenta la carga', async () => {

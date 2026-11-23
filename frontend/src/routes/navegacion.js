@@ -1,5 +1,6 @@
 // Roles del sistema (los valores que devuelve el backend) agrupados por permiso.
-export const ROLES_ADMIN = ['admin', 'administrador']
+export const ROLES_SUPERADMIN = ['superadmin']
+export const ROLES_ADMIN = [...ROLES_SUPERADMIN, 'admin', 'administrador']
 export const ROLES_MOSTRADOR = [...ROLES_ADMIN, 'recepcion', 'recepcionista']
 export const ROLES_MECANICO = ['mecanico', 'mecánico']
 export const ROLES_TALLER = [...ROLES_MOSTRADOR, ...ROLES_MECANICO]
@@ -7,6 +8,7 @@ export const ROLES_CLIENTE = ['cliente']
 
 // Etiqueta legible del rol para mostrar a las personas ("Recepción", no "recepcion").
 export function etiquetaRol(rol) {
+  if (ROLES_SUPERADMIN.includes(rol)) return 'Superadmin'
   if (ROLES_ADMIN.includes(rol)) return 'Administrador'
   if (ROLES_MECANICO.includes(rol)) return 'Mecánico'
   if (ROLES_MOSTRADOR.includes(rol)) return 'Recepción'
@@ -33,6 +35,8 @@ const MAS_MOSTRADOR = [
 
 const MAS_ADMIN = [...MAS_MOSTRADOR, { a: '/usuarios', texto: 'Usuarios', icono: 'usuarios' }]
 
+const MAS_SUPERADMIN = [...MAS_ADMIN, { a: '/admin', texto: 'Panel de control', icono: 'ajustes' }]
+
 const PRINCIPALES_MECANICO = [
   { a: '/hoy', texto: 'Mi trabajo', icono: 'hoy' },
   { a: '/ordenes', texto: 'Órdenes', icono: 'ordenes' },
@@ -43,6 +47,9 @@ const MAS_MECANICO = [{ a: '/horarios', texto: 'Horarios', icono: 'horarios' }]
 
 // Devuelve { principales, mas } para el rol dado. Un rol desconocido no ve nada.
 export function menuSegunRol(rol) {
+  if (ROLES_SUPERADMIN.includes(rol)) {
+    return { principales: [...PRINCIPALES_MOSTRADOR], mas: MAS_SUPERADMIN }
+  }
   if (ROLES_ADMIN.includes(rol)) {
     return { principales: [...PRINCIPALES_MOSTRADOR], mas: MAS_ADMIN }
   }
@@ -79,6 +86,7 @@ export const navegacion = [
   { a: '/horarios', texto: 'Horarios', roles: ROLES_TALLER },
   { a: '/dashboard', texto: 'Dashboard', roles: ROLES_MOSTRADOR },
   { a: '/usuarios', texto: 'Usuarios', roles: ROLES_ADMIN },
+  { a: '/admin', texto: 'Panel de control', roles: ROLES_SUPERADMIN },
 ]
 
 export function tieneAcceso(roles, rol) {

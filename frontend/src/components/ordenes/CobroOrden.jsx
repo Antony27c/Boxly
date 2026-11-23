@@ -3,6 +3,7 @@ import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import { useAuth } from '@/context/AuthContext'
+import useTaller from '@/hooks/useTaller'
 import { estadoCobro, ordenesService } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 import '@/styles/ticket.css'
@@ -12,8 +13,16 @@ function montoInicial(orden) {
   return String(valor)
 }
 
+// El CUIT se muestra como XX-XXXXXXXX-X cuando tiene los 11 dígitos.
+function cuitLegible(cuit) {
+  const digitos = String(cuit ?? '').replace(/\D/g, '')
+  if (digitos.length !== 11) return cuit
+  return `${digitos.slice(0, 2)}-${digitos.slice(2, 10)}-${digitos.slice(10)}`
+}
+
 export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) {
   const { token } = useAuth()
+  const { taller } = useTaller()
   const situacion = estadoCobro(orden)
   const [monto, setMonto] = useState(() => montoInicial(orden))
   const [error, setError] = useState('')
@@ -38,6 +47,11 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
               detalle: orden.cobro_propuesto_por_nombre && `Por ${orden.cobro_propuesto_por_nombre}`,
             }
           : null
+
+  const garantia =
+    taller?.dias_garantia != null
+      ? `Garantía: ${taller.dias_garantia} ${Number(taller.dias_garantia) === 1 ? 'día' : 'días'}`
+      : null
 
   const accion = esMostrador
     ? situacion === 'pendiente'
@@ -78,6 +92,14 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
   return (
     <form onSubmit={enviar} noValidate className="space-y-4">
       <div className="ticket-caja space-y-2 border-x border-graphite-700 bg-graphite-900 px-4 py-5 text-sm">
+        {taller?.nombre && (
+          <div className="space-y-0.5 border-b border-dashed border-graphite-600 pb-2 text-center">
+            <p className="font-semibold text-ink">{taller.nombre}</p>
+            {taller.direccion && <p className="text-muted">{taller.direccion}</p>}
+            {taller.telefono && <p className="text-muted">Tel: {taller.telefono}</p>}
+            {taller.cuit && <p className="text-muted">CUIT: {cuitLegible(taller.cuit)}</p>}
+          </div>
+        )}
         <p className="text-center font-mono text-[11px] uppercase tracking-[0.2em] text-muted" aria-hidden="true">
           Cobro{orden.id != null && ` · Orden #${orden.id}`}
         </p>
@@ -98,6 +120,12 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
             {situacion === 'pendiente' && (
               <p className="text-amber-deep">Esperando aprobación de administración o recepción.</p>
             )}
+          </div>
+        )}
+        {(taller?.pie_ticket || garantia) && (
+          <div className="space-y-1 border-t border-dashed border-graphite-600 pt-2 text-center">
+            {taller?.pie_ticket && <p className="text-muted">{taller.pie_ticket}</p>}
+            {garantia && <p className="text-muted">{garantia}</p>}
           </div>
         )}
       </div>

@@ -57,7 +57,8 @@ def require_roles(*roles: RolUsuario) -> Callable[..., Usuario]:
     allowed = set(roles)
 
     def _checker(current_user: CurrentUser) -> Usuario:
-        if current_user.rol not in allowed:
+        # El superadmin pasa cualquier control de rol del personal.
+        if current_user.rol not in allowed and current_user.rol != RolUsuario.superadmin:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tenés permisos para esta acción",
@@ -68,6 +69,7 @@ def require_roles(*roles: RolUsuario) -> Callable[..., Usuario]:
 
 
 PersonalUser = Annotated[Usuario, Depends(require_roles(*ROLES_PERSONAL))]
+SuperAdminUser = Annotated[Usuario, Depends(require_roles(RolUsuario.superadmin))]
 ClienteUser = Annotated[Usuario, Depends(require_roles(RolUsuario.cliente))]
 
 

@@ -11,6 +11,8 @@ from app.models.imagen_orden import ImagenOrden
 from app.models.pago import Pago
 from app.models.horario_mecanico import HorarioMecanico
 from app.models.notificacion import Notificacion
+from app.models.auditoria import Auditoria
+from app.models.configuracion_taller import ConfiguracionTaller
 __all__ = [
     "RolUsuario",
     "Usuario",
@@ -27,4 +29,6 @@ __all__ = [
     "Pago",
     "HorarioMecanico",
     "Notificacion",
+    "Auditoria",
+    "ConfiguracionTaller",
 ]

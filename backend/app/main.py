@@ -9,6 +9,7 @@ from sqlalchemy import text
 # Importar modelos para que Base.metadata los registre.
 import app.models  # noqa: F401
 from app.api.v1.router import api_router
+from app.core.auditoria import AuditoriaMiddleware
 from app.core.config import UPLOADS_DIR, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging_config import configurar_logging
@@ -42,9 +43,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
         # La paginación devuelve el total en este header; hay que exponerlo
-        # para que el frontend pueda leerlo desde el navegador.
-        expose_headers=["X-Total-Count"],
+        # para que el frontend pueda leerlo desde el navegador. Content-Disposition
+        # trae el nombre de los archivos que se descargan (respaldo y auditoría).
+        expose_headers=["X-Total-Count", "Content-Disposition"],
     )
+
+    # Registra cada POST/PUT/PATCH/DELETE de /api/v1 en la tabla auditoria.
+    app.add_middleware(AuditoriaMiddleware)
 
     register_exception_handlers(app)
     configurar_rate_limit(app)

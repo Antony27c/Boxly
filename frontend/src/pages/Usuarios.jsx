@@ -15,10 +15,12 @@ import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
-import { ROLES, usuariosService } from '@/services/usuarios'
+import { cuentasService } from '@/services/cuentas'
+import { ROLES, requiereSuperadmin, usuariosService } from '@/services/usuarios'
 
 export default function Usuarios() {
-  const { token } = useAuth()
+  const { token, usuario: lector } = useAuth()
+  const esSuperadmin = lector?.rol === 'superadmin'
   const [parametros, setParametros] = useSearchParams()
   const [busqueda, setBusqueda] = useState('')
   const [rolFiltro, setRolFiltro] = useState('')
@@ -27,6 +29,14 @@ export default function Usuarios() {
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
+  const [aRestablecer, setARestablecer] = useState(null)
+  const [errorRestablecer, setErrorRestablecer] = useState('')
+  const [restableciendo, setRestableciendo] = useState(false)
+  const [passwordTemporal, setPasswordTemporal] = useState(null)
+  const [copiado, setCopiado] = useState(false)
+  const [aCerrarSesiones, setACerrarSesiones] = useState(null)
+  const [errorSesiones, setErrorSesiones] = useState('')
+  const [cerrandoSesiones, setCerrandoSesiones] = useState(false)
   const [aviso, setAviso] = useState('')
   const [errorAccion, setErrorAccion] = useState('')
 
@@ -133,6 +143,62 @@ export default function Usuarios() {
     }
   }
 
+  // Solo superadmin: el servidor devuelve la contraseña temporal una sola vez;
+  // queda en pantalla hasta cerrar el modal y no se puede volver a ver.
+  async function confirmarRestablecer() {
+    setRestableciendo(true)
+    setErrorRestablecer('')
+    try {
+      const datos = await cuentasService.restablecerPassword(aRestablecer.id, token)
+      setPasswordTemporal({ usuario: aRestablecer, password: datos?.password_temporal ?? '' })
+      setCopiado(false)
+      setARestablecer(null)
+    } catch (problema) {
+      setErrorRestablecer(problema.message)
+    } finally {
+      setRestableciendo(false)
+    }
+  }
+
+  async function copiarPassword() {
+    const texto = passwordTemporal?.password
+    if (!texto) return
+    try {
+      await navigator.clipboard.writeText(texto)
+      setCopiado(true)
+      return
+    } catch {
+      // Sin Clipboard API (contexto no seguro o jsdom): campo temporal.
+    }
+    try {
+      const campo = document.createElement('textarea')
+      campo.value = texto
+      campo.style.position = 'fixed'
+      campo.style.opacity = '0'
+      document.body.appendChild(campo)
+      campo.select()
+      document.execCommand('copy')
+      campo.remove()
+      setCopiado(true)
+    } catch {
+      setCopiado(false)
+    }
+  }
+
+  async function confirmarCerrarSesiones() {
+    setCerrandoSesiones(true)
+    setErrorSesiones('')
+    try {
+      const datos = await cuentasService.cerrarSesiones(aCerrarSesiones.id, token)
+      setACerrarSesiones(null)
+      setAviso(datos?.detail ?? `Se cerraron las sesiones de ${aCerrarSesiones.email}.`)
+    } catch (problema) {
+      setErrorSesiones(problema.message)
+    } finally {
+      setCerrandoSesiones(false)
+    }
+  }
+
   return (
     <div className="animate-bay-in">
       <EncabezadoPagina
@@ -195,22 +261,39 @@ export default function Usuarios() {
             cargando ? 'opacity-60' : ''
           }`}
         >
-          {filtrados.map((usuario) => (
-            <TarjetaUsuario
-              key={usuario.id}
-              usuario={usuario}
-              onEditar={() => {
-                setEnEdicion(usuario)
-                setErrorAccion('')
-                setFormularioAbierto(true)
-              }}
-              onAlternarEstado={() => alternarEstado(usuario)}
-              onEliminar={() => {
-                setErrorEliminar('')
-                setAEliminar(usuario)
-              }}
-            />
-          ))}
+          {filtrados.map((usuario) => {
+            const esPropio = usuario.id === lector?.id
+            // Un administrador no gestiona cuentas de admin ni superadmin: la
+            // tarjeta se ve pero sin acciones (el servidor devolvería 403).
+            const soloSuperadmin = !esSuperadmin && requiereSuperadmin(usuario.rol)
+            return (
+              <TarjetaUsuario
+                key={usuario.id}
+                usuario={usuario}
+                esPropio={esPropio}
+                soloSuperadmin={soloSuperadmin}
+                esSuperadmin={esSuperadmin}
+                onEditar={() => {
+                  setEnEdicion(usuario)
+                  setErrorAccion('')
+                  setFormularioAbierto(true)
+                }}
+                onAlternarEstado={() => alternarEstado(usuario)}
+                onEliminar={() => {
+                  setErrorEliminar('')
+                  setAEliminar(usuario)
+                }}
+                onRestablecer={() => {
+                  setErrorRestablecer('')
+                  setARestablecer(usuario)
+                }}
+                onCerrarSesiones={() => {
+                  setErrorSesiones('')
+                  setACerrarSesiones(usuario)
+                }}
+              />
+            )
+          })}
         </ul>
       )}
 
@@ -247,6 +330,58 @@ export default function Usuarios() {
         procesando={eliminando}
         onConfirmar={confirmarEliminar}
         onCerrar={() => setAEliminar(null)}
+      />
+
+      <Confirmacion
+        abierto={Boolean(aRestablecer)}
+        titulo="Restablecer contraseña"
+        mensaje={`Se genera una contraseña temporal para ${aRestablecer?.nombre ?? ''} ${aRestablecer?.apellido ?? ''} y se cierran sus sesiones abiertas. La vas a ver una sola vez.`}
+        textoConfirmar="Restablecer"
+        peligrosa={false}
+        error={errorRestablecer}
+        procesando={restableciendo}
+        onConfirmar={confirmarRestablecer}
+        onCerrar={() => setARestablecer(null)}
+      />
+
+      <Modal
+        abierto={Boolean(passwordTemporal)}
+        titulo="Contraseña temporal"
+        descripcion={`Nueva contraseña de ${passwordTemporal?.usuario?.nombre ?? ''} ${passwordTemporal?.usuario?.apellido ?? ''}.`}
+        onCerrar={() => setPasswordTemporal(null)}
+        ancho="max-w-md"
+      >
+        <p className="text-sm text-muted">
+          Anotala o copiala ahora: es la única vez que se muestra.
+        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <code className="min-w-0 flex-1 select-all rounded-box border border-graphite-600 bg-graphite-900 px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.2em] text-ink">
+            {passwordTemporal?.password}
+          </code>
+          <Button onClick={copiarPassword} icono={copiado ? 'check' : undefined}>
+            {copiado ? 'Copiado' : 'Copiar'}
+          </Button>
+        </div>
+        <p className="mt-4 text-sm text-muted">
+          Pasásela a la persona por un medio seguro; no se vuelve a mostrar.
+        </p>
+        <div className="mt-6 flex justify-end">
+          <Button variante="secundario" onClick={() => setPasswordTemporal(null)}>
+            Listo
+          </Button>
+        </div>
+      </Modal>
+
+      <Confirmacion
+        abierto={Boolean(aCerrarSesiones)}
+        titulo="Cerrar sesiones"
+        mensaje={`Se cierran todas las sesiones abiertas de ${aCerrarSesiones?.nombre ?? ''} ${aCerrarSesiones?.apellido ?? ''}: va a tener que iniciar sesión de nuevo en cada dispositivo.`}
+        textoConfirmar="Cerrar sesiones"
+        peligrosa={false}
+        error={errorSesiones}
+        procesando={cerrandoSesiones}
+        onConfirmar={confirmarCerrarSesiones}
+        onCerrar={() => setACerrarSesiones(null)}
       />
     </div>
   )

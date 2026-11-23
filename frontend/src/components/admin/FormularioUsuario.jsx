@@ -3,7 +3,8 @@ import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Select from '@/components/ui/Select'
-import { ROLES } from '@/services/usuarios'
+import { useAuth } from '@/context/AuthContext'
+import { nombreRol, rolesAsignables } from '@/services/usuarios'
 import { validarUsuario } from '@/utils/validation'
 
 const VACIO = {
@@ -15,11 +16,21 @@ const VACIO = {
 }
 
 export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
+  const { usuario: lector } = useAuth()
   const esNuevo = !usuario
   const [datos, setDatos] = useState(() => ({ ...VACIO, ...usuario, password: '' }))
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
+
+  // El select solo ofrece los roles que el usuario logueado puede asignar
+  // (superadmin: todos; administrador: recepción y mecánico). Si el usuario en
+  // edición tiene un rol fuera de la lista (por ejemplo cliente), se agrega
+  // para que el select no quede en blanco.
+  const asignables = rolesAsignables(lector?.rol)
+  const opcionesRol = asignables.some((opcion) => opcion.valor === datos.rol)
+    ? asignables
+    : [...asignables, { valor: datos.rol, texto: nombreRol(datos.rol) }]
 
   function cambiar(campo, valor) {
     setDatos((previo) => ({ ...previo, [campo]: valor }))
@@ -90,7 +101,7 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
           error={errores.rol}
           disabled={guardando}
           ayuda="El rol define qué secciones ve el usuario al iniciar sesión."
-          opciones={ROLES}
+          opciones={opcionesRol}
         />
         <Field
           label={esNuevo ? 'Contraseña' : 'Nueva contraseña'}

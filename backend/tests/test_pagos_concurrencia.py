@@ -168,7 +168,7 @@ def test_la_migracion_crea_el_indice_y_lo_recrea(tmp_path):
     assert r.returncode == 0, r.stderr
     assert _indice_presente(db_path)
 
-    r = _alembic("downgrade", "-1")
+    r = _alembic("downgrade", "b3f7a2c91e04")
     assert r.returncode == 0, r.stderr
     assert not _indice_presente(db_path)
 

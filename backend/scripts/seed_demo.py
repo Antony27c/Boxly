@@ -20,6 +20,7 @@ from scripts.seed_catalogo import seed_catalogo
 PASSWORD = "Demo1234"
 
 USUARIOS = [
+    ("Super", "Admin", "superadmin@boxly.com", RolUsuario.superadmin, None),
     ("Admin", "Boxly", "admin@boxly.com", RolUsuario.administrador, None),
     ("Rosa", "Recepcion", "recepcion@boxly.com", RolUsuario.recepcion, None),
     ("Mario", "Mecanico", "mecanico@boxly.com", RolUsuario.mecanico, None),
@@ -381,7 +382,8 @@ def main() -> int:
         marcas, modelos = seed_catalogo()
         print(f"Datos de demo listos ({creadas} órdenes nuevas, {marcas} marcas y {modelos} modelos nuevos en el catálogo).")
         print(f"Clave de todos los usuarios: {PASSWORD}")
-        print("  Personal:  admin@boxly.com, recepcion@boxly.com, mecanico@boxly.com, mecanico2@boxly.com")
+        print("  Personal:  superadmin@boxly.com, admin@boxly.com, recepcion@boxly.com,")
+        print("             mecanico@boxly.com, mecanico2@boxly.com")
         print("  Clientes:  cliente@boxly.com (Juan Perez), cliente2@boxly.com (Laura Gomez)")
         return 0
     finally:

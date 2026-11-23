@@ -12,6 +12,10 @@ from app.api.v1.vehiculos.router import router as vehiculos_router
 from app.api.v1.catalogo.router import router as catalogo_router
 from app.api.v1.metricas.router import router as metricas_router
 from app.api.v1.mecanicos.router import router as mecanicos_router
+from app.api.v1.admin_auditoria.router import router as admin_auditoria_router
+from app.api.v1.admin_cuentas.router import router as admin_cuentas_router
+from app.api.v1.sistema.router import router as sistema_router
+from app.api.v1.taller.router import router as taller_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/api/v1")
@@ -26,3 +30,7 @@ api_router.include_router(metricas_router,prefix="/api/v1")
 api_router.include_router(portal_router, prefix="/api/v1")
 api_router.include_router(pagos_router, prefix="/api/v1")
 api_router.include_router(mecanicos_router, prefix="/api/v1")
+api_router.include_router(admin_auditoria_router, prefix="/api/v1")
+api_router.include_router(admin_cuentas_router, prefix="/api/v1")
+api_router.include_router(sistema_router, prefix="/api/v1")
+api_router.include_router(taller_router, prefix="/api/v1")

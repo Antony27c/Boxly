@@ -14,13 +14,19 @@ if TYPE_CHECKING:
 
 
 class RolUsuario(str, enum.Enum):
+    superadmin = "superadmin"
     administrador = "administrador"
     recepcion = "recepcion"
     mecanico = "mecanico"
     cliente = "cliente"
 
 
-ROLES_PERSONAL = (RolUsuario.administrador, RolUsuario.recepcion, RolUsuario.mecanico)
+ROLES_PERSONAL = (RolUsuario.superadmin, RolUsuario.administrador, RolUsuario.recepcion, RolUsuario.mecanico)
+
+
+def es_admin(usuario: "Usuario") -> bool:
+    """Administrador o superadmin: el superadmin puede todo lo que puede un administrador."""
+    return usuario.rol in (RolUsuario.superadmin, RolUsuario.administrador)
 
 
 class Usuario(Base):

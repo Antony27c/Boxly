@@ -13,7 +13,7 @@ from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacio
 from app.db.session import SessionLocal
 from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate
 from app.models.orden import Orden
-from app.models.usuario import RolUsuario, Usuario
+from app.models.usuario import RolUsuario, Usuario, es_admin
 from app.models.vehiculo import Vehiculo
 from app.models.detalle_orden import DetalleOrden
 from app.models.repuesto import Repuesto
@@ -519,7 +519,7 @@ class OrdenService:
         imagen= orden_repository.obtener_imagen(db, imagen_id)
         if imagen is None or imagen.orden_id != orden_id:
             raise HTTPException(status_code=404, detail="Imagen no encontrada")
-        if usuario.rol != RolUsuario.administrador and imagen.usuario_id != usuario.id:
+        if not es_admin(usuario) and imagen.usuario_id != usuario.id:
             raise HTTPException(status_code=403, detail="Solo el administrador o quien subió la foto puede borrarla")
         _borrar_archivo(imagen.url)
         orden_repository.eliminar_imagen(db, imagen)

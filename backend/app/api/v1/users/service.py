@@ -27,6 +27,10 @@ from app.schemas.usuario import (
 # contra este para que la respuesta tarde lo mismo y no se pueda enumerar usuarios.
 _HASH_DUMMY = "$2b$12$D5nmqropdACIU8iLQjEjGewyaEd1qk.04sX1PfmTKXgcR0AwcpDzC"
 
+# Roles que solo puede gestionar el superadmin (crear, editar, desactivar o
+# asignar). Contrato en docs/SuperAdmin.md, sección B1.
+ROLES_GERENCIA = frozenset({RolUsuario.administrador, RolUsuario.superadmin})
+
 
 def _to_response(user: Usuario) -> UsuarioResponse:
     return UsuarioResponse.model_validate(user)
@@ -173,7 +177,31 @@ def activar_cuenta(db: Session, data: ActivacionRequest) -> TokenResponse:
     return TokenResponse(access_token=token, usuario=_to_response(user))
 
 
-def create_usuario(db: Session, data: UsuarioCreate) -> UsuarioResponse:
+def _exigir_superadmin_para_gerencia(actor: Usuario, aplica: bool) -> None:
+    if aplica and actor.rol != RolUsuario.superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el superadmin puede gestionar administradores",
+        )
+
+
+def _validar_no_ultimo_superadmin(db: Session, user: Usuario, payload: dict) -> None:
+    """No se puede dejar el sistema sin superadmin activo: ni desactivándolo
+    ni cambiándole el rol (docs/SuperAdmin.md, sección B1)."""
+    if user.rol != RolUsuario.superadmin or not user.activo:
+        return
+    pierde_superadmin = payload.get("activo") is False or (
+        payload.get("rol") is not None and payload["rol"] != RolUsuario.superadmin
+    )
+    if pierde_superadmin and repository.contar_superadmins_activos(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tiene que quedar al menos un superadmin activo",
+        )
+
+
+def create_usuario(db: Session, data: UsuarioCreate, actor: Usuario) -> UsuarioResponse:
+    _exigir_superadmin_para_gerencia(actor, data.rol in ROLES_GERENCIA)
     if repository.get_by_email(db, data.email):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -216,7 +244,9 @@ def get_usuario(db: Session, user_id: int) -> UsuarioResponse:
     return _to_response(user)
 
 
-def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioResponse:
+def update_usuario(
+    db: Session, user_id: int, data: UsuarioUpdate, actor: Usuario
+) -> UsuarioResponse:
     user = repository.get_by_id(db, user_id)
     if user is None:
         raise HTTPException(
@@ -225,6 +255,18 @@ def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioRes
         )
 
     payload = data.model_dump(exclude_unset=True)
+
+    if payload.get("activo") is False and actor.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No podés desactivar tu propio usuario",
+        )
+
+    _exigir_superadmin_para_gerencia(
+        actor, user.rol in ROLES_GERENCIA or payload.get("rol") in ROLES_GERENCIA
+    )
+    _validar_no_ultimo_superadmin(db, user, payload)
+
     if "email" in payload:
         email = payload["email"].lower().strip()
         existing = repository.get_by_email(db, email)
@@ -256,13 +298,20 @@ def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioRes
     return _to_response(updated)
 
 
-def delete_usuario(db: Session, user_id: int) -> UsuarioResponse:
+def delete_usuario(db: Session, user_id: int, actor: Usuario) -> UsuarioResponse:
     user = repository.get_by_id(db, user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado",
         )
+    if actor.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No podés desactivar tu propio usuario",
+        )
+    _exigir_superadmin_para_gerencia(actor, user.rol in ROLES_GERENCIA)
+    _validar_no_ultimo_superadmin(db, user, {"activo": False})
     return _to_response(repository.soft_delete(db, user))
 
 def list_mecanicos(db: Session) -> list[MecanicoResponse]:
