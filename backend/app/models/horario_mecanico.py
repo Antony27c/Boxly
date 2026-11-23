@@ -2,9 +2,10 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.taller import TallerMixin
 
 
-class HorarioMecanico(Base):
+class HorarioMecanico(TallerMixin, Base):
     __tablename__ = "horarios_mecanico"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

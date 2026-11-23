@@ -21,12 +21,12 @@ class RolUsuario(str, enum.Enum):
     cliente = "cliente"
 
 
-ROLES_PERSONAL = (RolUsuario.superadmin, RolUsuario.administrador, RolUsuario.recepcion, RolUsuario.mecanico)
+ROLES_PERSONAL = (RolUsuario.administrador, RolUsuario.recepcion, RolUsuario.mecanico)
 
 
 def es_admin(usuario: "Usuario") -> bool:
-    """Administrador o superadmin: el superadmin puede todo lo que puede un administrador."""
-    return usuario.rol in (RolUsuario.superadmin, RolUsuario.administrador)
+    """Administrador del taller. El superadmin no opera dentro de los talleres."""
+    return usuario.rol == RolUsuario.administrador
 
 
 class Usuario(Base):
@@ -50,6 +50,12 @@ class Usuario(Base):
         default=RolUsuario.recepcion,
     )
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Taller al que pertenece. NULL solo para el superadmin (operador de la plataforma).
+    taller_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("talleres.id", name="fk_usuarios_taller_id_talleres"),
+        nullable=True,
+        index=True,
+    )
     cliente_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("clientes.id", name="fk_usuarios_cliente_id_clientes"),
         unique=True,

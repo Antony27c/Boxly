@@ -7,6 +7,7 @@ import Loader from '@/components/ui/Loader'
 import Paginacion from '@/components/ui/Paginacion'
 import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
+import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
@@ -29,6 +30,9 @@ const ENTIDADES = [
   { valor: 'catalogo', texto: 'Catálogo' },
   { valor: 'mecanicos', texto: 'Mecánicos' },
   { valor: 'portal', texto: 'Portal del cliente' },
+  { valor: 'plataforma', texto: 'Plataforma' },
+  { valor: 'soporte', texto: 'Soporte' },
+  { valor: 'terminos', texto: 'Términos' },
 ]
 
 // El middleware solo registra métodos que modifican datos.
@@ -93,10 +97,15 @@ function RutaTecnica({ registro }) {
   )
 }
 
-export default function Auditoria() {
+/* `ambito` elige el registro: 'taller' es la auditoría del propio taller
+   (panel del administrador) y 'plataforma' la de todos los talleres
+   (superadmin), que además permite filtrar por taller. */
+export default function Auditoria({ ambito = 'taller' }) {
   const { token } = useAuth()
+  const esPlataforma = ambito === 'plataforma'
   const [entidad, setEntidad] = useState('')
   const [metodo, setMetodo] = useState('')
+  const [tallerId, setTallerId] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const [soloErrores, setSoloErrores] = useState(false)
@@ -121,22 +130,38 @@ export default function Auditoria() {
     const activos = {}
     if (entidad) activos.entidad = entidad
     if (metodo) activos.metodo = metodo
+    if (esPlataforma && tallerId) activos.taller_id = tallerId
     if (desde) activos.desde = desde
     if (hasta) activos.hasta = hasta
     if (soloErrores) activos.solo_errores = true
     return activos
-  }, [entidad, metodo, desde, hasta, soloErrores])
+  }, [entidad, metodo, tallerId, esPlataforma, desde, hasta, soloErrores])
   const hayFiltros = Object.keys(filtros).length > 0
+
+  // En plataforma el selector de taller sale de la lista de talleres; se pide
+  // directo con api para no depender de services/plataforma.js (otro frente).
+  const cargarTalleres = useCallback(
+    (t) => (esPlataforma ? api.get('/api/v1/plataforma/talleres?limit=100', t) : Promise.resolve([])),
+    [esPlataforma],
+  )
+  const { datos: talleres } = useRecurso(cargarTalleres)
+  const opcionesTalleres = useMemo(
+    () => [
+      { valor: '', texto: 'Todos los talleres' },
+      ...(talleres ?? []).map((t) => ({ valor: String(t.id), texto: t.nombre })),
+    ],
+    [talleres],
+  )
 
   const cargarAuditoria = useCallback(
     (t) =>
       auditoriaService
-        .listar({ ...filtros, limit: limite, offset }, t)
+        .listar(ambito, { ...filtros, limit: limite, offset }, t)
         .then(({ items, total: cantidad }) => {
           setTotal(cantidad)
           return items
         }),
-    [filtros, limite, offset, setTotal],
+    [ambito, filtros, limite, offset, setTotal],
   )
   const { datos: registros, cargando, error, recargar } = useRecurso(cargarAuditoria)
   const lista = registros ?? []
@@ -145,7 +170,7 @@ export default function Auditoria() {
     setExportando(true)
     setErrorExportar('')
     try {
-      await auditoriaService.exportar(filtros, token)
+      await auditoriaService.exportar(ambito, filtros, token)
     } catch (problema) {
       setErrorExportar(problema.message)
     } finally {
@@ -156,10 +181,24 @@ export default function Auditoria() {
   return (
     <div className="animate-bay-in">
       <p className="text-sm text-muted">
-        Cada alta, cambio o baja que hace el sistema queda registrada acá, con quién la hizo.
+        {esPlataforma
+          ? 'Cada alta, cambio o baja que hace el sistema en todos los talleres queda registrada acá.'
+          : 'Cada alta, cambio o baja que hace el sistema en tu taller queda registrada acá, con quién la hizo.'}
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-4">
+        {esPlataforma && (
+          <Select
+            label="Taller"
+            className="w-full sm:max-w-52"
+            value={tallerId}
+            onChange={(e) => {
+              setTallerId(e.target.value)
+              reiniciar()
+            }}
+            opciones={opcionesTalleres}
+          />
+        )}
         <Select
           label="Entidad"
           className="w-full sm:max-w-48"

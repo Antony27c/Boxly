@@ -1,9 +1,10 @@
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.taller import TallerMixin
 
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
@@ -11,14 +12,15 @@ if TYPE_CHECKING:
     from app.models.turno import Turno
 
 
-class Vehiculo(Base):
+class Vehiculo(TallerMixin, Base):
     """Vehículo de un Cliente. Puede pasar por varias órdenes de trabajo y turnos."""
 
     __tablename__ = "vehiculos"
+    __table_args__ = (UniqueConstraint("taller_id", "patente", name="uq_vehiculos_taller_patente"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False, index=True)
-    patente: Mapped[str] = mapped_column(String(15), unique=True, nullable=False, index=True)
+    patente: Mapped[str] = mapped_column(String(15), nullable=False, index=True)
     marca: Mapped[str] = mapped_column(String(60), nullable=False)
     modelo: Mapped[str] = mapped_column(String(60), nullable=False)
     anio: Mapped[Optional[int]] = mapped_column(nullable=True)

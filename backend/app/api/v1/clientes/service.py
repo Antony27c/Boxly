@@ -10,7 +10,7 @@ from app.api.v1.users import service as users_service
 from app.core.config import get_settings
 from app.core.email import enviar_invitacion_portal
 from app.core.security import create_invitation_token
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, fijar_taller
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 from app.schemas.usuario import MessageResponse
 
@@ -155,6 +155,11 @@ def invitar_en_segundo_plano(cliente_id: int) -> None:
     """Al dar de alta un cliente con correo: invitación automática, sin frenar la respuesta."""
     with SessionLocal() as db:
         try:
+            # La sesión nueva no tiene taller: se fija el del cliente para que
+            # cualquier fila que se cree caiga en su taller (docs/Plataforma.md).
+            cliente = repository.get_by_id(db, cliente_id)
+            if cliente is not None:
+                fijar_taller(db, cliente.taller_id)
             _enviar_invitacion(db, cliente_id)
         except HTTPException:
             return

@@ -2,26 +2,28 @@ import { useSearchParams } from 'react-router-dom'
 import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
 import Auditoria from '@/components/superadmin/Auditoria'
 import ConfigTaller from '@/components/superadmin/ConfigTaller'
-import ResumenSistema from '@/components/superadmin/ResumenSistema'
+import RespaldoTaller from '@/components/superadmin/RespaldoTaller'
 
-// Panel de control del superadmin. Cada pestaña es un componente propio;
-// la pestaña activa queda en la URL (?pestana=) para poder compartirla.
+// Panel del taller del administrador (ruta /admin, ROLES_ADMIN): datos del
+// taller, auditoría del propio taller y respaldo de sus datos
+// (docs/Plataforma.md, P3). Cada pestaña es un componente propio; la pestaña
+// activa queda en la URL (?pestana=) para poder compartirla.
 const PESTANAS = [
-  { id: 'resumen', texto: 'Resumen', Componente: ResumenSistema },
-  { id: 'auditoria', texto: 'Auditoría', Componente: Auditoria },
   { id: 'taller', texto: 'Datos del taller', Componente: ConfigTaller },
+  { id: 'auditoria', texto: 'Auditoría', Componente: Auditoria, props: { ambito: 'taller' } },
+  { id: 'respaldo', texto: 'Respaldo', Componente: RespaldoTaller },
 ]
 
 export default function Admin() {
   const [parametros, setParametros] = useSearchParams()
   const activa = PESTANAS.find((p) => p.id === parametros.get('pestana')) ?? PESTANAS[0]
-  const { Componente } = activa
+  const { Componente, props } = activa
 
   return (
     <div className="space-y-6">
       <EncabezadoPagina
-        titulo="Panel de control"
-        descripcion="Estado del sistema, registro de acciones y datos del taller."
+        titulo="Panel del taller"
+        descripcion="Datos del taller, registro de acciones y respaldo de tus datos."
         icono="ajustes"
       />
       <div role="tablist" aria-label="Secciones del panel" className="flex flex-wrap gap-2 border-b border-[var(--borde,#e5e7eb)]">
@@ -41,7 +43,7 @@ export default function Admin() {
         ))}
       </div>
       <div role="tabpanel">
-        <Componente />
+        <Componente {...(props ?? {})} />
       </div>
     </div>
   )

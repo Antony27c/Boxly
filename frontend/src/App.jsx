@@ -26,6 +26,14 @@ import NoEncontrado from '@/pages/NoEncontrado'
 import Ayuda from '@/pages/Ayuda'
 import Configuracion from '@/pages/Configuracion'
 import Admin from '@/pages/Admin'
+import Plataforma from '@/pages/Plataforma'
+import PlataformaTaller from '@/pages/PlataformaTaller'
+import PlataformaSistema from '@/pages/PlataformaSistema'
+import Terminos from '@/pages/Terminos'
+import Suscripcion from '@/pages/Suscripcion'
+import PlataformaPlanes from '@/pages/PlataformaPlanes'
+import GuardiaTerminos from '@/components/terminos/GuardiaTerminos'
+import { SoporteProvider } from '@/context/SoporteContext'
 
 export default function App() {
   return (
@@ -33,9 +41,13 @@ export default function App() {
       <AuthProvider>
         <TemaProvider>
         <ToastProvider>
+        <SoporteProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/activar" element={<ActivarCuenta />} />
+
+          {/* GuardiaTerminos (P8): el admin de un taller sin términos aceptados va a /terminos. */}
+          <Route element={<GuardiaTerminos />}>
 
           <Route element={<ProtectedRoute roles={ROLES_TALLER} />}>
             <Route element={<AppLayout />}>
@@ -78,7 +90,18 @@ export default function App() {
 
           <Route element={<ProtectedRoute roles={ROLES_SUPERADMIN} />}>
             <Route element={<AppLayout />}>
+              <Route path="/plataforma" element={<Plataforma />} />
+              <Route path="/plataforma/talleres/:id" element={<PlataformaTaller />} />
+              <Route path="/plataforma/sistema" element={<PlataformaSistema />} />
+              <Route path="/plataforma/planes" element={<PlataformaPlanes />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute roles={ROLES_ADMIN} />}>
+            <Route element={<AppLayout />}>
               <Route path="/admin" element={<Admin />} />
+              <Route path="/terminos" element={<Terminos />} />
+              <Route path="/suscripcion" element={<Suscripcion />} />
             </Route>
           </Route>
 
@@ -97,9 +120,12 @@ export default function App() {
             </Route>
           </Route>
 
+          </Route>
+
           <Route path="/" element={<Raiz />} />
           <Route path="*" element={<NoEncontrado />} />
         </Routes>
+        </SoporteProvider>
         </ToastProvider>
         </TemaProvider>
       </AuthProvider>

@@ -10,6 +10,7 @@ class AuditoriaResponse(BaseModel):
     id: int
     creado_en: datetime
     usuario_id: Optional[int] = None
+    taller_id: Optional[int] = None
     usuario_email: Optional[str] = None
     rol: Optional[str] = None
     metodo: str
@@ -22,9 +23,14 @@ class AuditoriaResponse(BaseModel):
 
 
 class FiltrosAuditoria(BaseModel):
-    """Filtros compartidos por el listado y la exportación CSV."""
+    """Filtros compartidos por el listado y la exportación CSV.
+
+    ``taller_id`` solo lo usa la vista de plataforma; el administrador del
+    taller ya queda acotado por el filtro automático de la sesión.
+    """
 
     usuario_id: Optional[int] = None
+    taller_id: Optional[int] = None
     metodo: Optional[str] = None
     entidad: Optional[str] = None
     desde: Optional[date] = None

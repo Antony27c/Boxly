@@ -1,12 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import TarjetaDash from '@/components/dashboard/TarjetaDash'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Icono from '@/components/ui/Icono'
 import Loader from '@/components/ui/Loader'
-import { useAuth } from '@/context/AuthContext'
-import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
 import { etiquetaRol } from '@/routes/navegacion'
 import { sistemaService } from '@/services/sistema'
@@ -29,6 +27,10 @@ const INTEGRACIONES = [
   { clave: 'mercadopago', texto: 'Mercado Pago', icono: 'dinero' },
   { clave: 'rate_limit', texto: 'Límite de intentos', icono: 'info' },
 ]
+
+// Estados posibles de un taller (docs/Plataforma.md): activo y suspendido hoy;
+// cualquier otro se muestra con la primera letra en mayúscula.
+const ETIQUETAS_TALLER = { activo: 'Activo', suspendido: 'Suspendido' }
 
 function numero(valor) {
   return Number(valor ?? 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })
@@ -86,6 +88,38 @@ function Roles({ porRol }) {
   )
 }
 
+function etiquetaEstadoTaller(estado) {
+  const clave = String(estado ?? '').toLowerCase()
+  return ETIQUETAS_TALLER[clave] ?? (clave ? clave[0].toUpperCase() + clave.slice(1) : '—')
+}
+
+/* "talleres por estado" del sistema de plataforma: puede venir como mapa
+   { activo: 2, suspendido: 1 } o como lista [{ estado, total }]; se normaliza
+   a filas [estado, cantidad]. */
+function filasTalleres(talleres) {
+  if (Array.isArray(talleres)) {
+    return talleres.map((t) => [t.estado ?? t.nombre, t.total ?? t.cantidad ?? 0])
+  }
+  return Object.entries(talleres ?? {})
+}
+
+function Talleres({ datos }) {
+  const filas = filasTalleres(datos)
+  if (filas.length === 0) {
+    return <p className="text-sm text-muted">Todavía no hay talleres.</p>
+  }
+  return (
+    <ul className="divide-y divide-graphite-700">
+      {filas.map(([estado, cantidad]) => (
+        <li key={estado} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+          <span className="text-sm text-ink">{etiquetaEstadoTaller(estado)}</span>
+          <Badge>{numero(cantidad)}</Badge>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Integraciones({ datos }) {
   return (
     <ul className="divide-y divide-graphite-700">
@@ -109,30 +143,14 @@ function Integraciones({ datos }) {
 }
 
 /**
- * Pestaña "Resumen" del panel de control (superadmin): estado del sistema,
- * conteos, usuarios por rol, espacio de fotos, integraciones y el botón
- * para descargar el respaldo completo. Contrato en docs/SuperAdmin.md (B4).
+ * Salud de la plataforma (superadmin, docs/Plataforma.md P3): estado del
+ * sistema, conteos agregados de todos los talleres, talleres por estado,
+ * usuarios por rol, espacio de fotos e integraciones. Sin botón de respaldo:
+ * la descarga de datos del propio taller vive en RespaldoTaller.
  */
 export default function ResumenSistema() {
-  const { token } = useAuth()
-  const { avisar } = useToast()
   const cargar = useCallback((t) => sistemaService.obtener(t), [])
   const { datos, error, recargar } = useRecurso(cargar)
-  const [descargando, setDescargando] = useState(false)
-  const [errorRespaldo, setErrorRespaldo] = useState('')
-
-  async function descargar() {
-    setDescargando(true)
-    setErrorRespaldo('')
-    try {
-      await sistemaService.descargarRespaldo(token)
-      avisar('Respaldo descargado.')
-    } catch (problema) {
-      setErrorRespaldo(problema.message ?? 'No pudimos descargar el respaldo.')
-    } finally {
-      setDescargando(false)
-    }
-  }
 
   if (!datos) {
     if (error) {
@@ -193,7 +211,11 @@ export default function ResumenSistema() {
           <Roles porRol={datos.usuarios_por_rol} />
         </TarjetaDash>
 
-        <TarjetaDash titulo="Fotos subidas" icono="foto" indice={10}>
+        <TarjetaDash titulo="Talleres" icono="herramienta" indice={10}>
+          <Talleres datos={datos.talleres} />
+        </TarjetaDash>
+
+        <TarjetaDash titulo="Fotos subidas" icono="foto" indice={11}>
           <p className="text-4xl font-semibold tracking-tight tabular-nums text-ink">
             {tamanoLegible(uploads.bytes)}
           </p>
@@ -202,29 +224,8 @@ export default function ResumenSistema() {
           </p>
         </TarjetaDash>
 
-        <TarjetaDash titulo="Integraciones" icono="ajustes" indice={11}>
+        <TarjetaDash titulo="Integraciones" icono="ajustes" indice={12}>
           <Integraciones datos={datos.integraciones} />
-        </TarjetaDash>
-
-        <TarjetaDash titulo="Respaldo" icono="descarga" indice={12}>
-          <p className="text-sm text-muted">
-            Descargá un ZIP con un CSV por tabla. No incluye contraseñas ni tokens.
-          </p>
-          <div className="mt-4">
-            <Button
-              variante="secundario"
-              icono="descarga"
-              cargando={descargando}
-              onClick={descargar}
-            >
-              Descargar respaldo
-            </Button>
-          </div>
-          {errorRespaldo && (
-            <div className="mt-3">
-              <Alert>{errorRespaldo}</Alert>
-            </div>
-          )}
         </TarjetaDash>
       </div>
     </div>

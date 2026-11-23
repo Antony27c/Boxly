@@ -12,6 +12,8 @@ from app.schemas.paginacion import contar as contar_stmt
 def _stmt_filtrado(filtros: FiltrosAuditoria) -> Select:
     """SELECT de auditoría con los filtros aplicados (sin ORDER BY ni paginación)."""
     stmt = select(Auditoria)
+    if filtros.taller_id is not None:
+        stmt = stmt.where(Auditoria.taller_id == filtros.taller_id)
     if filtros.usuario_id is not None:
         stmt = stmt.where(Auditoria.usuario_id == filtros.usuario_id)
     if filtros.metodo:

@@ -15,6 +15,7 @@ const pagos = vi.hoisted(() => ({
   confirmar: vi.fn(),
   simular: vi.fn(),
 }))
+const tallerHook = vi.hoisted(() => ({ datos: null }))
 
 vi.mock('@/services/portal', async (importOriginal) => {
   const real = await importOriginal()
@@ -28,6 +29,10 @@ vi.mock('@/context/AuthContext', () => ({
     autenticado: true,
     cargandoSesion: false,
   }),
+}))
+
+vi.mock('@/hooks/useTaller', () => ({
+  default: () => ({ taller: tallerHook.datos, cargando: false, error: '', recargar: vi.fn() }),
 }))
 
 function ordenBase(extra = {}) {
@@ -67,6 +72,7 @@ function montar() {
 describe('PortalOrden', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tallerHook.datos = null
     portal.miOrden.mockResolvedValue(ordenBase())
   })
 
@@ -131,6 +137,31 @@ describe('PortalOrden', () => {
     montar()
 
     expect((await screen.findAllByText('Pagada')).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
+  })
+
+  it('sin datos del taller conserva el botón de pagar', async () => {
+    tallerHook.datos = null
+    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: true }))
+    montar()
+
+    expect(await screen.findByRole('button', { name: /pagar/i })).toBeInTheDocument()
+  })
+
+  it('con pago_online muestra el botón de pagar', async () => {
+    tallerHook.datos = { pago_online: true }
+    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: true }))
+    montar()
+
+    expect(await screen.findByRole('button', { name: /pagar/i })).toBeInTheDocument()
+  })
+
+  it('sin pago_online muestra "Pagás en el taller" en lugar del botón', async () => {
+    tallerHook.datos = { pago_online: false }
+    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: true }))
+    montar()
+
+    expect(await screen.findByText('Pagás en el taller')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
   })
 

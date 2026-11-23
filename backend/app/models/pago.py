@@ -6,6 +6,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, St
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.taller import TallerMixin
 
 if TYPE_CHECKING:
     from app.models.orden import Orden
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 ESTADOS_PAGO = ("pendiente", "aprobado", "rechazado")
 
 
-class Pago(Base):
+class Pago(TallerMixin, Base):
     """Pago online de una orden (Mercado Pago)."""
 
     __tablename__ = "pagos"

@@ -2,10 +2,20 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.taller import TallerMixin
 
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
@@ -17,7 +27,7 @@ if TYPE_CHECKING:
     from app.models.vehiculo import Vehiculo
 
 
-class Orden(Base):
+class Orden(TallerMixin, Base):
     """Orden de trabajo: el registro central de una reparación (DER §3.4).
 
     Tiene DOS relaciones hacia Usuario: creado_por_id (quién la registró) y
@@ -33,6 +43,8 @@ class Orden(Base):
             "'esperando_repuestos', 'listo', 'entregado', 'cancelado')",
             name="ck_ordenes_estado_valido",
         ),
+        # La numeración OT- es propia de cada taller.
+        UniqueConstraint("taller_id", "codigo", name="uq_ordenes_taller_codigo"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -43,7 +55,7 @@ class Orden(Base):
         ForeignKey("usuarios.id"), nullable=True, index=True
     )
     codigo: Mapped[str] = mapped_column(
-        String(30), unique=True, nullable=False, index=True
+        String(30), nullable=False, index=True
     )
     estado: Mapped[str] = mapped_column(String(30), default="pendiente", nullable=False, index=True)
     descripcion_ingreso: Mapped[str] = mapped_column(Text, nullable=False)

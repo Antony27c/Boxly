@@ -112,6 +112,9 @@ def test_post_autenticado_deja_fila_con_usuario_entidad_y_estado(api, datos):
     assert fila.usuario_id == datos["usuarios"]["administrador"].id
     assert fila.usuario_email == "admin@x.com"
     assert fila.rol == "administrador"
+    # P2: cada fila guarda el taller del usuario que hizo la acción.
+    assert fila.taller_id == 1
+    assert fila.soporte is False
     assert fila.ip is not None
 
 
@@ -134,6 +137,7 @@ def test_login_fallido_registra_email_sin_contrasena(api, datos):
     assert fila.estado_http == 401
     assert fila.usuario_email == "admin@x.com"
     assert fila.usuario_id is None
+    assert fila.taller_id is None
     # La contraseña no queda en ningún campo de la fila.
     for campo in (
         "usuario_email", "usuario_id", "rol", "metodo", "ruta",
@@ -174,6 +178,14 @@ def test_si_falla_la_escritura_la_respuesta_no_cambia(api, datos, monkeypatch):
     assert r.json()["codigo"] == "ACE-99"
 
 
+# Desde P3 las rutas son /taller/auditoria* (administrador, su taller) y
+# /plataforma/auditoria* (superadmin, filtro opcional taller_id).
+PLATAFORMA_LISTA = "/api/v1/plataforma/auditoria"
+PLATAFORMA_EXPORTAR = "/api/v1/plataforma/auditoria/exportar"
+TALLER_LISTA = "/api/v1/taller/auditoria"
+TALLER_EXPORTAR = "/api/v1/taller/auditoria/exportar"
+
+
 def test_filtros_entidad_usuario_errores_y_fechas(api, datos):
     admin_id = datos["usuarios"]["administrador"].id
     mec_id = datos["usuarios"]["mecanico"].id
@@ -194,7 +206,7 @@ def test_filtros_entidad_usuario_errores_y_fechas(api, datos):
     headers = datos["headers"]["superadmin"]
 
     def ids(**params):
-        r = api.get("/api/v1/admin/auditoria", headers=headers, params=params)
+        r = api.get(PLATAFORMA_LISTA, headers=headers, params=params)
         assert r.status_code == 200
         return [f["id"] for f in r.json()]
 
@@ -216,13 +228,13 @@ def test_listado_paginado_con_x_total_count(api, datos):
     ]
     headers = datos["headers"]["superadmin"]
 
-    r = api.get("/api/v1/admin/auditoria", headers=headers, params={"limit": 2})
+    r = api.get(PLATAFORMA_LISTA, headers=headers, params={"limit": 2})
     assert r.status_code == 200
     assert r.headers["X-Total-Count"] == "3"
     assert [f["id"] for f in r.json()] == [ids[2], ids[1]]  # más nuevo primero
 
     r = api.get(
-        "/api/v1/admin/auditoria",
+        PLATAFORMA_LISTA,
         headers=headers,
         params={"limit": 2, "offset": 2},
     )
@@ -236,7 +248,7 @@ def test_exportar_csv_con_encabezado_y_filas(api, datos):
     )
     headers = datos["headers"]["superadmin"]
 
-    r = api.get("/api/v1/admin/auditoria/exportar", headers=headers)
+    r = api.get(PLATAFORMA_EXPORTAR, headers=headers)
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/csv")
     assert 'attachment; filename="auditoria-' in r.headers["content-disposition"]
@@ -247,13 +259,73 @@ def test_exportar_csv_con_encabezado_y_filas(api, datos):
     assert any("auditada@x.com" in fila for fila in filas[1:])
 
 
-@pytest.mark.parametrize("rol", ["administrador", "recepcion", "mecanico", "cliente"])
-def test_endpoints_exigen_superadmin(api, datos, rol):
-    headers = datos["headers"][rol]
-    assert api.get("/api/v1/admin/auditoria", headers=headers).status_code == 403
-    assert api.get("/api/v1/admin/auditoria/exportar", headers=headers).status_code == 403
+def test_plataforma_auditoria_exige_superadmin(api, datos):
+    for rol in ("administrador", "recepcion", "mecanico", "cliente"):
+        headers = datos["headers"][rol]
+        assert api.get(PLATAFORMA_LISTA, headers=headers).status_code == 403
+        assert api.get(PLATAFORMA_EXPORTAR, headers=headers).status_code == 403
+
+
+def test_taller_auditoria_exige_administrador(api, datos):
+    # El administrador del taller sí entra y ve solo lo suyo (ver test siguiente).
+    assert api.get(
+        TALLER_LISTA, headers=datos["headers"]["administrador"]
+    ).status_code == 200
+    assert api.get(
+        TALLER_EXPORTAR, headers=datos["headers"]["administrador"]
+    ).status_code == 200
+    for rol in ("recepcion", "mecanico", "cliente", "superadmin"):
+        headers = datos["headers"][rol]
+        assert api.get(TALLER_LISTA, headers=headers).status_code == 403, rol
+        assert api.get(TALLER_EXPORTAR, headers=headers).status_code == 403, rol
+
+
+def test_taller_auditoria_solo_muestra_su_taller(api, datos):
+    """El administrador ve las filas de su taller (taller_id=1): las de otros
+    talleres y las de plataforma (taller_id NULL) quedan afuera."""
+    propia = _insertar_fila(taller_id=1, entidad="clientes", estado_http=201)
+    _insertar_fila(taller_id=2, entidad="clientes", estado_http=201)
+    _insertar_fila(taller_id=None, entidad="clientes", estado_http=201)
+
+    headers = datos["headers"]["administrador"]
+    r = api.get(TALLER_LISTA, headers=headers)
+    assert r.status_code == 200
+    # Solo la fila del taller 1: las de taller 2 y las de plataforma no entran.
+    assert [f["id"] for f in r.json()] == [propia]
+    assert r.headers["X-Total-Count"] == "1"
+
+    # El CSV del taller tampoco filtra datos ajenos.
+    r = api.get(TALLER_EXPORTAR, headers=headers)
+    assert r.status_code == 200
+    texto = r.content.decode("utf-8-sig")
+    filas = list(csv.reader(io.StringIO(texto)))
+    assert len(filas) == 2  # encabezado + la fila del taller 1
+
+
+def test_plataforma_auditoria_filtra_por_taller_id(api, datos):
+    del_taller1 = _insertar_fila(taller_id=1, entidad="clientes")
+    del_taller2 = _insertar_fila(taller_id=2, entidad="clientes")
+    _insertar_fila(taller_id=None, entidad="clientes")
+
+    headers = datos["headers"]["superadmin"]
+    # Sin filtro ve las tres (plataforma no queda acotada por taller).
+    r = api.get(PLATAFORMA_LISTA, headers=headers)
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+    assert {f["taller_id"] for f in r.json()} == {1, 2, None}
+    # Con filtro, solo las del taller pedido.
+    r = api.get(PLATAFORMA_LISTA, headers=headers, params={"taller_id": 1})
+    assert [f["id"] for f in r.json()] == [del_taller1]
+    r = api.get(PLATAFORMA_LISTA, headers=headers, params={"taller_id": 2})
+    assert [f["id"] for f in r.json()] == [del_taller2]
+    assert r.headers["X-Total-Count"] == "1"
+    # El exportar también lo aplica.
+    r = api.get(PLATAFORMA_EXPORTAR, headers=headers, params={"taller_id": 1})
+    texto = r.content.decode("utf-8-sig")
+    filas = list(csv.reader(io.StringIO(texto)))
+    assert len(filas) == 2
 
 
 def test_sin_token_da_401(api, datos):
-    assert api.get("/api/v1/admin/auditoria").status_code == 401
-    assert api.get("/api/v1/admin/auditoria/exportar").status_code == 401
+    for ruta in (PLATAFORMA_LISTA, PLATAFORMA_EXPORTAR, TALLER_LISTA, TALLER_EXPORTAR):
+        assert api.get(ruta).status_code == 401

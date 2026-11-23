@@ -28,7 +28,7 @@ def _vacio_a_none(value):
 
 
 class TallerUpdate(BaseModel):
-    """Actualización parcial de los datos del taller (solo superadmin)."""
+    """Actualización parcial de los datos del taller (administrador del taller)."""
 
     nombre: Optional[str] = Field(default=None, min_length=2, max_length=120)
     razon_social: Optional[str] = Field(default=None, max_length=120)
@@ -86,3 +86,5 @@ class TallerResponse(BaseModel):
     pie_ticket: Optional[str] = None
     dias_garantia: int
     actualizado_en: Optional[datetime] = None
+    # Si el taller puede cobrar online (hoy solo el principal, docs/Plataforma.md).
+    pago_online: bool = False

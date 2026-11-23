@@ -63,8 +63,8 @@ def main() -> int:
     db = SessionLocal()
     try:
         if repository.get_by_email(db, email):
-            print(f"Ya existe un usuario con email {email}. No se creó otro.")
-            return 0
+            print(f"ERROR: ya existe un usuario con email {email}.", file=sys.stderr)
+            return 1
 
         user = repository.create(
             db,

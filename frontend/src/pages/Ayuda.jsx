@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import PreguntaFrecuente from '@/components/ayuda/PreguntaFrecuente'
 import {
   CATEGORIAS,
@@ -205,6 +205,14 @@ export default function Ayuda() {
           Hablá con el administrador de tu taller: te puede orientar o cargar lo
           que falta.
         </p>
+        {/* /terminos es solo del administrador del taller (misma regla que la ruta). */}
+        {ROLES_ADMIN.includes(usuario?.rol) && (
+          <p className="mt-3 text-sm">
+            <Link to="/terminos" className="font-semibold text-amber-texto hover:underline">
+              Términos y privacidad
+            </Link>
+          </p>
+        )}
       </section>
     </div>
   )

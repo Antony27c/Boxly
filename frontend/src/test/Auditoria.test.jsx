@@ -7,7 +7,12 @@ const servicio = vi.hoisted(() => ({
   listar: vi.fn(),
   exportar: vi.fn(),
 }))
+const apiGet = vi.hoisted(() => vi.fn())
 
+vi.mock('@/lib/api', async (importOriginal) => {
+  const real = await importOriginal()
+  return { ...real, api: { ...real.api, get: apiGet } }
+})
 vi.mock('@/services/auditoria', () => ({ auditoriaService: servicio }))
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
@@ -91,10 +96,10 @@ const REGISTROS = [
   },
 ]
 
-function montar() {
+function montar(ambito = 'taller') {
   return render(
     <MemoryRouter>
-      <Auditoria />
+      <Auditoria ambito={ambito} />
     </MemoryRouter>,
   )
 }
@@ -104,6 +109,7 @@ describe('Auditoria', () => {
     vi.clearAllMocks()
     servicio.listar.mockResolvedValue({ items: REGISTROS, total: REGISTROS.length })
     servicio.exportar.mockResolvedValue(undefined)
+    apiGet.mockResolvedValue([])
   })
 
   it('muestra cada movimiento con frase legible, quién, estado e IP', async () => {
@@ -139,6 +145,7 @@ describe('Auditoria', () => {
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     await waitFor(() =>
       expect(servicio.listar).toHaveBeenLastCalledWith(
+        'taller',
         { limit: 20, offset: 20 },
         'tok',
       ),
@@ -148,6 +155,7 @@ describe('Auditoria', () => {
 
     await waitFor(() =>
       expect(servicio.listar).toHaveBeenLastCalledWith(
+        'taller',
         { entidad: 'turnos', limit: 20, offset: 0 },
         'tok',
       ),
@@ -178,6 +186,7 @@ describe('Auditoria', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Solo errores' }))
     await waitFor(() =>
       expect(servicio.listar).toHaveBeenLastCalledWith(
+        'taller',
         expect.objectContaining({ entidad: 'turnos', metodo: 'DELETE', solo_errores: true }),
         'tok',
       ),
@@ -188,7 +197,73 @@ describe('Auditoria', () => {
 
     await waitFor(() =>
       expect(servicio.exportar).toHaveBeenCalledWith(
+        'taller',
         { entidad: 'turnos', metodo: 'DELETE', solo_errores: true },
+        'tok',
+      ),
+    )
+    expect(servicio.listar).not.toHaveBeenCalled()
+  })
+})
+
+describe('Auditoria en plataforma', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    servicio.listar.mockResolvedValue({ items: REGISTROS, total: REGISTROS.length })
+    servicio.exportar.mockResolvedValue(undefined)
+    apiGet.mockResolvedValue([
+      { id: 1, nombre: 'Taller Norte', estado: 'activo' },
+      { id: 2, nombre: 'Taller Sur', estado: 'activo' },
+    ])
+  })
+
+  it('pide la lista de talleres a /plataforma/talleres y filtra por taller_id', async () => {
+    montar('plataforma')
+
+    await waitFor(() =>
+      expect(apiGet).toHaveBeenCalledWith('/api/v1/plataforma/talleres?limit=100', 'tok'),
+    )
+    expect(await screen.findByRole('option', { name: 'Taller Norte' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Todos los talleres' })).toBeInTheDocument()
+
+    await screen.findAllByText('Creó en Órdenes')
+    expect(servicio.listar).toHaveBeenLastCalledWith(
+      'plataforma',
+      { limit: 20, offset: 0 },
+      'tok',
+    )
+
+    fireEvent.change(screen.getByLabelText('Taller'), { target: { value: '2' } })
+
+    await waitFor(() =>
+      expect(servicio.listar).toHaveBeenLastCalledWith(
+        'plataforma',
+        { taller_id: '2', limit: 20, offset: 0 },
+        'tok',
+      ),
+    )
+  })
+
+  it('exporta en plataforma con el taller_id elegido', async () => {
+    montar('plataforma')
+    await screen.findByRole('option', { name: 'Taller Sur' })
+
+    fireEvent.change(screen.getByLabelText('Taller'), { target: { value: '2' } })
+    await waitFor(() =>
+      expect(servicio.listar).toHaveBeenLastCalledWith(
+        'plataforma',
+        expect.objectContaining({ taller_id: '2' }),
+        'tok',
+      ),
+    )
+    servicio.listar.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: /exportar csv/i }))
+
+    await waitFor(() =>
+      expect(servicio.exportar).toHaveBeenCalledWith(
+        'plataforma',
+        { taller_id: '2' },
         'tok',
       ),
     )

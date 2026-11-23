@@ -5,6 +5,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.taller import TallerMixin
 
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
     from app.models.vehiculo import Vehiculo
 
 
-class Turno(Base):
+class Turno(TallerMixin, Base):
     """Turno agendado por un Cliente para traer un Vehículo al taller."""
 
     __tablename__ = "turnos"

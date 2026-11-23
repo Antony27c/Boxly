@@ -13,6 +13,7 @@ import {
   guardarPreferencia,
   leerPreferencias,
 } from '@/lib/preferencias'
+import AccesoSoporte from '@/components/soporte/AccesoSoporte'
 import { ROLES_ADMIN, etiquetaRol } from '@/routes/navegacion'
 import pkg from '../../package.json'
 
@@ -269,6 +270,8 @@ export default function Configuracion() {
           </div>
         </section>
       )}
+
+      {esAdmin && <AccesoSoporte />}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-graphite-700 pt-5 text-sm text-muted">
         <span>Boxly · versión {pkg.version}</span>

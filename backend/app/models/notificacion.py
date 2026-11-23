@@ -5,6 +5,7 @@ from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.taller import TallerMixin
 
 if TYPE_CHECKING:
     from app.models.orden import Orden
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 RESULTADOS_NOTIFICACION = ("enviado", "fallido", "omitido")
 
 
-class Notificacion(Base):
+class Notificacion(TallerMixin, Base):
     """Comprobante de cada aviso por email que se intentó mandar al cliente."""
 
     __tablename__ = "notificaciones"

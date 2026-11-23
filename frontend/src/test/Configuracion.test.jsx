@@ -18,6 +18,15 @@ vi.mock('@/context/AuthContext', () => ({
   }),
 }))
 
+vi.mock('@/services/soporte', () => ({
+  soporteService: {
+    listarAccesos: vi.fn().mockResolvedValue([]),
+    crearAcceso: vi.fn(),
+    revocarAcceso: vi.fn(),
+    listarActividad: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
+}))
+
 const USUARIO_ADMIN = {
   id: 2,
   nombre: 'Admin',

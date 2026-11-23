@@ -1,6 +1,7 @@
-"""Estado del sistema y respaldo CSV (B4).
+"""Estado de la plataforma, respaldo por taller y salud general (P3).
 
-Solo lo usan las rutas de superadmin de ``app/api/v1/sistema/router.py``.
+Solo lo usan las rutas de ``app/api/v1/sistema/router.py``: ``/plataforma/*``
+para el superadmin y ``/taller/respaldo`` para el administrador del taller.
 Nunca se devuelven secretos: las integraciones informan solo si están
 configuradas y el respaldo excluye las columnas sensibles.
 """
@@ -19,33 +20,48 @@ from app.api.v1.ordenes.service import TRANSICIONES_VALIDAS
 from app.core.config import UPLOADS_DIR, get_settings
 from app.core.rate_limit import limiter
 from app.db.base import Base
-from app.db.session import engine
+from app.db.session import SIN_FILTRO_TALLER, engine
+from app.models import (
+    Cliente,
+    ConfiguracionTaller,
+    DetalleOrden,
+    Historial_estado,
+    HorarioMecanico,
+    Orden,
+    Pago,
+    Repuesto,
+    Taller,
+    Turno,
+    Usuario,
+    Vehiculo,
+)
 from app.models.usuario import RolUsuario
 from app.schemas.sistema import (
     SistemaConteosResponse,
     SistemaDbResponse,
     SistemaIntegracionesResponse,
     SistemaResponse,
+    SistemaTalleresResponse,
     SistemaUploadsResponse,
     SistemaUsuariosPorRolResponse,
 )
 
-# Tablas del respaldo en el orden del contrato (docs/SuperAdmin.md B4), con los
-# __tablename__ reales de app/models (el contrato dice "historial_estados" pero
-# la tabla se llama "historial_estado").
-TABLAS_RESPALDO = (
-    "usuarios",
-    "clientes",
-    "vehiculos",
-    "ordenes",
-    "detalles_orden",
-    "historial_estado",
-    "repuestos",
-    "turnos",
-    "pagos",
-    "horarios_mecanico",
-    "configuracion_taller",
-)
+# Tablas del respaldo en el orden del contrato, con sus modelos ORM. Las
+# consultas son ORM a propósito: el filtro automático por taller de
+# app.db.session es lo único que garantiza que el ZIP no mezcle talleres.
+MODELOS_RESPALDO = {
+    "usuarios": Usuario,
+    "clientes": Cliente,
+    "vehiculos": Vehiculo,
+    "ordenes": Orden,
+    "detalles_orden": DetalleOrden,
+    "historial_estado": Historial_estado,
+    "repuestos": Repuesto,
+    "turnos": Turno,
+    "pagos": Pago,
+    "horarios_mecanico": HorarioMecanico,
+    "configuracion_taller": ConfiguracionTaller,
+}
 
 # Nunca se exportan secretos: password_hash, token_version ni ninguna columna
 # de token de activación presente o futura.
@@ -70,8 +86,16 @@ def _celda(valor):
 
 class SistemaService:
     def _contar_tabla(self, db: Session, nombre: str) -> int:
+        # Conteo agregado de toda la plataforma: sin filtro de taller.
         tabla = Base.metadata.tables[nombre]
-        return db.scalar(select(func.count()).select_from(tabla)) or 0
+        return (
+            db.scalar(
+                select(func.count())
+                .select_from(tabla)
+                .execution_options(**{SIN_FILTRO_TALLER: True})
+            )
+            or 0
+        )
 
     def _estados_finales_orden(self) -> tuple[str, ...]:
         # Estados sin transición saliente: entregado y cancelado.
@@ -86,6 +110,7 @@ class SistemaService:
                 select(func.count())
                 .select_from(tabla)
                 .where(tabla.c.estado.notin_(self._estados_finales_orden()))
+                .execution_options(**{SIN_FILTRO_TALLER: True})
             )
             or 0
         )
@@ -106,12 +131,25 @@ class SistemaService:
         tabla = Base.metadata.tables["usuarios"]
         conteos = {rol.value: 0 for rol in RolUsuario}
         for rol, total in db.execute(
-            select(tabla.c.rol, func.count()).group_by(tabla.c.rol)
+            select(tabla.c.rol, func.count())
+            .group_by(tabla.c.rol)
+            .execution_options(**{SIN_FILTRO_TALLER: True})
         ):
             clave = rol.value if isinstance(rol, RolUsuario) else str(rol)
             if clave in conteos:
                 conteos[clave] = total
         return SistemaUsuariosPorRolResponse(**conteos)
+
+    def _talleres_por_estado(self, db: Session) -> SistemaTalleresResponse:
+        conteos = {"activo": 0, "suspendido": 0}
+        for estado, total in db.execute(
+            select(Taller.estado, func.count())
+            .group_by(Taller.estado)
+            .execution_options(**{SIN_FILTRO_TALLER: True})
+        ):
+            if estado in conteos:
+                conteos[estado] = total
+        return SistemaTalleresResponse(**conteos)
 
     def _db_responde(self, db: Session) -> bool:
         try:
@@ -162,6 +200,7 @@ class SistemaService:
             )
             conteos = self._conteos(db)
             usuarios_por_rol = self._usuarios_por_rol(db)
+            talleres = self._talleres_por_estado(db)
         else:
             # La base no responde: se informa el estado sin romper el endpoint.
             db_info = SistemaDbResponse(motor=motor, ok=False, revision=None)
@@ -178,36 +217,42 @@ class SistemaService:
             usuarios_por_rol = SistemaUsuariosPorRolResponse(
                 superadmin=0, administrador=0, recepcion=0, mecanico=0, cliente=0
             )
+            talleres = SistemaTalleresResponse(activo=0, suspendido=0)
         return SistemaResponse(
             version=settings.app_version,
             entorno=settings.environment,
             db=db_info,
             conteos=conteos,
             usuarios_por_rol=usuarios_por_rol,
+            talleres=talleres,
             uploads=self._uploads(),
             integraciones=self._integraciones(),
         )
 
-    def _csv_tabla(self, db: Session, tabla: Table) -> str:
+    def _csv_modelo(self, db: Session, modelo: type) -> str:
+        """CSV de un modelo con la sesión ya filtrada por taller (solo ORM)."""
+        tabla: Table = modelo.__table__
         columnas = [c for c in tabla.columns if not _columna_sensible(c.name)]
-        stmt = select(*columnas)
-        if tabla.primary_key.columns:
-            stmt = stmt.order_by(*tabla.primary_key.columns)
+        stmt = select(modelo).order_by(modelo.id)
+        if not hasattr(modelo, "taller_id"):
+            # Sin columna propia (detalles e historial): se acotan por la orden,
+            # que sí queda filtrada por el taller de la sesión.
+            stmt = stmt.where(modelo.orden_id.in_(select(Orden.id)))
         buffer = io.StringIO()
         escritor = csv.writer(buffer)
         escritor.writerow([c.name for c in columnas])
-        for fila in db.execute(stmt):
-            escritor.writerow([_celda(valor) for valor in fila])
+        for fila in db.scalars(stmt):
+            escritor.writerow([_celda(getattr(fila, c.name)) for c in columnas])
         return buffer.getvalue()
 
     def generar_respaldo(self, db: Session) -> bytes:
-        """ZIP en memoria con un CSV por tabla (UTF-8 con BOM)."""
+        """ZIP en memoria con un CSV por tabla, solo del taller de la sesión."""
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as respaldo:
-            for nombre in TABLAS_RESPALDO:
-                tabla = Base.metadata.tables[nombre]
+            for modelo in MODELOS_RESPALDO.values():
                 respaldo.writestr(
-                    f"{tabla.name}.csv", self._csv_tabla(db, tabla).encode("utf-8-sig")
+                    f"{modelo.__tablename__}.csv",
+                    self._csv_modelo(db, modelo).encode("utf-8-sig"),
                 )
         return buffer.getvalue()
 

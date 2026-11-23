@@ -8,7 +8,7 @@ from app.db.base import Base
 
 
 class ConfiguracionTaller(Base):
-    """Datos del taller (una sola fila, id=1). La edita el superadmin.
+    """Datos de cada taller (una fila por taller). Los edita el administrador del taller.
 
     Se muestran en el ticket de cobro y en el portal del cliente.
     """
@@ -16,6 +16,11 @@ class ConfiguracionTaller(Base):
     __tablename__ = "configuracion_taller"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    taller_id: Mapped[int] = mapped_column(
+        ForeignKey("talleres.id", name="fk_configuracion_taller_taller_id_talleres"),
+        nullable=False,
+        unique=True,
+    )
     nombre: Mapped[str] = mapped_column(String(120), nullable=False, default="Mi taller")
     razon_social: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     cuit: Mapped[Optional[str]] = mapped_column(String(13), nullable=True)

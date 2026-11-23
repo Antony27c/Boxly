@@ -13,6 +13,20 @@ export function setUnauthorizedHandler(fn) {
   onNoAutorizado = fn
 }
 
+/* Modo soporte (P6): el SoporteContext fija el taller visitado y cada
+   request del taller sale con el header X-Taller-Soporte. */
+let tallerSoporte = null
+export function setTallerSoporte(id) {
+  tallerSoporte = id ?? null
+}
+
+/* Cuando el backend responde 403 con "acceso de soporte" (el taller revocó
+   o venció el acceso), el contexto sale del modo soporte con un aviso. */
+let onSoportePerdido = null
+export function setSoportePerdidoHandler(fn) {
+  onSoportePerdido = fn
+}
+
 function mensajeSegunEstado(status, detalle) {
   if (detalle) return detalle
   if (status === 401) return 'Tu sesion vencio. Inicia sesion de nuevo.'
@@ -30,6 +44,7 @@ export function urlArchivo(ruta) {
 async function enviar(path, { method = 'GET', body, token, form = false } = {}) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
+  if (tallerSoporte != null) headers['X-Taller-Soporte'] = String(tallerSoporte)
 
   let payload
   if (body instanceof FormData) {
@@ -64,6 +79,13 @@ async function enviar(path, { method = 'GET', body, token, form = false } = {}) 
     const base = detalle ?? 'Hay un error en los datos enviados'
     if (campo) detalle = `${base}: revisá el campo ${campo}.`
     if (response.status === 401 && token && onNoAutorizado) onNoAutorizado()
+    if (
+      response.status === 403 &&
+      onSoportePerdido &&
+      /acceso de soporte/i.test(String(detalle ?? ''))
+    ) {
+      onSoportePerdido(detalle)
+    }
     throw new ApiError(mensajeSegunEstado(response.status, detalle), response.status)
   }
 

@@ -79,7 +79,7 @@ export default function BarraInferior({ principales = [], mas = [] }) {
         <ul className="flex">
           {visibles.map((item) => (
             <li key={item.a} className="flex-1">
-              <NavLink to={item.a} className={({ isActive }) => claseItem(isActive)}>
+              <NavLink to={item.a} end={item.a === "/plataforma"} className={({ isActive }) => claseItem(isActive)}>
                 {({ isActive }) => (
                   <>
                     <Icono

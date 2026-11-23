@@ -10,6 +10,7 @@ import LineaDeTiempo from '@/components/ordenes/LineaDeTiempo'
 import RutaSeguimiento from '@/components/portal/RutaSeguimiento'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import useTaller from '@/hooks/useTaller'
 import { nombreEstado } from '@/services/ordenes'
 import { pagosService, portalService } from '@/services/portal'
 import { pesos } from '@/utils/formato'
@@ -26,8 +27,13 @@ function fecha(iso) {
 export default function PortalOrden() {
   const { id } = useParams()
   const { token } = useAuth()
+  const { taller } = useTaller()
   const [pagando, setPagando] = useState(false)
   const [errorPago, setErrorPago] = useState('')
+
+  // El cobro online depende del taller (docs/Plataforma.md, P3): si el dato
+  // no está (cargando o error) se conserva el comportamiento de siempre.
+  const pagoOnline = taller?.pago_online !== false
 
   const cargar = useCallback((t) => portalService.miOrden(id, t), [id])
   const { datos: orden, cargando, error, recargar } = useRecurso(cargar)
@@ -170,6 +176,8 @@ export default function PortalOrden() {
           </div>
           {orden.pagada ? (
             <Badge tono="ok">Pagada</Badge>
+          ) : orden.puede_pagar && !pagoOnline ? (
+            <span className="text-xs text-muted">Pagás en el taller</span>
           ) : orden.puede_pagar ? (
             <Button cargando={pagando} onClick={pagar}>
               Pagar {pesos(orden.costo_final)}

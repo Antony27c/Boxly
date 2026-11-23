@@ -1,3 +1,4 @@
+from app.models.taller import AccesoSoporte, Taller, TallerMixin
 from app.models.usuario import RolUsuario, Usuario
 from app.models.cliente import Cliente
 from app.models.vehiculo import Vehiculo
@@ -14,6 +15,9 @@ from app.models.notificacion import Notificacion
 from app.models.auditoria import Auditoria
 from app.models.configuracion_taller import ConfiguracionTaller
 __all__ = [
+    "Taller",
+    "TallerMixin",
+    "AccesoSoporte",
     "RolUsuario",
     "Usuario",
     "Cliente",

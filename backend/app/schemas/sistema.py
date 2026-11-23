@@ -1,4 +1,4 @@
-"""Schemas del estado del sistema y del respaldo (B4, docs/SuperAdmin.md)."""
+"""Schemas del estado de la plataforma y del respaldo por taller (P3)."""
 
 from pydantic import BaseModel
 
@@ -39,11 +39,19 @@ class SistemaIntegracionesResponse(BaseModel):
     rate_limit: bool
 
 
+class SistemaTalleresResponse(BaseModel):
+    """Talleres de la plataforma agrupados por estado."""
+
+    activo: int
+    suspendido: int
+
+
 class SistemaResponse(BaseModel):
     version: str
     entorno: str
     db: SistemaDbResponse
     conteos: SistemaConteosResponse
     usuarios_por_rol: SistemaUsuariosPorRolResponse
+    talleres: SistemaTalleresResponse
     uploads: SistemaUploadsResponse
     integraciones: SistemaIntegracionesResponse

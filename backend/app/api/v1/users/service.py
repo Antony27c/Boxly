@@ -27,9 +27,9 @@ from app.schemas.usuario import (
 # contra este para que la respuesta tarde lo mismo y no se pueda enumerar usuarios.
 _HASH_DUMMY = "$2b$12$D5nmqropdACIU8iLQjEjGewyaEd1qk.04sX1PfmTKXgcR0AwcpDzC"
 
-# Roles que solo puede gestionar el superadmin (crear, editar, desactivar o
-# asignar). Contrato en docs/SuperAdmin.md, sección B1.
-ROLES_GERENCIA = frozenset({RolUsuario.administrador, RolUsuario.superadmin})
+# El superadmin es de la plataforma: nadie del taller puede crearlo ni asignarlo
+# (docs/Plataforma.md, P1).
+_MSG_SIN_SUPERADMIN = "No se puede crear ni asignar el rol superadmin"
 
 
 def _to_response(user: Usuario) -> UsuarioResponse:
@@ -177,32 +177,33 @@ def activar_cuenta(db: Session, data: ActivacionRequest) -> TokenResponse:
     return TokenResponse(access_token=token, usuario=_to_response(user))
 
 
-def _exigir_superadmin_para_gerencia(actor: Usuario, aplica: bool) -> None:
-    if aplica and actor.rol != RolUsuario.superadmin:
+def _exigir_sin_superadmin(rol: RolUsuario | None) -> None:
+    if rol == RolUsuario.superadmin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el superadmin puede gestionar administradores",
+            detail=_MSG_SIN_SUPERADMIN,
         )
 
 
-def _validar_no_ultimo_superadmin(db: Session, user: Usuario, payload: dict) -> None:
-    """No se puede dejar el sistema sin superadmin activo: ni desactivándolo
-    ni cambiándole el rol (docs/SuperAdmin.md, sección B1)."""
-    if user.rol != RolUsuario.superadmin or not user.activo:
+def _validar_no_ultimo_admin(db: Session, user: Usuario, payload: dict) -> None:
+    """No se puede dejar el taller sin administrador activo: ni desactivándolo
+    ni cambiándole el rol (docs/Plataforma.md, P1). El filtro de taller ya
+    limita el conteo a los administradores del taller del actor."""
+    if user.rol != RolUsuario.administrador or not user.activo:
         return
-    pierde_superadmin = payload.get("activo") is False or (
-        payload.get("rol") is not None and payload["rol"] != RolUsuario.superadmin
+    pierde_admin = payload.get("activo") is False or (
+        payload.get("rol") is not None and payload["rol"] != RolUsuario.administrador
     )
-    if pierde_superadmin and repository.contar_superadmins_activos(db) <= 1:
+    if pierde_admin and repository.contar_administradores_activos(db) <= 1:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Tiene que quedar al menos un superadmin activo",
+            detail="Tiene que quedar al menos un administrador activo en el taller",
         )
 
 
 def create_usuario(db: Session, data: UsuarioCreate, actor: Usuario) -> UsuarioResponse:
-    _exigir_superadmin_para_gerencia(actor, data.rol in ROLES_GERENCIA)
-    if repository.get_by_email(db, data.email):
+    _exigir_sin_superadmin(data.rol)
+    if repository.email_existe(db, data.email):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ya existe un usuario con ese email",
@@ -262,15 +263,12 @@ def update_usuario(
             detail="No podés desactivar tu propio usuario",
         )
 
-    _exigir_superadmin_para_gerencia(
-        actor, user.rol in ROLES_GERENCIA or payload.get("rol") in ROLES_GERENCIA
-    )
-    _validar_no_ultimo_superadmin(db, user, payload)
+    _exigir_sin_superadmin(payload.get("rol"))
+    _validar_no_ultimo_admin(db, user, payload)
 
     if "email" in payload:
         email = payload["email"].lower().strip()
-        existing = repository.get_by_email(db, email)
-        if existing and existing.id != user.id:
+        if repository.email_existe(db, email, excluir_id=user.id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Ya existe un usuario con ese email",
@@ -310,8 +308,7 @@ def delete_usuario(db: Session, user_id: int, actor: Usuario) -> UsuarioResponse
             status_code=status.HTTP_409_CONFLICT,
             detail="No podés desactivar tu propio usuario",
         )
-    _exigir_superadmin_para_gerencia(actor, user.rol in ROLES_GERENCIA)
-    _validar_no_ultimo_superadmin(db, user, {"activo": False})
+    _validar_no_ultimo_admin(db, user, {"activo": False})
     return _to_response(repository.soft_delete(db, user))
 
 def list_mecanicos(db: Session) -> list[MecanicoResponse]:

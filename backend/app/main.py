@@ -10,6 +10,7 @@ from sqlalchemy import text
 import app.models  # noqa: F401
 from app.api.v1.router import api_router
 from app.core.auditoria import AuditoriaMiddleware
+from app.core.enmascarado import EnmascaradoSoporteMiddleware
 from app.core.config import UPLOADS_DIR, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging_config import configurar_logging
@@ -50,6 +51,8 @@ def create_app() -> FastAPI:
 
     # Registra cada POST/PUT/PATCH/DELETE de /api/v1 en la tabla auditoria.
     app.add_middleware(AuditoriaMiddleware)
+    # En modo soporte (header X-Taller-Soporte) enmascara DNI, teléfonos y emails.
+    app.add_middleware(EnmascaradoSoporteMiddleware)
 
     register_exception_handlers(app)
     configurar_rate_limit(app)

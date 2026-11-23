@@ -23,7 +23,7 @@ function fecha(iso) {
   return iso ? new Date(iso).toLocaleDateString('es-AR') : '—'
 }
 
-function TarjetaOrden({ orden, pagando, onPagar }) {
+function TarjetaOrden({ orden, pagando, onPagar, pagoOnline }) {
   const pagable = puedePagar(orden)
   const pasos = pasosDesdeEstado(orden.estado)
   return (
@@ -60,9 +60,13 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
       <FichaPie>
         <FichaLink to={`/portal/orden/${orden.id}`}>Ver seguimiento</FichaLink>
         {pagable ? (
-          <Button cargando={pagando} onClick={() => onPagar(orden)} className="ml-auto !py-2">
-            Pagar {pesos(orden.costo_final)}
-          </Button>
+          pagoOnline ? (
+            <Button cargando={pagando} onClick={() => onPagar(orden)} className="ml-auto !py-2">
+              Pagar {pesos(orden.costo_final)}
+            </Button>
+          ) : (
+            <span className="ml-auto px-3 text-xs text-muted">Pagás en el taller</span>
+          )
         ) : (
           !orden.pagada && <span className="ml-auto px-3 text-xs text-muted">Se habilita el pago cuando esté lista</span>
         )}
@@ -71,7 +75,7 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
   )
 }
 
-function TarjetaVehiculo({ vehiculo, seleccionado, onAlternar, ordenPagable, pagando, onPagar }) {
+function TarjetaVehiculo({ vehiculo, seleccionado, onAlternar, ordenPagable, pagando, onPagar, pagoOnline }) {
   const activa = vehiculo.orden_activa
   const lista = activa?.estado === 'listo'
   return (
@@ -120,15 +124,18 @@ function TarjetaVehiculo({ vehiculo, seleccionado, onAlternar, ordenPagable, pag
         >
           {seleccionado ? 'Ocultar órdenes' : 'Ver órdenes'}
         </Button>
-        {ordenPagable && (
-          <Button
-            cargando={pagando}
-            className="ml-auto !py-2"
-            onClick={() => onPagar(ordenPagable)}
-          >
-            Pagar {pesos(ordenPagable.costo_final)}
-          </Button>
-        )}
+        {ordenPagable &&
+          (pagoOnline ? (
+            <Button
+              cargando={pagando}
+              className="ml-auto !py-2"
+              onClick={() => onPagar(ordenPagable)}
+            >
+              Pagar {pesos(ordenPagable.costo_final)}
+            </Button>
+          ) : (
+            <span className="ml-auto px-3 text-xs text-muted">Pagás en el taller</span>
+          ))}
       </FichaPie>
     </Ficha>
   )
@@ -149,6 +156,9 @@ const ORDEN_ETAPAS = [
 export default function Portal() {
   const { token, usuario } = useAuth()
   const { taller } = useTaller()
+  // El cobro online depende del taller (docs/Plataforma.md, P3): si el dato
+  // no está (cargando o error) se conserva el comportamiento de siempre.
+  const pagoOnline = taller?.pago_online !== false
   const [pagandoId, setPagandoId] = useState(null)
   const [errorPago, setErrorPago] = useState('')
   const [vehiculoSelId, setVehiculoSelId] = useState(null)
@@ -211,6 +221,7 @@ export default function Portal() {
         ordenPagable={ordenPagable}
         pagando={ordenPagable ? pagandoId === ordenPagable.id : false}
         onPagar={pagar}
+        pagoOnline={pagoOnline}
       />
     )
   }
@@ -244,7 +255,8 @@ export default function Portal() {
             <section className="mt-6">
               <h2 className="font-semibold">Listos para retirar</h2>
               <p className="text-sm text-muted">
-                Ya podés pasar a buscarlos — o pagar online desde sus órdenes.
+                Ya podés pasar a buscarlos
+                {pagoOnline ? ' — o pagar online desde sus órdenes.' : '.'}
               </p>
               <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {listos.map(tarjetaVehiculo)}
@@ -302,6 +314,7 @@ export default function Portal() {
                       orden={orden}
                       pagando={pagandoId === orden.id}
                       onPagar={pagar}
+                      pagoOnline={pagoOnline}
                     />
                   ))}
                 </ul>

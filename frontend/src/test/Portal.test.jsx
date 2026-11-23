@@ -240,6 +240,39 @@ describe('Portal', () => {
     expect(screen.queryByText(/Tel:/)).not.toBeInTheDocument()
   })
 
+  it('con pago_online ofrece el botón de pagar', async () => {
+    taller.datos = { pago_online: true }
+    portal.misOrdenes.mockResolvedValue([ORDEN_PAGABLE])
+    portal.misVehiculos.mockResolvedValue([VEHICULO])
+    montar()
+
+    await screen.findByText('Mis vehículos')
+    const tarjetaFocus = screen.getByText('Focus').closest('li')
+    expect(within(tarjetaFocus).getByRole('button', { name: /pagar/i })).toBeInTheDocument()
+  })
+
+  it('sin pago_online no ofrece pagar y muestra "Pagás en el taller"', async () => {
+    taller.datos = { pago_online: false }
+    portal.misOrdenes.mockResolvedValue([ORDEN_PAGABLE])
+    portal.misVehiculos.mockResolvedValue([
+      { ...VEHICULO, orden_activa: { id: 7, codigo: 'OR-007', estado: 'listo' } },
+    ])
+    montar()
+
+    // La sección de listos ya no promete pago online.
+    const seccionListos = (await screen.findByText('Listos para retirar')).closest('section')
+    expect(within(seccionListos).getByText(/Ya podés pasar a buscarlos\./)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
+
+    // La tarjeta del vehículo lo dice; al desplegar la orden también.
+    expect(within(seccionListos).getAllByText('Pagás en el taller').length).toBeGreaterThan(0)
+    const tarjetaFocus = within(seccionListos).getByRole('listitem')
+    fireEvent.click(within(tarjetaFocus).getByRole('button', { name: 'Ver órdenes' }))
+    await screen.findByText('OR-007')
+    expect(screen.getAllByText('Pagás en el taller').length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
+  })
+
   it('muestra el error y reintenta la carga', async () => {
     portal.misOrdenes
       .mockRejectedValueOnce(new Error('No pudimos cargar tus órdenes.'))

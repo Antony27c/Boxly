@@ -10,7 +10,7 @@ from app.core import imagenes
 import anyio
 
 from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, fijar_taller
 from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate
 from app.models.orden import Orden
 from app.models.usuario import RolUsuario, Usuario, es_admin
@@ -305,6 +305,9 @@ class OrdenService:
         """
         with SessionLocal() as db:
             orden = self.obtener_detalle_orden(db, orden_id)
+            # La sesión de fondo arranca sin taller: se fija el de la orden
+            # para que el comprobante quede en el taller que la generó.
+            fijar_taller(db, orden.taller_id)
             vehiculo = orden.vehiculo
             datos_comunes = (
                 orden.cliente.email,

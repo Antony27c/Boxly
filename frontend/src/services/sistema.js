@@ -1,7 +1,10 @@
 import { api, ApiError } from '@/lib/api'
 
-const RECURSO = '/api/v1/admin'
-// Misma base que lib/api.js (la constante no está exportada).
+// Salud de la plataforma (superadmin) y respaldo del propio taller
+// (administrador), docs/Plataforma.md P3.
+const SISTEMA = '/api/v1/plataforma/sistema'
+const RESPALDO = '/api/v1/taller/respaldo'
+// Mismo origen que lib/api.js (la constante no está exportada).
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 // El nombre del archivo viene en Content-Disposition, por ejemplo:
@@ -26,7 +29,7 @@ function nombreDelArchivo(headers) {
 async function descargarRespaldo(token) {
   let response
   try {
-    response = await fetch(`${BASE_URL}${RECURSO}/exportar`, {
+    response = await fetch(`${BASE_URL}${RESPALDO}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
   } catch {
@@ -58,6 +61,6 @@ async function descargarRespaldo(token) {
 }
 
 export const sistemaService = {
-  obtener: (token) => api.get(`${RECURSO}/sistema`, token),
+  obtener: (token) => api.get(SISTEMA, token),
   descargarRespaldo,
 }

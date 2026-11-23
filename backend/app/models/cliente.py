@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.taller import TallerMixin
 
 if TYPE_CHECKING:
     from app.models.orden import Orden
@@ -13,15 +14,17 @@ if TYPE_CHECKING:
     from app.models.vehiculo import Vehiculo
 
 
-class Cliente(Base):
+class Cliente(TallerMixin, Base):
     """Cliente del taller. Puede tener varios vehículos, órdenes y turnos."""
 
     __tablename__ = "clientes"
+    # El DNI es único dentro de cada taller (la misma persona puede ir a dos talleres).
+    __table_args__ = (UniqueConstraint("taller_id", "dni", name="uq_clientes_taller_dni"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     nombre: Mapped[str] = mapped_column(String(80), nullable=False)
     apellido: Mapped[str] = mapped_column(String(80), nullable=False)
-    dni: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    dni: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     telefono: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     direccion: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

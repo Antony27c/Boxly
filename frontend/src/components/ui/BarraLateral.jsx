@@ -23,7 +23,7 @@ function Grupo({ titulo, items }) {
       <ul className="space-y-0.5">
         {items.map((item) => (
           <li key={item.a}>
-            <NavLink to={item.a} className={claseItem}>
+            <NavLink to={item.a} end={item.a === "/plataforma"} className={claseItem}>
               {({ isActive }) => (
                 <>
                   {/* Marca lateral de la página activa. */}

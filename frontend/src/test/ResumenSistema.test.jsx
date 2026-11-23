@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ResumenSistema from '@/components/superadmin/ResumenSistema'
 
@@ -7,6 +7,12 @@ const sistema = vi.hoisted(() => ({
   descargarRespaldo: vi.fn(),
 }))
 
+const apiGet = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const real = await importOriginal()
+  return { ...real, api: { ...real.api, get: apiGet } }
+})
 vi.mock('@/services/sistema', () => ({ sistemaService: sistema }))
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
@@ -17,7 +23,7 @@ vi.mock('@/context/AuthContext', () => ({
   }),
 }))
 
-// Datos de ejemplo del contrato (docs/SuperAdmin.md, B4).
+// Datos de ejemplo del contrato de plataforma (docs/Plataforma.md, P3).
 const SISTEMA = {
   version: '1.0.0',
   entorno: 'dev',
@@ -32,6 +38,7 @@ const SISTEMA = {
     turnos: 30,
     pagos: 70,
   },
+  talleres: { activo: 3, suspendido: 1 },
   usuarios_por_rol: {
     superadmin: 1,
     administrador: 1,
@@ -93,6 +100,10 @@ describe('ResumenSistema', () => {
     expect(within(filaDe(roles, 'Mecánico')).getByText('2')).toBeInTheDocument()
     expect(within(filaDe(roles, 'Cliente')).getByText('30')).toBeInTheDocument()
 
+    const talleres = tarjeta('Talleres')
+    expect(within(filaDe(talleres, 'Activo')).getByText('3')).toBeInTheDocument()
+    expect(within(filaDe(talleres, 'Suspendido')).getByText('1')).toBeInTheDocument()
+
     const fotos = tarjeta('Fotos subidas')
     expect(within(fotos).getByText('3,3 MB')).toBeInTheDocument()
     expect(within(fotos).getByText('120 archivos')).toBeInTheDocument()
@@ -105,6 +116,13 @@ describe('ResumenSistema', () => {
     expect(
       within(filaDe(integraciones, 'Límite de intentos')).getByText('Configurado'),
     ).toBeInTheDocument()
+  })
+
+  it('no tiene botón de respaldo: la descarga vive en el panel del taller', async () => {
+    render(<ResumenSistema />)
+    await screen.findByText('Estado del sistema')
+
+    expect(screen.queryByRole('button', { name: /descargar respaldo/i })).not.toBeInTheDocument()
   })
 
   it('mientras carga muestra el loader', () => {
@@ -124,37 +142,24 @@ describe('ResumenSistema', () => {
     expect(await screen.findByText('Estado del sistema')).toBeInTheDocument()
     expect(sistema.obtener).toHaveBeenCalledTimes(2)
   })
-
-  it('el botón Descargar respaldo llama al servicio con el token', async () => {
-    render(<ResumenSistema />)
-    await screen.findByText('Estado del sistema')
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Descargar respaldo' }))
-    })
-
-    expect(sistema.descargarRespaldo).toHaveBeenCalledWith('tok')
-  })
-
-  it('si la descarga falla muestra el aviso de error', async () => {
-    sistema.descargarRespaldo.mockRejectedValue(new Error('El servidor no responde'))
-    render(<ResumenSistema />)
-    await screen.findByText('Estado del sistema')
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Descargar respaldo' }))
-    })
-
-    expect(await screen.findByText('El servidor no responde')).toBeInTheDocument()
-  })
 })
 
-describe('sistemaService.descargarRespaldo', () => {
+describe('sistemaService', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    apiGet.mockReset()
   })
 
-  it('pide el ZIP con el token y dispara la descarga con el nombre del servidor', async () => {
+  it('obtener pide la salud de la plataforma', async () => {
+    const { sistemaService: real } = await vi.importActual('@/services/sistema')
+    apiGet.mockResolvedValue({ version: '1.0.0' })
+
+    await real.obtener('tok')
+
+    expect(apiGet).toHaveBeenCalledWith('/api/v1/plataforma/sistema', 'tok')
+  })
+
+  it('descargarRespaldo pide el ZIP del taller con el token y el nombre del servidor', async () => {
     const { sistemaService: real } = await vi.importActual('@/services/sistema')
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -171,7 +176,7 @@ describe('sistemaService.descargarRespaldo', () => {
     await real.descargarRespaldo('tok')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/admin/exportar'),
+      expect.stringContaining('/api/v1/taller/respaldo'),
       expect.objectContaining({ headers: { Authorization: 'Bearer tok' } }),
     )
     expect(URL.createObjectURL).toHaveBeenCalled()
@@ -188,13 +193,13 @@ describe('sistemaService.descargarRespaldo', () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 403,
-        text: () => Promise.resolve(JSON.stringify({ detail: 'Solo el superadmin exporta' })),
+        text: () => Promise.resolve(JSON.stringify({ detail: 'No se pudo generar el respaldo' })),
       }),
     )
 
     await expect(real.descargarRespaldo('tok')).rejects.toMatchObject({
       name: 'ApiError',
-      message: 'Solo el superadmin exporta',
+      message: 'No se pudo generar el respaldo',
       status: 403,
     })
   })

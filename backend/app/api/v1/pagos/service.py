@@ -11,8 +11,10 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.pagos import mercadopago
 from app.core.config import get_settings
+from app.db.session import SIN_FILTRO_TALLER, fijar_taller
 from app.models.orden import Orden
 from app.models.pago import Pago
+from app.models.taller import TALLER_PRINCIPAL_ID
 from app.models.usuario import RolUsuario, Usuario, es_admin
 from app.schemas.pago import PagoResponse, PreferenciaPagoResponse
 
@@ -61,9 +63,12 @@ def _pago_del_usuario(db: Session, usuario: Usuario, pago_id: int) -> Pago:
     return pago
 
 
-def _pago_bloqueado(db: Session, pago_id: int) -> Pago | None:
+def _pago_bloqueado(db: Session, pago_id: int, *, sin_filtro: bool = False) -> Pago | None:
     """Pago con lock de fila para actualizarlo (FOR UPDATE; se ignora en SQLite)."""
-    return db.scalar(select(Pago).where(Pago.id == pago_id).with_for_update())
+    stmt = select(Pago).where(Pago.id == pago_id).with_for_update()
+    if sin_filtro:
+        stmt = stmt.execution_options(**{SIN_FILTRO_TALLER: True})
+    return db.scalar(stmt)
 
 
 def _aplicar_estado(pago: Pago, estado: str, payment_id: str | None) -> None:
@@ -101,6 +106,13 @@ def _preferencia_vigente(token: str, pago: Pago) -> dict | None:
 
 def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoResponse:
     orden = _orden_bloqueada_del_usuario(db, usuario, orden_id)
+    # Cobro online solo en el taller principal: los demás talleres todavía no
+    # tienen credenciales propias de Mercado Pago (docs/Plataforma.md, P3).
+    if orden.taller_id != TALLER_PRINCIPAL_ID:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este taller todavía no tiene cobro online",
+        )
     if orden.pagada:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La orden ya está pagada")
     if orden.estado not in PAGABLES:
@@ -274,9 +286,16 @@ def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None)
         logger.warning("No se pudo consultar el pago %s en Mercado Pago: %s", payment_id, exc)
         return
     referencia = str(info.get("external_reference") or "")
-    pago = _pago_bloqueado(db, int(referencia)) if referencia.isdigit() else None
+    # El webhook no tiene usuario: el pago se busca en toda la plataforma y
+    # después la sesión queda en el taller del pago antes de tocar nada.
+    pago = (
+        _pago_bloqueado(db, int(referencia), sin_filtro=True)
+        if referencia.isdigit()
+        else None
+    )
     if pago is None:
         return
+    fijar_taller(db, pago.taller_id)
     mp_id = str(info.get("id") or payment_id)
     if _payment_id_ajeno(db, pago, mp_id):
         logger.warning(

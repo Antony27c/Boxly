@@ -1,12 +1,13 @@
 from datetime import datetime, timezone
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.session import CLAVE_TALLER
 from app.models import ConfiguracionTaller, Usuario
-from app.schemas.taller import TallerUpdate
-
-FILA_ID = 1
+from app.models.taller import TALLER_PRINCIPAL_ID
+from app.schemas.taller import TallerResponse, TallerUpdate
 
 # Valores por defecto al crear la fila (los mismos defaults del modelo).
 _DEFAULTS = {
@@ -17,19 +18,46 @@ _DEFAULTS = {
 }
 
 
-def obtener(db: Session) -> ConfiguracionTaller:
-    """La fila única del taller; si no existe la crea con los valores por defecto."""
-    taller = db.get(ConfiguracionTaller, FILA_ID)
-    if taller is None:
-        taller = ConfiguracionTaller(id=FILA_ID, **_DEFAULTS)
-        db.add(taller)
+def _taller_sesion(db: Session) -> int:
+    """Taller de la sesión actual. Sin taller (plataforma o sistema) no hay datos que dar."""
+    taller_id = db.info.get(CLAVE_TALLER)
+    if taller_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenés permisos para esta acción",
+        )
+    return taller_id
+
+
+def _config_sesion(db: Session) -> ConfiguracionTaller:
+    """La fila de configuración del taller de la sesión; la crea si falta."""
+    taller_id = _taller_sesion(db)
+    config = db.scalar(
+        select(ConfiguracionTaller).where(ConfiguracionTaller.taller_id == taller_id)
+    )
+    if config is None:
+        # ConfiguracionTaller no usa TallerMixin: el taller va explícito.
+        config = ConfiguracionTaller(taller_id=taller_id, **_DEFAULTS)
+        db.add(config)
         db.commit()
-        db.refresh(taller)
-    return taller
+        db.refresh(config)
+    return config
 
 
-def actualizar(db: Session, usuario: Usuario, datos: TallerUpdate) -> ConfiguracionTaller:
-    taller = obtener(db)
+def _a_response(config: ConfiguracionTaller) -> TallerResponse:
+    respuesta = TallerResponse.model_validate(config)
+    # Cobro online propio: hoy solo el taller principal (docs/Plataforma.md, P3).
+    respuesta.pago_online = config.taller_id == TALLER_PRINCIPAL_ID
+    return respuesta
+
+
+def obtener(db: Session) -> TallerResponse:
+    """Datos del taller de la sesión (cualquier usuario del taller; superadmin: 403)."""
+    return _a_response(_config_sesion(db))
+
+
+def actualizar(db: Session, usuario: Usuario, datos: TallerUpdate) -> TallerResponse:
+    taller = _config_sesion(db)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(taller, campo, valor)
 
@@ -45,4 +73,4 @@ def actualizar(db: Session, usuario: Usuario, datos: TallerUpdate) -> Configurac
     taller.actualizado_en = datetime.now(timezone.utc)
     db.commit()
     db.refresh(taller)
-    return taller
+    return _a_response(taller)

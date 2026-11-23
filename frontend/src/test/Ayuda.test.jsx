@@ -155,6 +155,21 @@ describe('Ayuda', () => {
     ).toBeInTheDocument()
   })
 
+  it('muestra el link a términos solo para el administrador del taller', () => {
+    montar()
+    expect(
+      screen.getByRole('link', { name: /términos y privacidad/i }),
+    ).toHaveAttribute('href', '/terminos')
+  })
+
+  it('no muestra el link a términos para otros roles', () => {
+    auth.usuario = { id: 3, nombre: 'Ana', apellido: 'Gómez', rol: 'recepcion' }
+    montar()
+    expect(
+      screen.queryByRole('link', { name: /términos y privacidad/i }),
+    ).not.toBeInTheDocument()
+  })
+
   it('muestra primero las preguntas del rol del usuario', () => {
     auth.usuario = { id: 3, nombre: 'Ana', apellido: 'Gómez', rol: 'recepcion' }
     montar()

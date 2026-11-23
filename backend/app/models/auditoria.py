@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -25,6 +25,14 @@ class Auditoria(Base):
         nullable=True,
         index=True,
     )
+    # Taller donde ocurrió la acción (NULL: acción de plataforma o sin sesión).
+    taller_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("talleres.id", name="fk_auditoria_taller_id_talleres"),
+        nullable=True,
+        index=True,
+    )
+    # True si la hizo el superadmin en modo soporte (tarea P2).
+    soporte: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     usuario_email: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     rol: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     metodo: Mapped[str] = mapped_column(String(8), nullable=False)
