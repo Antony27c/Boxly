@@ -26,9 +26,5 @@ def listar_planes(db: DbSession) -> list[PlanPublico]:
     summary="Pedido de demo desde la landing",
 )
 def enviar_contacto(data: ContactoCreate, request: Request, db: DbSession) -> ContactoRespuesta:
-    # La IP es la de la conexión: detrás de un proxy, uvicorn la toma de
-    # X-Forwarded-For solo si el proxy es de confianza (--forwarded-allow-ips).
-    # No se lee el header a mano porque cualquiera podría falsearlo y saltear el límite.
-    ip = request.client.host if request.client else None
-    service.registrar_contacto(db, data, ip)
+    service.registrar_contacto(db, data, request)
     return ContactoRespuesta()

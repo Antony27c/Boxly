@@ -12,6 +12,9 @@ del usuario en cada fila.
 El registro nunca cambia la respuesta: cualquier excepción se loguea con
 logger.exception y se sigue de largo. En POST /api/v1/auth/login se lee el
 body (sin consumirlo para la app) y se guarda solo el email intentado.
+
+La IP auditada es la de la conexión (app.core.ip): no se lee X-Forwarded-For
+a mano porque se puede falsear; detrás de un proxy la reescribe uvicorn.
 """
 import json
 import logging
@@ -20,6 +23,7 @@ import urllib.parse
 from sqlalchemy import select
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.core.ip import ip_de_scope
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
 from app.models.auditoria import Auditoria
@@ -54,20 +58,6 @@ def _entidad_y_id(ruta: str) -> tuple[str | None, int | None]:
             entidad_id = int(parte)
             break
     return entidad, entidad_id
-
-
-def _ip(scope: Scope) -> str | None:
-    for nombre, valor in scope.get("headers", []):
-        if nombre == b"x-forwarded-for":
-            # La primera IP de la cadena es la del cliente.
-            ip = valor.decode("latin-1").split(",")[0].strip()
-            if ip:
-                return ip[:45]
-            break
-    cliente = scope.get("client")
-    if cliente:
-        return str(cliente[0])[:45]
-    return None
 
 
 def _usuario(scope: Scope) -> tuple[int | None, str | None, str | None]:
@@ -232,7 +222,7 @@ class AuditoriaMiddleware:
                     entidad=(entidad or "")[:50] or None,
                     entidad_id=entidad_id,
                     estado_http=estado_http or 0,
-                    ip=_ip(scope),
+                    ip=ip_de_scope(scope),
                     detalle=None,
                 )
                 db.add(fila)

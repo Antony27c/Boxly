@@ -1,10 +1,11 @@
 """Lógica de la API pública de la landing (docs/Landing.md, L5)."""
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.ip import ip_cliente
 from app.models import Plan, SolicitudContacto
 from app.schemas.publico import ContactoCreate
 
@@ -21,10 +22,13 @@ def planes_activos(db: Session) -> list[Plan]:
     )
 
 
-def registrar_contacto(db: Session, data: ContactoCreate, ip: str | None) -> None:
+def registrar_contacto(db: Session, data: ContactoCreate, request: Request) -> None:
     """Guarda la solicitud. Con el campo trampa lleno no guarda nada (y no avisa)."""
     if data.sitio_web:
         return
+
+    # IP de la conexión (app.core.ip): un X-Forwarded-For falso no saltea el límite.
+    ip = ip_cliente(request)
 
     ahora = datetime.now(timezone.utc)
     if ip:
@@ -45,7 +49,7 @@ def registrar_contacto(db: Session, data: ContactoCreate, ip: str | None) -> Non
             telefono=data.telefono,
             ciudad=data.ciudad,
             mensaje=data.mensaje,
-            ip=ip[:45] if ip else None,
+            ip=ip,
             # Explícito (no server_default) para que el conteo compare igual en SQLite.
             creado_en=ahora,
         )

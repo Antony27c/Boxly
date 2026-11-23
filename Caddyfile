@@ -6,7 +6,13 @@
 {$DOMINIO} {
 	encode zstd gzip
 
-	# API de FastAPI (incluye el webhook de Mercado Pago)
+	# API de FastAPI (incluye el webhook de Mercado Pago).
+	# reverse_proxy manda X-Forwarded-For, X-Forwarded-Proto y X-Forwarded-Host.
+	# Como no hay trusted_proxies configurado, Caddy NO confía en los X-Forwarded-*
+	# que manda el visitante: los descarta y pone la IP real de la conexión.
+	# No agregar trusted_proxies salvo que haya otro proxy (CDN) delante de Caddy.
+	# La API acepta estos encabezados solo desde la IP fija de Caddy
+	# (FORWARDED_ALLOW_IPS en docker-compose.yml).
 	handle /api/* {
 		reverse_proxy api:8000
 	}
