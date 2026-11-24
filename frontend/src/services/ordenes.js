@@ -48,12 +48,12 @@ export const DESCRIPCION_ESTADOS = {
 
 export const ESTADOS_COBRABLES = ['Listo', 'Entregado']
 
-// 'pendiente' ya no se genera: el mecánico no propone cobros desde el commit
-// 2542dd5 (S3). Se deja porque puede haber órdenes viejas con cobro_estado
-// 'pendiente' y monto_propuesto, que recepción o el administrador todavía aprueban
-// con POST /ordenes/{id}/cobro/aprobar. Borrar esta rama (y la de "Revisar/Aprobar
-// cobro" en accionPrincipal, TarjetaOrden, CobroOrden y el filtro "Cobro pendiente")
-// recién cuando una migración resuelva esas órdenes.
+// 'pendiente' ya no se genera: el mecánico no propone cobros ni ve montos
+// (S3 y MC1). Se deja solo para administración y recepción, porque puede haber
+// órdenes viejas con cobro_estado 'pendiente' y monto_propuesto que todavía se
+// aprueban con POST /ordenes/{id}/cobro/aprobar. Borrar esta rama (y la de
+// "Revisar/Aprobar cobro" en accionPrincipal, TarjetaOrden, CobroOrden y el filtro
+// "Cobro pendiente") recién cuando una migración resuelva esas órdenes.
 export function estadoCobro(orden) {
   if (orden.pagada) return 'pagada'
   if (orden.cobro_estado === 'aprobado' && Number(orden.costo_final) > 0) return 'aprobado'
@@ -113,7 +113,7 @@ const ROL_MECANICO = ['mecanico', 'mecánico']
  * tipo:
  *  - 'etapa'   → abrir el cambio de etapa con `destino` preseleccionado
  *  - 'asignar' → elegir mecánico
- *  - 'cobro'   → abrir el cobro (emitir, proponer, revisar o aprobar)
+ *  - 'cobro'   → abrir el cobro (emitir, revisar o aprobar; solo mostrador)
  *  - 'abrir'   → ir a la página de la orden (/ordenes/:id) a cargar trabajo
  * `secundaria` (opcional) es una segunda acción del mismo formato.
  */
@@ -156,9 +156,8 @@ export function accionPrincipal(orden, rol) {
             trabajo: { tipo: 'abrir', texto: 'Cotizar trabajos' },
           }
         }
-        if (esMostrador) return { tipo: 'cobro', texto: 'Emitir cobro' }
-        // "Proponer cobro" no se muestra: accionVisible se lo filtra al mecánico.
-        return esMecanico ? { tipo: 'cobro', texto: 'Proponer cobro' } : null
+        // El mecánico no propone cobros (MC1): con la orden lista no le toca nada.
+        return esMostrador ? { tipo: 'cobro', texto: 'Emitir cobro' } : null
       }
       // Solo órdenes viejas con cobro propuesto (ver estadoCobro).
       if (cobro === 'pendiente') {
@@ -212,9 +211,9 @@ export function lineaACotizar(detalle) {
   return detalle?.a_cotizar === true || detalle?.precio_unitario == null
 }
 
-/* La acción principal que se puede mostrar: el mecánico no emite ni propone
-   cobros (el backend le responde 403), así que la acción 'cobro' no se le
-   ofrece aunque accionPrincipal la calcule. */
+/* La acción principal que se puede mostrar: el mecánico no emite, propone ni
+   aprueba cobros (el backend le responde 403); por las dudas la acción 'cobro'
+   nunca se le ofrece. */
 export function accionVisible(orden, rol) {
   const accion = accionPrincipal(orden, rol)
   if (accion?.tipo === 'cobro' && ROL_MECANICO.includes(rol)) return null
@@ -262,19 +261,19 @@ export const ordenesService = {
 
   obtener: (id, token) => api.get(`${RECURSO}/${id}`, token).then(desdeApi),
 
-  crear: (orden, token) =>
-    api
-      .post(
-        RECURSO,
-        {
-          vehiculo_id: Number(orden.vehiculo_id),
-          mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
-          descripcion_ingreso: orden.descripcion,
-          costo_estimado: parsearMontoAR(orden.total) || null,
-        },
-        token,
-      )
-      .then(desdeApi),
+  // El servidor responde 403 si el mecánico manda costo_estimado o costo_final
+  // (MC1): el presupuesto viaja solo con `incluirCosto` (administración o
+  // recepción) y si hay un monto; si no, la clave no se manda.
+  crear: (orden, token, { incluirCosto = false } = {}) => {
+    const cuerpo = {
+      vehiculo_id: Number(orden.vehiculo_id),
+      mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
+      descripcion_ingreso: orden.descripcion,
+    }
+    const costo = incluirCosto ? parsearMontoAR(orden.total) || null : null
+    if (costo != null) cuerpo.costo_estimado = costo
+    return api.post(RECURSO, cuerpo, token).then(desdeApi)
+  },
 
   detalles: (ordenId, token) => api.get(`${RECURSO}/${ordenId}/detalles`, token),
 
@@ -340,17 +339,17 @@ export const ordenesService = {
       .post(`${RECURSO}/${id}/cobro/aprobar`, monto ? { monto: parsearMontoAR(monto) } : {}, token)
       .then(desdeApi),
 
-  actualizar: (id, orden, token) =>
-    api
-      .patch(
-        `${RECURSO}/${id}`,
-        {
-          estado: CODIGOS[orden.estado],
-          mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
-          descripcion_ingreso: orden.descripcion,
-          costo_estimado: parsearMontoAR(orden.total) ?? 0,
-        },
-        token,
-      )
-      .then(desdeApi),
+  // costo_estimado viaja solo con `incluirCosto` (el formulario de la orden de
+  // administración o recepción). Sin la opción no se toca el presupuesto: así
+  // el mecánico no recibe un 403 (MC1) y asignar un mecánico no pisa el
+  // presupuesto con el total de la orden (que puede ser el costo_final).
+  actualizar: (id, orden, token, { incluirCosto = false } = {}) => {
+    const cuerpo = {
+      estado: CODIGOS[orden.estado],
+      mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
+      descripcion_ingreso: orden.descripcion,
+    }
+    if (incluirCosto) cuerpo.costo_estimado = parsearMontoAR(orden.total) ?? 0
+    return api.patch(`${RECURSO}/${id}`, cuerpo, token).then(desdeApi)
+  },
 }

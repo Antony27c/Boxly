@@ -158,3 +158,8 @@ El barrido lista las preapprovals `pending`/`authorized` de la cuenta de
 Boxly con referencia `taller-*` y cancela las que no sean el
 `mp_preapproval_id` de ningún taller. Conviene correrlo cada tanto (por
 ejemplo, una vez por semana o después de incidentes de red).
+
+## Pendientes conocidos
+
+- **Suscripciones MP sin reconciliación:** no hay forma de consultar desde la API el estado real de la preapproval en MP ni de pausarla o reactivarla (solo activar, cancelar y el webhook); sumarlo cambia el contrato de `docs/Suscripciones.md`.
+- **Webhooks de MP con parámetros IPN legacy:** los routers todavía aceptan `topic` e `id` en la query; IPN está deprecado y se pueden quitar cuando se confirme que ninguna cuenta productiva los usa (sin firma válida igual dan 401).

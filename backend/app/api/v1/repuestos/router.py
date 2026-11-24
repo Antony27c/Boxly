@@ -24,14 +24,14 @@ MostradorUser = Annotated[
 )
 def listar_repuestos(
     db: DbSession,
-    _: PersonalUser,
+    usuario: PersonalUser,
     pagina: PaginaParams,
     response: Response,
     solo_activos: bool = Query(default=False),
     q: str | None = Query(default=None),
 ) -> list[RepuestoResponse]:
     items, total = service.list_repuestos(
-        db, solo_activos=solo_activos, q=q, pagina=pagina
+        db, solo_activos=solo_activos, q=q, pagina=pagina, usuario=usuario
     )
     response.headers["X-Total-Count"] = str(total)
     return items
@@ -42,8 +42,8 @@ def listar_repuestos(
     response_model=list[RepuestoResponse],
     summary="Repuestos con stock menor o igual al mínimo",
 )
-def listar_stock_bajo(db: DbSession, _: PersonalUser) -> list[RepuestoResponse]:
-    return service.list_stock_bajo(db)
+def listar_stock_bajo(db: DbSession, usuario: PersonalUser) -> list[RepuestoResponse]:
+    return service.list_stock_bajo(db, usuario)
 
 
 @router.get(
@@ -95,9 +95,9 @@ def crear_repuesto(
 def obtener_repuesto(
     repuesto_id: int,
     db: DbSession,
-    _: PersonalUser,
+    usuario: PersonalUser,
 ) -> RepuestoResponse:
-    return service.get_repuesto(db, repuesto_id)
+    return service.get_repuesto(db, repuesto_id, usuario)
 
 
 @router.put(

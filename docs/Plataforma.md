@@ -32,6 +32,11 @@ sus clientes (Ley 25.326) y Boxly es el **encargado del tratamiento**. Regla de 
   `"El taller está suspendido. Comunicate con Boxly."` si su taller no está activo.
 - `require_roles` ya no deja pasar al superadmin; `ROLES_PERSONAL` no lo incluye;
   `es_admin()` es solo el administrador del taller.
+- Mecánico sin dinero (decisión del dueño): hace sus tareas y avisa qué repuestos
+  usó. Ninguna respuesta le trae precios, montos, presupuesto, cobros ni pagos
+  (las claves van en null o vacías) y no carga precios, presupuesto ni propone o
+  emite cobros (403). Lo vigilan `tests/test_mecanico_sin_dinero.py` y
+  `tests/test_mecanico_sin_dinero_rutas.py`.
 - Routers vacíos: `/plataforma` (P1), `/soporte` (P2), `/terminos` (P8);
   `EnmascaradoSoporteMiddleware` vacío en `app/core/enmascarado.py` (P2).
 - Frontend: menú del superadmin = Talleres (`/plataforma`) y Sistema

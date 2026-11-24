@@ -136,11 +136,15 @@ def test_mecanico_repuesto_usa_precio_inventario(api, datos):
     )
     assert r.status_code == 201, r.text
     linea = r.json()
-    assert linea["precio_unitario"] == "1500.00"
+    # El servidor toma el precio del inventario pero no se lo muestra al
+    # mecánico: la respuesta va sin dinero (el stock sí se descuenta).
+    assert linea["precio_unitario"] is None
+    assert linea["subtotal"] is None
     assert linea["a_cotizar"] is False
-    assert linea["subtotal"] == "3000.00"
     with SessionLocal() as db:
         assert db.get(Repuesto, datos["repuesto"]).stock == 8
+        detalle = db.query(DetalleOrden).order_by(DetalleOrden.id.desc()).first()
+        assert detalle.precio_unitario == Decimal("1500.00")
 
 
 def test_mecanico_mano_obra_queda_a_cotizar(api, datos):

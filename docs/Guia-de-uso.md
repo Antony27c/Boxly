@@ -30,7 +30,7 @@ Cada persona del taller tiene un rol, y el rol define qué puede hacer:
 | --- | --- |
 | **Administrador** | Todo lo del taller, más: alta de personal, métricas del negocio, panel del taller (datos, auditoría, respaldo), acceso de soporte y suscripción. |
 | **Recepción** | El mostrador: clientes, vehículos, turnos, órdenes, inventario, horarios y cobros. |
-| **Mecánico** | "Mi trabajo": sus órdenes asignadas, cambios de etapa, carga de trabajos y repuestos (sin precio), fotos, propuesta de cobro y su horario. |
+| **Mecánico** | "Mi trabajo": sus órdenes asignadas, cambios de etapa, carga de trabajos y de los repuestos que usó, fotos y su horario. No ve precios ni montos y no propone cobros. |
 | **Cliente** | No es del taller: es tu cliente. Entra a su portal para ver el estado de sus autos y, si el taller tiene el cobro online habilitado, pagar online. |
 
 El menú de cada persona solo muestra lo que su rol puede usar. Si algo no
@@ -171,11 +171,11 @@ correo ni por WhatsApp. El mecánico no lo ve.
   Entregado**. Podés pasar a "Esperando repuestos" si falta algo y marcar
   "Listo" cuando terminás.
 - **Pestaña Trabajo**: cargás las líneas —trabajos (mano de obra) y repuestos
-  del inventario— con cantidad y descripción. **No cargás precios**: el repuesto
-  toma el precio del inventario solo, y la mano de obra queda "a cotizar" para
-  que recepción o el administrador la cotice.
-- **Cobro**: podés proponer el monto del cobro; recepción o el administrador lo
-  revisa y lo emite.
+  del inventario— con cantidad y descripción. **No ves ni cargás precios**: el
+  repuesto toma el precio del inventario solo, y la mano de obra queda "a
+  cotizar" para que recepción o el administrador la cotice.
+- **Sin dinero**: no ves precios, presupuestos, cobros ni pagos, y no proponés
+  cobros. De eso se ocupan recepción y el administrador.
 - En **Horarios** ves "Mi horario": las franjas que el administrador cargó para
   vos (vos no las editás).
 
@@ -361,11 +361,12 @@ Con el **débito automático de Mercado Pago**: lo activás desde la pantalla de
 Suscripción y Mercado Pago debita el plan cada mes. Si todavía no está
 habilitado, escribinos.
 
-**¿Por qué no puedo cargar precio siendo mecánico?**
-Por diseño: el mecánico no pone precios. El repuesto toma el precio del
-inventario automáticamente y la mano de obra queda "a cotizar" para que
-recepción o el administrador le ponga precio. Así los precios quedan siempre en
-manos del taller.
+**¿Por qué no veo precios ni puedo cobrar siendo mecánico?**
+Por diseño: el mecánico hace sus tareas y avisa qué repuestos usó; no ve
+precios, presupuestos ni montos, y no propone cobros. El repuesto toma el precio
+del inventario automáticamente y la mano de obra queda "a cotizar" para que
+recepción o el administrador le ponga precio y cobre. Así la plata queda siempre
+en manos del mostrador.
 
 **¿Qué es una línea "a cotizar"?**
 Es una línea de la orden sin precio. Recepción o el administrador la cotiza

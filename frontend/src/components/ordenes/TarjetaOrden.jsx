@@ -5,6 +5,7 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { BOTON_PIE, Chip, Chips, Ficha, FichaCabecera, FichaPersona, FichaPie, FichaSeccion } from '@/components/ui/Ficha'
 import Patente from '@/components/ui/Patente'
+import { ROLES_MECANICO, tieneAcceso } from '@/routes/navegacion'
 import { MOTIVO_A_COTIZAR, accionEjecutable, estadoCobro, pagosDuplicados } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
@@ -36,10 +37,11 @@ const COBROS = {
   aprobado: { texto: 'Esperando el pago', tono: 'neutro' },
 }
 
+// Solo administración y recepción: el mecánico no ve montos ni cobros (MC1).
 export function BannerCobro({ orden, esMostrador, onAbrir }) {
   const idMensaje = useId()
   const cobro = estadoCobro(orden)
-  if (!cobro || cobro === 'pagada') return null
+  if (!esMostrador || !cobro || cobro === 'pagada') return null
   // Con líneas a cotizar el backend rechaza el cobro (409, S3).
   const aCotizar = Number(orden.lineas_a_cotizar ?? 0)
   const bloqueado = cobro === 'sin_cobro' && aCotizar > 0
@@ -48,19 +50,19 @@ export function BannerCobro({ orden, esMostrador, onAbrir }) {
       mensaje: bloqueado
         ? `${MOTIVO_A_COTIZAR} ${aCotizar === 1 ? 'Falta 1 línea' : `Faltan ${aCotizar} líneas`}.`
         : 'Todavía no se emitió el cobro.',
-      boton: esMostrador ? 'Generar cobro' : 'Emitir cobro',
+      boton: 'Generar cobro',
       destacado: true,
     },
     pendiente: {
       mensaje: `Cobro propuesto ${pesos(orden.monto_propuesto)}${
         orden.cobro_propuesto_por_nombre ? ` por ${orden.cobro_propuesto_por_nombre}` : ''
       } · falta aprobar.`,
-      boton: esMostrador ? 'Revisar cobro' : 'Ver cobro',
+      boton: 'Revisar cobro',
       destacado: true,
     },
     aprobado: {
       mensaje: 'Cobro enviado al cliente, esperando el pago.',
-      boton: esMostrador ? 'Editar monto' : 'Ver cobro',
+      boton: 'Editar monto',
       destacado: false,
     },
   }[cobro]
@@ -102,9 +104,11 @@ export default function TarjetaOrden({
 }) {
   const accion = accionEjecutable(orden, usuario?.rol)
   const codigo = orden.codigo ?? `#${orden.id}`
-  const cobro = COBROS[estadoCobro(orden)]
+  // El mecánico no ve montos ni el estado del cobro (MC1): sin chips de dinero.
+  const verDinero = !tieneAcceso(ROLES_MECANICO, usuario?.rol)
+  const cobro = verDinero ? COBROS[estadoCobro(orden)] : null
   // Cobro online duplicado (Q1): la orden ya estaba paga, hay que devolver.
-  const duplicado = pagosDuplicados(orden).length > 0
+  const duplicado = verDinero && pagosDuplicados(orden).length > 0
 
   function accionar(evento, destino) {
     evento.stopPropagation()
@@ -148,14 +152,16 @@ export default function TarjetaOrden({
           {vehiculo && <Patente valor={vehiculo.patente} tamano="sm" />}
           <span className="font-mono text-xs font-semibold text-muted">{codigo}</span>
           {mostrarEstado && <Badge tono={TONOS[orden.estado] ?? 'neutro'}>{orden.estado}</Badge>}
-          {orden.pagada && <Badge tono="ok">Pagada</Badge>}
+          {verDinero && orden.pagada && <Badge tono="ok">Pagada</Badge>}
         </div>
         {orden.descripcion && <p className="relative mt-2 line-clamp-2 text-sm">{orden.descripcion}</p>}
-        <Chips>
-          <Chip mono={Boolean(orden.total)}>{orden.total ? pesos(orden.total) : 'A presupuestar'}</Chip>
-          {cobro && <Chip tono={cobro.tono}>{cobro.texto}</Chip>}
-          {duplicado && <Chip tono="peligro">Pago duplicado</Chip>}
-        </Chips>
+        {verDinero && (
+          <Chips>
+            <Chip mono={Boolean(orden.total)}>{orden.total ? pesos(orden.total) : 'A presupuestar'}</Chip>
+            {cobro && <Chip tono={cobro.tono}>{cobro.texto}</Chip>}
+            {duplicado && <Chip tono="peligro">Pago duplicado</Chip>}
+          </Chips>
+        )}
       </FichaCabecera>
 
       <FichaSeccion className="grid gap-2.5 !px-4">

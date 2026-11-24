@@ -32,10 +32,12 @@ describe('accionPrincipal', () => {
     expect(accionPrincipal(orden({ estado: 'Esperando repuestos' }), 'mecanico')).toMatchObject({ destino: 'Listo' })
   })
 
-  it('listo sin cobro: mostrador emite, mecánico propone', () => {
+  it('listo sin cobro: mostrador emite y el mecánico no propone nada', () => {
     const o = orden({ estado: 'Listo', cobro_estado: null })
     expect(accionPrincipal(o, 'recepcion')).toMatchObject({ tipo: 'cobro', texto: 'Emitir cobro' })
-    expect(accionPrincipal(o, 'mecanico')).toMatchObject({ texto: 'Proponer cobro' })
+    expect(accionPrincipal(o, 'mecanico')).toBeNull()
+    // Sin ningún campo de dinero (MC1) tampoco.
+    expect(accionPrincipal({ id: 1, estado: 'Listo', mecanico_id: 3 }, 'mecanico')).toBeNull()
   })
 
   it('listo con líneas a cotizar: el cobro queda deshabilitado con el motivo y se ofrece cotizar', () => {

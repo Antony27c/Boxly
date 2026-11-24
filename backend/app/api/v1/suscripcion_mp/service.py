@@ -198,25 +198,48 @@ def activar_cobro(db: Session, usuario: Usuario) -> CobroAutomaticoResponse:
     # Solo queda activo cuando MP la autoriza (avisa por webhook).
     taller.cobro_automatico = preapproval.get("status") == "authorized"
     db.commit()
-    return CobroAutomaticoResponse(
-        init_point=preapproval.get("init_point") or preapproval.get("sandbox_init_point")
+    init_point = mercadopago.url_de_pago(
+        preapproval, token=token, produccion=settings.environment == "prod"
     )
+    if init_point is None and settings.environment == "prod":
+        # La preapproval ya existe en MP y quedó referenciada: el commit de
+        # arriba evita que quede huérfana; se informa el error igual.
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Mercado Pago no devolvió el link de pago",
+        )
+    return CobroAutomaticoResponse(init_point=init_point)
+
+
+def cancelar_cobro_taller(db: Session, taller: Taller) -> None:
+    """Cancela la preapproval del taller en MP y limpia el estado local.
+
+    No commitea: el llamador decide (el endpoint confirma con ``db.commit()``
+    y la conversión de acceso lo hace junto con el cambio de tipo). Si MP no
+    confirma la cancelación se responde 502 sin tocar las marcas locales:
+    es mejor reintentar la operación que quedar en piloto con el cobro
+    todavía vivo en MP. Sin ``mp_preapproval_id`` no hay nada que cancelar:
+    solo se limpian las marcas, así la función es idempotente.
+    """
+    if taller.mp_preapproval_id:
+        token = _token_boxly()
+        try:
+            cliente_mp.cancelar_preapproval(token, taller.mp_preapproval_id)
+        except cliente_mp.MercadoPagoError:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, DETALLE_MP) from None
+    taller.cobro_automatico = False
+    taller.mp_preapproval_id = None
 
 
 def cancelar_cobro(db: Session, usuario: Usuario) -> None:
     """Cancela la preapproval en MP y desactiva el cobro automático local."""
-    token = _token_boxly()
+    _token_boxly()
     taller = _taller_del_usuario(db, usuario)
     if not taller.mp_preapproval_id:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "El taller no tiene cobro automático configurado"
         )
-    try:
-        cliente_mp.cancelar_preapproval(token, taller.mp_preapproval_id)
-    except cliente_mp.MercadoPagoError:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, DETALLE_MP) from None
-    taller.cobro_automatico = False
-    taller.mp_preapproval_id = None
+    cancelar_cobro_taller(db, taller)
     db.commit()
 
 
@@ -337,6 +360,9 @@ def _procesar_preapproval(db: Session, token: str, data_id: str) -> None:
     try:
         info = cliente_mp.obtener_preapproval(token, data_id)
     except cliente_mp.MercadoPagoError as exc:
+        if exc.transitorio:
+            # 503 para que MP reintente el aviso (firma ya válida).
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, DETALLE_MP) from exc
         logger.warning("No se pudo consultar la preapproval %s: %s", data_id, exc)
         return
     nuevo_id = str(info.get("id") or data_id)
@@ -440,6 +466,9 @@ def _procesar_cobro(db: Session, token: str, data_id: str) -> None:
     try:
         info = cliente_mp.obtener_pago_autorizado(token, data_id)
     except cliente_mp.MercadoPagoError as exc:
+        if exc.transitorio:
+            # 503 para que MP reintente el aviso (firma ya válida).
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, DETALLE_MP) from exc
         logger.warning("No se pudo consultar el cobro %s: %s", data_id, exc)
         return
     pago_mp = info.get("payment") if isinstance(info.get("payment"), dict) else {}
@@ -483,8 +512,14 @@ def _procesar_cobro(db: Session, token: str, data_id: str) -> None:
 
 
 def procesar_notificacion(db: Session, tipo: str | None, data_id: str | None) -> None:
-    """Procesa un webhook de la cuenta de Boxly. Siempre responde 200: si MP
-    reintenta, lo hace por su cuenta (mismo criterio que el webhook de pagos).
+    """Procesa un webhook de la cuenta de Boxly.
+
+    El procesamiento sigue síncrono a propósito (no hay infraestructura de
+    colas y el handler es corto): el cliente HTTP de MP tiene timeout de 10 s
+    (app/core/mercadopago.py). Los casos ya decididos (taller o referencia
+    desconocidos, evento repetido o ignorado) responden 200 igual; si la
+    consulta a MP falla de forma transitoria se responde 503 para que MP
+    reintente con su backoff.
     """
     settings = get_settings()
     token = settings.boxly_mp_access_token

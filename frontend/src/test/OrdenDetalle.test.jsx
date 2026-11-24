@@ -250,4 +250,26 @@ describe('OrdenDetalle', () => {
     expect(await screen.findByText('En diagnóstico')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
+
+  it.each(['En diagnóstico', 'Listo'])(
+    'sin campos de dinero (MC1) el mecánico no ve "$", NaN ni undefined (%s)',
+    async (estado) => {
+      // Como la manda el backend al mecánico: sin total, costos, cobro ni pagos.
+      const sinDinero = Object.fromEntries(
+        Object.entries({ ...ORDEN, estado }).filter(
+          ([campo]) =>
+            !['total', 'costo_estimado', 'costo_final', 'cobro_estado', 'monto_propuesto', 'pagada'].includes(campo),
+        ),
+      )
+      ordenes.obtener.mockResolvedValue(sinDinero)
+      ordenes.detalles.mockResolvedValue([{ id: 1, descripcion: 'Filtro', repuesto_id: 2, cantidad: 1 }])
+      const { container } = montar()
+
+      expect(await screen.findByText(estado)).toBeInTheDocument()
+      expect(screen.queryByText(/Presupuesto|A presupuestar|A cobrar|Pagada/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Cobro' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /cobro/i })).not.toBeInTheDocument()
+      expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+    },
+  )
 })

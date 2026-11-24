@@ -136,7 +136,13 @@ def test_flujo_completo_del_taller(api, datos, monkeypatch):
         "repuesto_id": repuesto_id, "cantidad": 2,
     })
     assert r.status_code == 201, r.text
-    assert r.json()["precio_unitario"] == "1500.00"  # precio del catálogo
+    # El mecánico no recibe precios (MC1); el servidor igual toma el del
+    # inventario y el personal lo ve al consultar los detalles.
+    assert r.json()["precio_unitario"] is None
+    r = api.get(f"/api/v1/ordenes/{orden_id}/detalles", headers=h_recep)
+    assert r.status_code == 200, r.text
+    linea_repuesto = next(d for d in r.json() if d["repuesto_id"] == repuesto_id)
+    assert linea_repuesto["precio_unitario"] == "1500.00"  # precio del catálogo
 
     r = api.get(f"/api/v1/repuestos/{repuesto_id}", headers=h_recep)
     assert r.json()["stock"] == 8  # 10 - 2

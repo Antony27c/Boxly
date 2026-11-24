@@ -65,16 +65,60 @@ describe('Líneas a cotizar en el detalle de la orden', () => {
     repuestos.listar.mockResolvedValue([])
   })
 
-  it('el mecánico no ve el campo de precio y ve los textos de cotización', async () => {
-    render(<DetallesOrden orden={ORDEN} />)
+  it('el mecánico no ve ningún precio: ni campo, ni textos de cotización, ni totales', async () => {
+    // Fixtures como las manda el backend al mecánico (MC1): sin campos de dinero.
+    ordenes.detalles.mockResolvedValue([
+      { id: 5, descripcion: 'Cambio de aceite y filtro', repuesto_id: null, cantidad: 1 },
+      { id: 6, descripcion: 'Pastillas de freno', repuesto_id: 4, cantidad: 2 },
+    ])
+    const { container } = render(<DetallesOrden orden={ORDEN} />)
 
-    expect(await screen.findByLabelText('Trabajo')).toBeInTheDocument()
+    expect(await screen.findByText('Pastillas de freno')).toBeInTheDocument()
+    expect(screen.getByText('Repuesto · 2')).toBeInTheDocument()
+    expect(screen.getByLabelText('Trabajo')).toBeInTheDocument()
     expect(screen.queryByLabelText('Precio unitario')).not.toBeInTheDocument()
-    expect(screen.getByText('Queda a cotizar por recepción')).toBeInTheDocument()
+    expect(screen.queryByText(/cotizar|precio|total/i)).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Tipo de línea'), { target: { value: 'repuesto' } })
-    expect(await screen.findByText('Precio del inventario')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Precio unitario')).not.toBeInTheDocument()
+    expect(await screen.findByLabelText('Repuesto')).toBeInTheDocument()
+    expect(screen.queryByText(/precio/i)).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+  })
+
+  it('con el JSON real del mecánico (precio_unitario y subtotal en null) no muestra precios', async () => {
+    ordenes.detalles.mockResolvedValue([
+      { id: 5, descripcion: 'Cambio de aceite', repuesto_id: null, cantidad: 1, precio_unitario: null, subtotal: null, a_cotizar: true },
+      { id: 6, descripcion: 'Pastillas de freno', repuesto_id: 4, cantidad: 2, precio_unitario: null, subtotal: null },
+    ])
+    const { container } = render(<DetallesOrden orden={{ ...ORDEN, total: 0, costo_final: null }} />)
+
+    expect(await screen.findByText('Pastillas de freno')).toBeInTheDocument()
+    expect(screen.queryByText(/cotizar|precio|total/i)).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined|null/)
+  })
+
+  it('el mecánico elige el repuesto y la cantidad, ve el stock y no el precio', async () => {
+    ordenes.detalles.mockResolvedValue([])
+    repuestos.listar.mockResolvedValue([{ id: 4, codigo: 'PF-01', nombre: 'Pastillas de freno', stock: 6 }])
+    const { container } = render(<DetallesOrden orden={ORDEN} />)
+
+    fireEvent.change(await screen.findByLabelText('Tipo de línea'), { target: { value: 'repuesto' } })
+    const campo = screen.getByLabelText('Repuesto')
+    fireEvent.focus(campo)
+    fireEvent.change(campo, { target: { value: 'Pastillas' } })
+    const opcion = await screen.findByRole('option', { name: /Pastillas de freno/ })
+    expect(opcion).toHaveTextContent('PF-01 · stock 6')
+    fireEvent.click(opcion)
+    expect(await screen.findByText('Stock disponible: 6')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Cantidad'), { target: { value: '2' } })
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar línea' }))
+
+    await waitFor(() => expect(ordenes.agregarDetalle).toHaveBeenCalledTimes(1))
+    const [, linea] = ordenes.agregarDetalle.mock.calls[0]
+    expect(linea).toMatchObject({ repuesto_id: 4, cantidad: '2' })
+    expect(linea).not.toHaveProperty('precio_unitario')
   })
 
   it('el mecánico agrega una línea sin enviar precio', async () => {
@@ -152,11 +196,13 @@ describe('Líneas a cotizar en el detalle de la orden', () => {
     expect(await screen.findByLabelText('Precio a cotizar')).toBeInTheDocument()
   })
 
-  it('el mecánico ve el chip pero no el botón Cotizar', async () => {
+  it('el mecánico no ve el chip, el total ni el botón Cotizar', async () => {
     render(<DetallesOrden orden={ORDEN} />)
 
-    expect(await screen.findByText('A cotizar')).toBeInTheDocument()
-    expect(screen.getByText('Total parcial · 1 a cotizar')).toBeInTheDocument()
+    expect(await screen.findByText('Cambio de aceite y filtro')).toBeInTheDocument()
+    expect(screen.queryByText('A cotizar')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Total/)).not.toBeInTheDocument()
+    expect(screen.queryByText(monto(20000))).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cotizar' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Precio a cotizar')).not.toBeInTheDocument()
   })

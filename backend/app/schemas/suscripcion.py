@@ -7,18 +7,23 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.funciones import FUNCIONES
+from app.schemas.sin_dinero import SinDineroMixin
 
 TipoAcceso = Literal["pago", "demo", "piloto"]
 # Adicionales confirmados (docs/Oferta.md): por ahora solo ARCA.
 CodigoAdicional = Literal["arca"]
 
 
-class PlanResponse(BaseModel):
+class PlanResponse(SinDineroMixin, BaseModel):
+    """Plan de Boxly. El mecánico ve el plan y sus funciones, no el precio."""
+
     model_config = ConfigDict(from_attributes=True)
+    _CAMPOS_DINERO = {"precio_mensual": None}
 
     codigo: str
     nombre: str
-    precio_mensual: Decimal
+    # Opcional solo en la respuesta: va en null cuando se oculta el dinero.
+    precio_mensual: Optional[Decimal] = None
     # NULL = sin límite de personal.
     max_personal: Optional[int] = None
     funciones: list[str] = []
@@ -36,7 +41,12 @@ class AdicionalResponse(BaseModel):
     hasta: Optional[date] = None
 
 
-class SuscripcionResponse(BaseModel):
+class SuscripcionResponse(SinDineroMixin, BaseModel):
+    """El mecánico recibe estado, plan, fechas y funciones (para los avisos de
+    solo lectura), sin el precio del plan ni el próximo monto."""
+
+    _CAMPOS_DINERO = {"plan.precio_mensual": None, "proximo_monto": None}
+
     plan: PlanResponse
     # NULL = sin vencimiento (queda al día).
     vence_en: Optional[date] = None
@@ -46,7 +56,8 @@ class SuscripcionResponse(BaseModel):
     cobro_automatico: bool
     personal_activo: int
     max_personal: Optional[int] = None
-    proximo_monto: Decimal
+    # Opcional solo en la respuesta: va en null cuando se oculta el dinero.
+    proximo_monto: Optional[Decimal] = None
     # docs/Oferta.md (C2): cómo accede el taller, adicionales vigentes y las
     # funciones que tiene por su plan más sus adicionales.
     tipo_acceso: TipoAcceso = "pago"
@@ -59,13 +70,16 @@ class SuscripcionResponse(BaseModel):
     fin_acceso: Optional[date] = None
 
 
-class PagoSuscripcionResponse(BaseModel):
-    """Pago de la suscripción del taller a Boxly (sin taller_id ni mp_payment_id)."""
+class PagoSuscripcionResponse(SinDineroMixin, BaseModel):
+    """Pago de la suscripción del taller a Boxly (sin taller_id ni mp_payment_id).
+    El mecánico no recibe el monto."""
 
     model_config = ConfigDict(from_attributes=True)
+    _CAMPOS_DINERO = {"monto": None}
 
     id: int
-    monto: Decimal
+    # Opcional solo en la respuesta: va en null cuando se oculta el dinero.
+    monto: Optional[Decimal] = None
     periodo_desde: date
     periodo_hasta: date
     medio: str

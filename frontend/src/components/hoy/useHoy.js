@@ -74,8 +74,9 @@ export default function useHoy(usuario) {
 }
 
 // Mecánico: sus órdenes abiertas ordenadas por lo que hay que hacer primero.
+// No mira el cobro: el mecánico no ve montos ni propone cobros (MC1), así que
+// una orden Listo ya no le pide nada y va al final.
 function prioridadMiTrabajo(orden) {
-  if (orden.estado === 'Listo' && estadoCobro(orden) === 'sin_cobro') return 0
   if (orden.estado === 'En diagnóstico') return 1
   if (orden.estado === 'Esperando repuestos') return 2
   if (orden.estado === 'Ingresado') return 3

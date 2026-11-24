@@ -23,7 +23,14 @@ API_URL = "https://api.mercadopago.com"
 
 
 class MercadoPagoError(Exception):
-    pass
+    """Falla al hablar con MP. ``transitorio`` distingue los errores que vale
+    la pena reintentar (red, timeout, 5xx, 429) de los permanentes (4xx,
+    validaciones locales): el webhook de MP solo reintenta si respondemos
+    no-2xx, así que un transitorio no puede confirmarse con 200."""
+
+    def __init__(self, mensaje: str, *, transitorio: bool = False) -> None:
+        super().__init__(mensaje)
+        self.transitorio = transitorio
 
 
 # Los ids de MP van dentro de la ruta de la API: solo caracteres seguros.
@@ -34,20 +41,56 @@ ID_SEGURO = re.compile(r"[A-Za-z0-9_-]{1,64}")
 VENTANA_FIRMA_SEG = 300
 
 
-def request(method: str, path: str, token: str, body: dict | None = None) -> dict[str, Any]:
+def request(
+    method: str,
+    path: str,
+    token: str,
+    body: dict | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Request autenticado a la API de MP. Los errores de red/JSON se traducen
-    a MercadoPagoError para que el llamador no filtre detalles internos."""
+    a MercadoPagoError para que el llamador no filtre detalles internos.
+    ``headers`` suma encabezados (por ejemplo X-Idempotency-Key)."""
     req = urllib.request.Request(
         f"{API_URL}{path}",
         data=json.dumps(body).encode() if body is not None else None,
         method=method,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers={
+            **(headers or {}),
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             return json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        # HTTPError es subclase de URLError: va primero. 4xx es un rechazo
+        # permanente de MP (recurso inexistente, datos inválidos); 5xx y 429
+        # sí son transitorios y MP los reintenta si el webhook no da 200.
+        raise MercadoPagoError(
+            str(exc), transitorio=exc.code >= 500 or exc.code == 429
+        ) from exc
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise MercadoPagoError(str(exc)) from exc
+        raise MercadoPagoError(str(exc), transitorio=True) from exc
+
+
+def url_de_pago(recurso: dict, *, token: str, produccion: bool) -> str | None:
+    """URL del checkout de MP para una preferencia o preapproval.
+
+    ``init_point`` sirve en todos los entornos. ``sandbox_init_point`` solo se
+    usa con token de prueba (``TEST-…``) o fuera de producción: en prod con
+    token real esa URL es inválida (checklist mp-review: no hay sandbox).
+    Devuelve None si no hay URL utilizable.
+    """
+    init_point = recurso.get("init_point")
+    if init_point:
+        return init_point
+    sandbox = recurso.get("sandbox_init_point")
+    if sandbox and (token.startswith("TEST-") or not produccion):
+        return sandbox
+    return None
 
 
 def listar_preapprovals(token: str, *, limite: int = 50, offset: int = 0) -> dict[str, Any]:

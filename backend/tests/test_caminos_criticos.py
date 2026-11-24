@@ -457,7 +457,9 @@ def test_los_pagos_de_suscripcion_son_solo_del_propio_taller(api, datos):
         assert r.status_code == 200, rol
         pagos = r.json()
         assert [p["id"] for p in pagos] == [propio_id], rol
-        assert pagos[0]["monto"] == "35000.00"
+        # El mecánico no recibe montos (MC1); administración y recepción sí.
+        esperado = None if rol == "mecanico" else "35000.00"
+        assert pagos[0]["monto"] == esperado, rol
         assert pagos[0]["referencia"] == "transferencia-taller-1"
         # El contrato deja afuera taller_id y mp_payment_id.
         assert "taller_id" not in pagos[0] and "mp_payment_id" not in pagos[0]

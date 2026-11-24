@@ -189,6 +189,10 @@ def reservar_cupo(db, taller_id: int):
       transacción, también si la request falla y la sesión se cierra.
     El taller se relee después de tomar el lock (``populate_existing``): el que
     ya estaba en la sesión puede tener el plan de antes del cambio.
+
+    Antes de releer se flushea la sesión: ``autoflush`` está apagado y, sin
+    esto, ``populate_existing`` pisaba con los valores de la base los cambios
+    pendientes de la misma fila (se perdían en el commit).
     """
     from sqlalchemy import event, select
 
@@ -201,6 +205,7 @@ def reservar_cupo(db, taller_id: int):
                 event.listen(db, "after_transaction_end", _liberar_cupos)
             _lock_cupo(taller_id).acquire()
             reservados.add(taller_id)
+    db.flush()
     stmt = (
         select(Taller)
         .where(Taller.id == taller_id)

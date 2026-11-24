@@ -202,7 +202,7 @@ export default function OrdenDetalle() {
             {orden.vehiculo_patente && <Patente valor={orden.vehiculo_patente} tamano="lg" />}
             <Chips className="!mt-0">
               <Chip mono>Orden {orden.codigo ?? `#${orden.id}`}</Chip>
-              {orden.pagada && <Chip tono="ok">Pagada</Chip>}
+              {!esMecanico && orden.pagada && <Chip tono="ok">Pagada</Chip>}
             </Chips>
           </div>
           <div className="relative mt-4 hidden sm:block">
@@ -228,7 +228,7 @@ export default function OrdenDetalle() {
         </div>
 
         <FichaSeccion>
-          <dl className="grid gap-3 py-1 text-sm sm:grid-cols-3">
+          <dl className={`grid gap-3 py-1 text-sm ${esMecanico ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
             <div>
               <dt className="text-muted">Ingreso</dt>
               <dd className="mt-0.5">{orden.fecha ? fechaLegible(orden.fecha) : '—'}</dd>
@@ -241,10 +241,13 @@ export default function OrdenDetalle() {
                   : '—'}
               </dd>
             </div>
-            <div>
-              <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
-              <dd className="mt-0.5 font-semibold">{orden.total ? pesos(orden.total) : 'A presupuestar'}</dd>
-            </div>
+            {/* El mecánico no ve montos (MC1). */}
+            {!esMecanico && (
+              <div>
+                <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
+                <dd className="mt-0.5 font-semibold">{orden.total ? pesos(orden.total) : 'A presupuestar'}</dd>
+              </div>
+            )}
           </dl>
         </FichaSeccion>
 
@@ -401,7 +404,7 @@ export default function OrdenDetalle() {
         descripcion={
           esMostrador
             ? 'Revisá el monto y envialo al cliente para que lo pague online.'
-            : 'Proponé el monto a cobrar; administración o recepción lo aprueba.'
+            : 'El cobro lo manejan administración y recepción.'
         }
         ancho="max-w-md"
         onCerrar={() => setConCobro(null)}

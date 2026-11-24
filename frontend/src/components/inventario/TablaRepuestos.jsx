@@ -4,7 +4,8 @@ import { tieneStockBajo } from '@/services/repuestos'
 import { pesos } from '@/utils/formato'
 import VarillaStock from './VarillaStock'
 
-/* Escritorio: tabla de repuestos con stock, mínimo y acciones. */
+/* Escritorio: tabla de repuestos con stock, mínimo y acciones. La columna de
+   precio la ve solo quien edita: el mecánico no ve montos (MC1). */
 export default function TablaRepuestos({ repuestos, cargando, puedeEditar, acciones }) {
   return (
     <div
@@ -17,7 +18,7 @@ export default function TablaRepuestos({ repuestos, cargando, puedeEditar, accio
           <tr>
             <th className="px-4 py-3 font-medium">Código</th>
             <th className="px-4 py-3 font-medium">Repuesto</th>
-            <th className="px-4 py-3 text-right font-medium">Precio</th>
+            {puedeEditar && <th className="px-4 py-3 text-right font-medium">Precio</th>}
             <th className="px-4 py-3 text-right font-medium">Stock</th>
             <th className="px-4 py-3 text-right font-medium">Mínimo</th>
             <th className="px-4 py-3" />
@@ -44,7 +45,7 @@ export default function TablaRepuestos({ repuestos, cargando, puedeEditar, accio
                   </p>
                   {repuesto.descripcion && <p className="text-xs text-muted">{repuesto.descripcion}</p>}
                 </td>
-                <td className="px-4 py-3 text-right">{pesos(repuesto.precio)}</td>
+                {puedeEditar && <td className="px-4 py-3 text-right">{pesos(repuesto.precio)}</td>}
                 <td className="px-4 py-3 text-right">
                   <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
                     <VarillaStock stock={repuesto.stock} minimo={repuesto.stock_minimo} />

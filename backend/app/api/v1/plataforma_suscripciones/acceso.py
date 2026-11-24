@@ -20,9 +20,10 @@ from datetime import date, timedelta
 from typing import Callable, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.api.v1.suscripcion import service as suscripcion
+from app.api.v1.suscripcion_mp import service as suscripcion_mp
 from app.core.suscripcion import hoy
 from app.models import Auditoria, Plan, Taller, Usuario
 from app.models.suscripcion import DIAS_DEMO, PLAN_DEMO
@@ -171,6 +172,13 @@ def _a_demo(taller: Taller, acceso: AccesoTaller, resuelto: AccesoResuelto) -> A
 def _a_piloto(taller: Taller, acceso: AccesoTaller, resuelto: AccesoResuelto) -> AccesoResuelto:
     # El schema exige plan, vence_en y motivo: la fecha del piloto siempre es
     # explícita, venga de demo, de pago o de otro piloto.
+    # Un taller pago con preapproval en MP no puede quedar en piloto con el
+    # cobro vivo: se cancela en MP y se limpian las marcas en la misma
+    # transacción que la conversión. Se mira mp_preapproval_id y no
+    # cobro_automatico porque una preapproval "pending" todavía puede
+    # autorizarse y cobrar; cancelar_cobro_taller no commitea.
+    if taller.tipo_acceso == "pago" and taller.mp_preapproval_id:
+        suscripcion_mp.cancelar_cobro_taller(object_session(taller), taller)
     return resuelto
 
 

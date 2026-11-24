@@ -117,6 +117,17 @@ class Settings(BaseSettings):
                     "JWT_SECRET_KEY sigue siendo un placeholder de ejemplo; "
                     "generá un secreto real en producción."
                 )
+            # Estas URLs viajan a Mercado Pago (back_urls, notification_url) y
+            # el pagador vuelve por ellas: en producción, solo por TLS.
+            for nombre, valor in (
+                ("FRONTEND_URL", self.frontend_url),
+                ("BACKEND_PUBLIC_URL", self.backend_public_url),
+            ):
+                if valor and not valor.startswith("https://"):
+                    raise ValueError(
+                        f"Configuración inválida para producción: {nombre} tiene "
+                        "que usar https://."
+                    )
         elif not (self.jwt_secret_key or "").strip():
             # Sin JWT_SECRET_KEY en desarrollo se usa un secreto inseguro solo
             # para poder levantar la API en local.

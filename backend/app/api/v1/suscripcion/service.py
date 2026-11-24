@@ -30,6 +30,7 @@ from app.db.session import CLAVE_TALLER, SIN_FILTRO_TALLER, fijar_taller
 from app.models import AdicionalTaller, PagoSuscripcion, Plan, Taller, Usuario
 from app.models.suscripcion import EstadoPagoSuscripcion, MedioPagoSuscripcion
 from app.models.usuario import ROLES_PERSONAL
+from app.schemas.sin_dinero import ve_dinero
 from app.schemas.suscripcion import (
     AdicionalResponse,
     PagoManualCreate,
@@ -166,14 +167,22 @@ def armar_suscripcion(db: Session, taller: Taller) -> SuscripcionResponse:
 # --- Lado del taller ---------------------------------------------------------
 
 
-def obtener(db: Session) -> SuscripcionResponse:
-    return armar_suscripcion(db, taller_de_sesion(db))
+def obtener(db: Session, usuario: Usuario | None = None) -> SuscripcionResponse:
+    """Suscripción del taller de la sesión; sin precios si el rol no ve dinero."""
+    respuesta = armar_suscripcion(db, taller_de_sesion(db))
+    respuesta.sin_dinero = usuario is not None and not ve_dinero(usuario)
+    return respuesta
 
 
-def planes(db: Session) -> list[PlanResponse]:
-    """Planes activos para que el taller elija el suyo."""
+def planes(db: Session, usuario: Usuario | None = None) -> list[PlanResponse]:
+    """Planes activos para que el taller elija el suyo; sin precios si el rol
+    no ve dinero."""
+    sin_dinero = usuario is not None and not ve_dinero(usuario)
     stmt = select(Plan).where(Plan.activo.is_(True)).order_by(Plan.codigo)
-    return [PlanResponse.model_validate(p) for p in db.scalars(stmt)]
+    respuesta = [PlanResponse.model_validate(p) for p in db.scalars(stmt)]
+    for plan in respuesta:
+        plan.sin_dinero = sin_dinero
+    return respuesta
 
 
 def exigir_cupo_plan(db: Session, taller: Taller, plan: Plan) -> None:
@@ -232,8 +241,12 @@ def _a_response(pago: PagoSuscripcion, nombres: dict[int, str]) -> PagoSuscripci
     )
 
 
-def pagos_del_taller(db: Session, taller_id: int) -> list[PagoSuscripcionResponse]:
-    """Pagos de la suscripción del taller, más nuevo primero."""
+def pagos_del_taller(
+    db: Session, taller_id: int, usuario: Usuario | None = None
+) -> list[PagoSuscripcionResponse]:
+    """Pagos de la suscripción del taller, más nuevo primero; sin montos si el
+    rol no ve dinero."""
+    sin_dinero = usuario is not None and not ve_dinero(usuario)
     stmt = (
         select(PagoSuscripcion)
         .where(PagoSuscripcion.taller_id == taller_id)
@@ -241,7 +254,10 @@ def pagos_del_taller(db: Session, taller_id: int) -> list[PagoSuscripcionRespons
     )
     pagos = list(db.scalars(stmt))
     nombres = _nombres_de_registro(db, pagos)
-    return [_a_response(p, nombres) for p in pagos]
+    respuesta = [_a_response(p, nombres) for p in pagos]
+    for pago in respuesta:
+        pago.sin_dinero = sin_dinero
+    return respuesta
 
 
 # --- Lado de la plataforma ----------------------------------------------------
@@ -300,7 +316,11 @@ def _actualizar_estado(
 def _taller_bloqueado(db: Session, taller_id: int) -> Taller | None:
     """La fila del taller con lock (FOR UPDATE; se ignora en SQLite) y datos
     frescos: la extensión del vencimiento se calcula siempre sobre el valor
-    confirmado, nunca sobre una copia leída antes de la carrera."""
+    confirmado, nunca sobre una copia leída antes de la carrera.
+
+    ``db.flush()`` antes de releer: con ``autoflush`` apagado,
+    ``populate_existing`` pisaría los cambios pendientes de la misma fila."""
+    db.flush()
     return db.scalar(
         select(Taller)
         .where(Taller.id == taller_id)

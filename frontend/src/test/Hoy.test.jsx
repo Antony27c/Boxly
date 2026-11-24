@@ -343,6 +343,32 @@ describe('Hoy — mecánico', () => {
     expect(ordenes.listar).toHaveBeenCalledTimes(2)
   })
 
+  it('sin campos de dinero (MC1) no aparece "$", NaN ni undefined y Listo va al final', async () => {
+    const sinDinero = (extra) => ({
+      id: 40,
+      estado: 'En diagnóstico',
+      mecanico_id: 5,
+      vehiculo_patente: 'HH888II',
+      vehiculo_marca: 'Fiat',
+      vehiculo_modelo: 'Cronos',
+      cliente_nombre: 'Perez, Ana',
+      descripcion: 'Frenos',
+      fecha: HOY,
+      ...extra,
+    })
+    ordenes.listar.mockResolvedValue([
+      sinDinero({ id: 41, estado: 'Listo', vehiculo_patente: 'JJ999KK' }),
+      sinDinero({}),
+    ])
+    const { container } = montar()
+
+    const listo = await screen.findByRole('button', { name: /JJ999KK/ })
+    const diagnostico = screen.getByRole('button', { name: /HH888II/ })
+    expect(diagnostico.compareDocumentPosition(listo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /cobro/i })).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+  })
+
   it('sin órdenes asignadas muestra un vacío que lo explica', async () => {
     ordenes.listar.mockResolvedValue([])
     montar()

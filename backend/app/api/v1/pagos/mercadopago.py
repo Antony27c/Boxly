@@ -19,6 +19,7 @@ def crear_preferencia(
     referencia: str,
     back_urls: dict[str, str],
     notification_url: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     body = {
         "items": [
@@ -31,7 +32,10 @@ def crear_preferencia(
         body["auto_return"] = "approved"
     if notification_url:
         body["notification_url"] = notification_url
-    return request("POST", "/checkout/preferences", token, body)
+    # Con X-Idempotency-Key, si la respuesta se pierde y se reintenta, MP
+    # devuelve la misma preferencia en vez de crear otra huérfana.
+    headers = {"X-Idempotency-Key": idempotency_key} if idempotency_key else None
+    return request("POST", "/checkout/preferences", token, body, headers=headers)
 
 
 def obtener_preferencia(token: str, preference_id: str) -> dict:

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.pagos import mercadopago
 from app.core.config import get_settings
-from app.core.mercadopago import VENTANA_FIRMA_SEG, firma_valida
+from app.core.mercadopago import VENTANA_FIRMA_SEG, firma_valida, url_de_pago
 from app.db.session import SIN_FILTRO_TALLER, fijar_taller
 from app.models.auditoria import Auditoria
 from app.models.orden import Orden
@@ -182,6 +182,8 @@ def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoR
                     referencia=str(pago.id),
                     back_urls=back_urls,
                     notification_url=notificacion,
+                    # Determinística por pago: el monto de un pago no cambia.
+                    idempotency_key=f"pago-{pago.id}",
                 )
             except mercadopago.MercadoPagoError:
                 db.rollback()
@@ -190,11 +192,20 @@ def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoR
                     detail="No pudimos comunicarnos con Mercado Pago",
                 ) from None
             pago.preference_id = preferencia.get("id")
-        url_pago = (
-            preferencia.get("init_point")
-            or preferencia.get("sandbox_init_point")
-            or back_urls["pending"]
+        url_mp = url_de_pago(
+            preferencia,
+            token=settings.mp_access_token,
+            produccion=settings.environment == "prod",
         )
+        if url_mp is None and settings.environment == "prod":
+            # La preferencia ya existe en MP y queda referenciada por el pago:
+            # se commitea antes de fallar para no dejarla huérfana.
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Mercado Pago no devolvió el link de pago",
+            )
+        url_pago = url_mp or back_urls["pending"]
 
     db.commit()
     db.refresh(pago)
@@ -337,13 +348,26 @@ def verificar_firma_webhook(
 
 
 def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None) -> None:
+    """Procesa un webhook de la cuenta de MP de los talleres.
+
+    El procesamiento sigue síncrono a propósito (no hay infraestructura de
+    colas y el handler es corto): el cliente HTTP de MP tiene timeout de 10 s
+    (app/core/mercadopago.py), muy por debajo del timeout de MP. Si la
+    consulta a MP falla de forma transitoria (red, 5xx, 429) se responde 503
+    para que MP reintente; con un error permanente (4xx) el aviso se ignora
+    con 200, igual que un taller o referencia desconocidos.
+    """
     token = get_settings().mp_access_token
     if tipo != "payment" or not payment_id or not payment_id.isdigit() or not token:
         return
     try:
         info = mercadopago.obtener_pago(token, payment_id)
     except mercadopago.MercadoPagoError as exc:
-        # El webhook responde 200 igual: si MP reintenta, lo hace por su cuenta.
+        if exc.transitorio:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No pudimos consultar el pago en Mercado Pago",
+            ) from exc
         logger.warning("No se pudo consultar el pago %s en Mercado Pago: %s", payment_id, exc)
         return
     referencia = str(info.get("external_reference") or "")

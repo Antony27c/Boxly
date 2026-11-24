@@ -20,7 +20,9 @@ import {
 import { pesos } from '@/utils/formato'
 import '@/styles/ticket.css'
 
-// Se precarga en formato argentino ("185.000,50"), igual que se tipea.
+// Se precarga en formato argentino ("185.000,50"), igual que se tipea. El
+// monto_propuesto de una orden vieja (cobro 'pendiente') se le sigue mostrando
+// a administración y recepción para que lo aprueben.
 function montoInicial(orden) {
   const valor = Number(orden.costo_final) || Number(orden.monto_propuesto) || Number(orden.costo_estimado) || 0
   return valor > 0 ? formatearMontoAR(valor) : ''
@@ -102,6 +104,9 @@ function RegistrarPagoLocal({ orden, abierto, onCerrar, onListo }) {
   )
 }
 
+/* Cobro de una orden: solo administración y recepción. El mecánico no ve
+   montos ni propone cobros (MC1): si igual llega acá, no se le muestra nada
+   de dinero. */
 export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) {
   const { token } = useAuth()
   const { taller } = useTaller()
@@ -111,12 +116,12 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
   const [guardando, setGuardando] = useState(false)
   const [pagoLocal, setPagoLocal] = useState(false)
 
-  const soloLectura = situacion === 'pagada' || (!esMostrador && situacion === 'aprobado')
+  const soloLectura = situacion === 'pagada'
   // Con líneas a cotizar el backend rechaza el cobro (409, S3): se avisa
   // antes en vez de dejar que el intento falle.
   const hayACotizar = Number(orden.lineas_a_cotizar ?? 0) > 0
   // Recepción y el administrador registran el pago presencial de un cobro emitido.
-  const puedeRegistrarPago = esMostrador && situacion === 'aprobado' && !hayACotizar
+  const puedeRegistrarPago = situacion === 'aprobado' && !hayACotizar
   // Cobros online duplicados (Q1): plata cobrada dos veces, a devolver a mano.
   const duplicados = pagosDuplicados(orden)
 
@@ -153,15 +158,12 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
       ? `Garantía: ${taller.dias_garantia} ${Number(taller.dias_garantia) === 1 ? 'día' : 'días'}`
       : null
 
-  const accion = esMostrador
-    ? situacion === 'pendiente'
+  const accion =
+    situacion === 'pendiente'
       ? 'Aprobar y enviar al cliente'
       : situacion === 'aprobado'
         ? 'Guardar nuevo monto'
         : 'Enviar cobro al cliente'
-    : situacion === 'pendiente'
-      ? 'Actualizar propuesta'
-      : 'Enviar a revisión'
 
   async function enviar(evento) {
     evento.preventDefault()
@@ -177,21 +179,30 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
     setGuardando(true)
     setError('')
     try {
-      if (esMostrador && situacion === 'pendiente') {
+      if (situacion === 'pendiente') {
         await ordenesService.aprobarCobro(orden.id, numero, token)
         onListo('Cobro aprobado. El cliente ya puede pagarlo desde su portal.')
       } else {
         await ordenesService.emitirCobro(orden.id, numero, token)
-        onListo(
-          esMostrador
-            ? 'Cobro enviado. El cliente ya puede pagarlo desde su portal.'
-            : 'Cobro enviado a revisión. Recepción lo tiene que aprobar.',
-        )
+        onListo('Cobro enviado. El cliente ya puede pagarlo desde su portal.')
       }
     } catch (problema) {
       setError(problema.message)
       setGuardando(false)
     }
+  }
+
+  if (!esMostrador) {
+    return (
+      <div className="space-y-4">
+        <Alert tipo="info">El cobro lo manejan administración y recepción.</Alert>
+        <div className="flex justify-end">
+          <Button type="button" variante="secundario" onClick={onCancelar}>
+            Cerrar
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -254,20 +265,15 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
             </div>
           </div>
         ) : soloLectura ? (
-          <>
-            {situacion === 'aprobado' && (
-              <Alert tipo="info">Si hay que cambiar el monto, pedíselo a recepción.</Alert>
-            )}
-            <div className="flex justify-end">
-              <Button type="button" variante="secundario" onClick={onCancelar}>
-                Cerrar
-              </Button>
-            </div>
-          </>
+          <div className="flex justify-end">
+            <Button type="button" variante="secundario" onClick={onCancelar}>
+              Cerrar
+            </Button>
+          </div>
         ) : (
           <>
             <Field
-              label={esMostrador ? 'Monto a cobrar' : 'Monto a cobrar (lo aprueba recepción)'}
+              label="Monto a cobrar"
               inputMode="decimal"
               value={monto}
               onChange={(e) => {
@@ -276,11 +282,7 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
               }}
               disabled={guardando}
               placeholder="Ej.: 185.000 o 185.000,50"
-              ayuda={
-                esMostrador
-                  ? 'Al confirmar, el cliente lo ve en su portal y puede pagarlo online.'
-                  : 'El cliente lo va a ver recién cuando administración o recepción lo apruebe.'
-              }
+              ayuda="Al confirmar, el cliente lo ve en su portal y puede pagarlo online."
             />
             <div className="flex flex-wrap justify-end gap-2 pt-1">
               <Button type="button" variante="fantasma" onClick={onCancelar} disabled={guardando}>

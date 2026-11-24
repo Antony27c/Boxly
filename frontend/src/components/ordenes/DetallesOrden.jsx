@@ -27,8 +27,10 @@ const VACIO = {
 export default function DetallesOrden({ orden, onCambio }) {
   const { token, usuario } = useAuth()
   const editable = sePuedeEditarDetalle(orden)
-  // S3: el mecánico no carga precios; administración y recepción cotizan.
+  // S3 y MC1: el mecánico no carga ni ve precios (el backend no se los manda);
+  // elige el repuesto y la cantidad, y administración y recepción cotizan.
   const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
+  const verPrecios = !esMecanico
   const puedeCotizar = editable && tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
 
   const cargarDetalles = useCallback((t) => ordenesService.detalles(orden.id, t), [orden.id])
@@ -55,9 +57,15 @@ export default function DetallesOrden({ orden, onCambio }) {
       (repuestos ?? []).map((repuesto) => ({
         valor: repuesto.id,
         texto: repuesto.nombre,
-        detalle: `${repuesto.codigo ?? ''} · ${pesos(repuesto.precio)} · stock ${repuesto.stock}`,
+        detalle: [
+          repuesto.codigo,
+          verPrecios ? pesos(repuesto.precio) : null,
+          `stock ${repuesto.stock ?? 0}`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
       })),
-    [repuestos],
+    [repuestos, verPrecios],
   )
 
   const repuestoElegido = useMemo(
@@ -215,19 +223,16 @@ export default function DetallesOrden({ orden, onCambio }) {
                     <p className="font-medium">{item.descripcion}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted">
                       {item.repuesto_id ? 'Repuesto' : 'Mano de obra'} · {item.cantidad}
-                      {pendiente ? (
-                        ' · precio a definir'
-                      ) : (
-                        ` × ${pesos(item.precio_unitario)}`
-                      )}
+                      {verPrecios && (pendiente ? ' · precio a definir' : ` × ${pesos(item.precio_unitario)}`)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {pendiente ? (
-                      <Badge tono="ambar">A cotizar</Badge>
-                    ) : (
-                      <span className="font-medium">{pesos(item.subtotal)}</span>
-                    )}
+                    {verPrecios &&
+                      (pendiente ? (
+                        <Badge tono="ambar">A cotizar</Badge>
+                      ) : (
+                        <span className="font-medium">{pesos(item.subtotal)}</span>
+                      ))}
                     {puedeCotizar && pendiente && cotizando !== item.id && (
                       <Button variante="fantasma" onClick={() => abrirCotizar(item)}>
                         Cotizar
@@ -279,12 +284,14 @@ export default function DetallesOrden({ orden, onCambio }) {
         </ul>
       )}
 
-      <div className="flex justify-between border-t border-graphite-700 pt-3 text-sm">
-        <span className="text-muted">
-          {lineasACotizar > 0 ? `Total parcial · ${lineasACotizar} a cotizar` : 'Total de líneas'}
-        </span>
-        <span className="font-semibold">{pesos(totalLineas)}</span>
-      </div>
+      {verPrecios && (
+        <div className="flex justify-between border-t border-graphite-700 pt-3 text-sm">
+          <span className="text-muted">
+            {lineasACotizar > 0 ? `Total parcial · ${lineasACotizar} a cotizar` : 'Total de líneas'}
+          </span>
+          <span className="font-semibold">{pesos(totalLineas)}</span>
+        </div>
+      )}
 
       {editable && (
         <form onSubmit={agregar} noValidate className="space-y-4 border-t border-graphite-700 pt-4">
@@ -335,14 +342,7 @@ export default function DetallesOrden({ orden, onCambio }) {
               error={errores.cantidad}
               disabled={guardando}
             />
-            {esMecanico ? (
-              <div className="self-end pb-1">
-                <p className="text-xs font-medium text-muted">Precio</p>
-                <p className="mt-1 text-sm text-ink">
-                  {datos.tipo === 'repuesto' ? 'Precio del inventario' : 'Queda a cotizar por recepción'}
-                </p>
-              </div>
-            ) : (
+            {esMecanico ? null : (
               <Field
                 label="Precio unitario"
                 inputMode="decimal"

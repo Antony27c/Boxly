@@ -12,6 +12,7 @@ from app.models.repuesto import Repuesto
 from app.models.usuario import Usuario
 from app.schemas.paginacion import ParametrosPagina
 from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate
+from app.schemas.sin_dinero import ve_dinero
 
 
 class AvisoStockResponse(BaseModel):
@@ -27,9 +28,13 @@ class AvisoStockResponse(BaseModel):
     leida_en: Optional[datetime] = None
 
 
-def _to_response(repuesto) -> RepuestoResponse:
+def _to_response(repuesto, usuario: Usuario | None = None) -> RepuestoResponse:
+    """Respuesta del repuesto. Las lecturas pasan el usuario: si su rol no ve
+    dinero (el mecánico), el precio va en null. Las escrituras son solo de
+    administración y recepción, que sí lo ven."""
     respuesta = RepuestoResponse.model_validate(repuesto)
     respuesta.stock_bajo = repuesto.stock <= repuesto.stock_minimo
+    respuesta.sin_dinero = usuario is not None and not ve_dinero(usuario)
     return respuesta
 
 
@@ -118,20 +123,21 @@ def list_repuestos(
     solo_activos: bool = False,
     q: str | None = None,
     pagina: ParametrosPagina | None = None,
+    usuario: Usuario | None = None,
 ) -> tuple[list[RepuestoResponse], int]:
     items = repository.list_repuestos(
         db, solo_activos=solo_activos, q=q, pagina=pagina
     )
     total = repository.contar_repuestos(db, solo_activos=solo_activos, q=q)
-    return [_to_response(r) for r in items], total
+    return [_to_response(r, usuario) for r in items], total
 
 
-def list_stock_bajo(db: Session) -> list[RepuestoResponse]:
-    return [_to_response(r) for r in repository.list_stock_bajo(db)]
+def list_stock_bajo(db: Session, usuario: Usuario) -> list[RepuestoResponse]:
+    return [_to_response(r, usuario) for r in repository.list_stock_bajo(db)]
 
 
-def get_repuesto(db: Session, repuesto_id: int) -> RepuestoResponse:
-    return _to_response(_get_or_404(db, repuesto_id))
+def get_repuesto(db: Session, repuesto_id: int, usuario: Usuario) -> RepuestoResponse:
+    return _to_response(_get_or_404(db, repuesto_id), usuario)
 
 
 def create_repuesto(db: Session, data: RepuestoCreate) -> RepuestoResponse:

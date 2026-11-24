@@ -14,7 +14,8 @@ from app.schemas.suscripcion import (
 )
 
 # Suscripción del taller (docs/Suscripciones.md, S1): la ve el personal para el
-# aviso de pago; solo el administrador cambia de plan.
+# aviso de pago; solo el administrador cambia de plan. El mecánico la recibe sin
+# precios ni montos (schemas/sin_dinero.py).
 router = APIRouter(prefix="/suscripcion", tags=["Suscripción"])
 
 AdminTallerUser = Annotated[
@@ -23,13 +24,13 @@ AdminTallerUser = Annotated[
 
 
 @router.get("", response_model=SuscripcionResponse, summary="Suscripción del taller")
-def obtener_suscripcion(db: DbSession, _: PersonalUser) -> SuscripcionResponse:
-    return service.obtener(db)
+def obtener_suscripcion(db: DbSession, usuario: PersonalUser) -> SuscripcionResponse:
+    return service.obtener(db, usuario)
 
 
 @router.get("/planes", response_model=list[PlanResponse], summary="Planes disponibles")
-def listar_planes(db: DbSession, _: PersonalUser) -> list[PlanResponse]:
-    return service.planes(db)
+def listar_planes(db: DbSession, usuario: PersonalUser) -> list[PlanResponse]:
+    return service.planes(db, usuario)
 
 
 @router.put("/plan", response_model=SuscripcionResponse, summary="Cambiar de plan")
@@ -40,6 +41,6 @@ def cambiar_plan(
 
 
 @router.get("/pagos", response_model=list[PagoSuscripcionResponse], summary="Pagos de la suscripción")
-def listar_pagos(db: DbSession, _: PersonalUser) -> list[PagoSuscripcionResponse]:
+def listar_pagos(db: DbSession, usuario: PersonalUser) -> list[PagoSuscripcionResponse]:
     taller = service.taller_de_sesion(db)
-    return service.pagos_del_taller(db, taller.id)
+    return service.pagos_del_taller(db, taller.id, usuario)

@@ -184,6 +184,18 @@ describe('Inventario', () => {
     await waitFor(() => expect(screen.getByTestId('ubicacion')).toHaveTextContent(/^$/))
   })
 
+  it('al mecánico no le muestra precios, aunque vengan o falten', async () => {
+    sesion.rol = 'mecanico'
+    const filtroSinPrecio = { ...FILTRO }
+    delete filtroSinPrecio.precio
+    repuestos.listarPaginado.mockResolvedValue({ items: [filtroSinPrecio, BUJIA], total: 2 })
+    const { container } = montar()
+    await screen.findByRole('table')
+    expect(screen.queryByRole('columnheader', { name: 'Precio' })).not.toBeInTheDocument()
+    expect(within(filaDe('Filtro de aceite')).getByText('2')).toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+  })
+
   it('el mecánico solo mira: sin alta, sin acciones ni inactivos', async () => {
     sesion.rol = 'mecanico'
     montar('/inventario?nuevo=1')

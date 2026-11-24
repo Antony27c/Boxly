@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.sin_dinero import SinDineroMixin
+
 
 class DetalleOrdenCreate(BaseModel):
     repuesto_id: Optional[int] = Field(default=None, gt=0)
@@ -27,8 +29,12 @@ class DetallePrecioUpdate(BaseModel):
     precio_unitario: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
 
 
-class DetalleOrdenResponse(BaseModel):
+class DetalleOrdenResponse(SinDineroMixin, BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+    # Precio unitario y subtotal son dinero: el mecánico recibe null (el
+    # servidor igual los guarda; `a_cotizar` sigue marcando la cotización).
+    _CAMPOS_DINERO = {"precio_unitario": None, "subtotal": None}
 
     id: int
     orden_id: int

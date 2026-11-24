@@ -15,7 +15,8 @@ function nivelDeStock({ stock, stock_minimo: minimo }) {
 
 const TONO_CHIP_STOCK = { danger: 'peligro', amber: 'ambar', ok: 'ok', neutro: 'neutro' }
 
-/* Celular: una tarjeta por repuesto, sin tabla que obligue a deslizar de costado. */
+/* Celular: una tarjeta por repuesto, sin tabla que obligue a deslizar de costado.
+   El precio lo ve solo quien edita: el mecánico no ve montos (MC1). */
 export default function FichasRepuestos({ repuestos, cargando, puedeEditar, acciones }) {
   return (
     <ul className={`mt-6 space-y-3 sm:hidden ${cargando ? 'opacity-60' : ''}`}>
@@ -33,7 +34,7 @@ export default function FichasRepuestos({ repuestos, cargando, puedeEditar, acci
             >
               {repuesto.descripcion && <p className="mt-1 text-sm text-muted">{repuesto.descripcion}</p>}
               <Chips>
-                <Chip mono>{pesos(repuesto.precio)}</Chip>
+                {puedeEditar && <Chip mono>{pesos(repuesto.precio)}</Chip>}
                 <Chip tono={TONO_CHIP_STOCK[nivel]}>
                   Stock <span className="font-mono font-semibold">{repuesto.stock}</span> · mín. {repuesto.stock_minimo}
                 </Chip>

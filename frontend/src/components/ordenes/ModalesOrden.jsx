@@ -95,7 +95,7 @@ export default function ModalesOrden({
         descripcion={
           esMostrador
             ? 'Revisá el monto y envialo al cliente para que lo pague online.'
-            : 'Proponé el monto a cobrar; administración o recepción lo aprueba.'
+            : 'El cobro lo manejan administración y recepción.'
         }
         ancho="max-w-md"
         onCerrar={onCerrarCobro}

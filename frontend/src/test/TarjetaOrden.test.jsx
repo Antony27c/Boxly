@@ -43,6 +43,50 @@ function montar(props) {
 }
 
 describe('TarjetaOrden', () => {
+  it('al mecánico no le muestra montos ni cobro, aunque vengan o falten los campos', () => {
+    const { container, unmount } = montar({
+      usuario: MECANICO,
+      orden: orden({
+        estado: 'Listo',
+        mecanico: 'Mario',
+        mecanico_id: 3,
+        total: 50000,
+        cobro_estado: 'pendiente',
+        monto_propuesto: 50000,
+        pagos: [{ id: 1, estado: 'duplicado' }],
+      }),
+    })
+    expect(screen.queryByText(/A presupuestar|Cobro|Pago duplicado|Sin cobro/)).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+    unmount()
+
+    // Sin ningún campo de dinero (MC1).
+    const { container: sinDinero } = montar({
+      usuario: MECANICO,
+      orden: { id: 2, codigo: 'OT-002', estado: 'Listo', descripcion: 'Frenos', mecanico: 'Mario', mecanico_id: 3, vehiculo_id: 7 },
+    })
+    expect(screen.queryByRole('button', { name: /cobro/i })).not.toBeInTheDocument()
+    expect(sinDinero.textContent).not.toMatch(/\$|NaN|undefined/)
+  })
+
+  it('al administrador le sigue mostrando el monto propuesto viejo', () => {
+    render(
+      <BannerCobro
+        orden={orden({ estado: 'Listo', cobro_estado: 'pendiente', monto_propuesto: 90000 })}
+        esMostrador
+        onAbrir={() => {}}
+      />,
+    )
+    expect(screen.getByText(/Cobro propuesto .*90\.000/)).toBeInTheDocument()
+  })
+
+  it('el banner del cobro no se le muestra al mecánico', () => {
+    const { container } = render(
+      <BannerCobro orden={orden({ estado: 'Listo', cobro_estado: 'pendiente', monto_propuesto: 90000 })} onAbrir={() => {}} />,
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
+
   it('muestra un solo botón primario para recepción en Pendiente', () => {
     montar({ usuario: RECEPCION })
 

@@ -141,6 +141,19 @@ describe('Cobro como ticket de caja', () => {
   })
 })
 
+describe('Cobro y el mecánico', () => {
+  it('sin rol de mostrador no muestra montos ni deja proponer un cobro', () => {
+    const { container } = mostrar(
+      { estado: 'Listo', cobro_estado: 'pendiente', monto_propuesto: 90000, costo_estimado: 80000 },
+      false,
+    )
+    expect(screen.getByText('El cobro lo manejan administración y recepción.')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Monto/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /revisión|propuesta|Enviar/ })).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+  })
+})
+
 describe('Registrar pago en el local', () => {
   const emitido = { cobro_estado: 'aprobado', costo_final: '185000.00' }
 
