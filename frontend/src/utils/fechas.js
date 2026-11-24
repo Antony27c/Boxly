@@ -1,3 +1,5 @@
+import { formatearDiaMes } from '@/lib/fechas'
+
 export function aISO(fecha) {
   const copia = new Date(fecha)
   copia.setMinutes(copia.getMinutes() - copia.getTimezoneOffset())
@@ -19,8 +21,5 @@ export function sumarDias(fecha, dias) {
 }
 
 export function etiquetaDia(fecha) {
-  return new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-  })
+  return formatearDiaMes(fecha)
 }

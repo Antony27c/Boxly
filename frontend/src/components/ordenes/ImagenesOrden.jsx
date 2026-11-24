@@ -5,6 +5,7 @@ import Loader from '@/components/ui/Loader'
 import Select from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import { formatearFechaHora } from '@/lib/fechas'
 import { ROLES_ADMIN, tieneAcceso } from '@/routes/navegacion'
 import { ESTADOS_ORDEN, ordenesService } from '@/services/ordenes'
 
@@ -166,7 +167,7 @@ export default function ImagenesOrden({ orden }) {
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
             <span>
               {ampliada.etapa}
-              {ampliada.fecha ? ` · ${new Date(ampliada.fecha).toLocaleString('es-AR')}` : ''}
+              {ampliada.fecha ? ` · ${formatearFechaHora(ampliada.fecha)}` : ''}
               {ampliada.usuario_nombre ? ` · ${ampliada.usuario_nombre}` : ''}
             </span>
             {confirmarQuitar ? (

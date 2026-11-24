@@ -87,6 +87,24 @@ describe('CambioEstado', () => {
     expect(input).toHaveAttribute('accept', 'image/*')
     expect(input).toHaveAttribute('capture', 'environment')
   })
+
+  it('sin puedeCobrar (mecánico) no pide monto al pasar a Listo', () => {
+    montar({ destinoInicial: 'Listo' })
+
+    expect(screen.queryByLabelText(/monto a cobrar/i)).not.toBeInTheDocument()
+  })
+
+  it('con puedeCobrar (recepción) pide el monto al pasar a Listo', () => {
+    montar({ destinoInicial: 'Listo', puedeCobrar: true })
+
+    expect(screen.getByLabelText(/monto a cobrar/i)).toBeInTheDocument()
+  })
+
+  it('con líneas a cotizar tampoco pide monto aunque pueda cobrar', () => {
+    montar({ destinoInicial: 'Listo', puedeCobrar: true, orden: { ...ORDEN, lineas_a_cotizar: 2 } })
+
+    expect(screen.queryByLabelText(/monto a cobrar/i)).not.toBeInTheDocument()
+  })
 })
 
 describe('CambioEstado: guiños de etapa', () => {

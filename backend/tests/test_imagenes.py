@@ -5,8 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import ExifTags, Image
 
-from app.core.security import create_access_token, hash_password
 from app.core.imagenes import MAX_BYTES_IMAGEN, MAX_LADO_PX
+from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app

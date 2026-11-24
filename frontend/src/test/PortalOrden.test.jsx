@@ -3,6 +3,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PortalOrden from '@/pages/PortalOrden'
 import { puedePagar } from '@/services/portal'
+import { pesos } from '@/utils/formato'
+
+// pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
+const monto = (valor) => pesos(valor).replace(/\s/g, ' ')
 
 const portal = vi.hoisted(() => ({
   misVehiculos: vi.fn(),
@@ -15,6 +19,7 @@ const pagos = vi.hoisted(() => ({
   confirmar: vi.fn(),
   simular: vi.fn(),
 }))
+const tallerHook = vi.hoisted(() => ({ datos: null }))
 
 vi.mock('@/services/portal', async (importOriginal) => {
   const real = await importOriginal()
@@ -28,6 +33,10 @@ vi.mock('@/context/AuthContext', () => ({
     autenticado: true,
     cargandoSesion: false,
   }),
+}))
+
+vi.mock('@/hooks/useTaller', () => ({
+  default: () => ({ taller: tallerHook.datos, cargando: false, error: '', recargar: vi.fn() }),
 }))
 
 function ordenBase(extra = {}) {
@@ -67,6 +76,7 @@ function montar() {
 describe('PortalOrden', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tallerHook.datos = null
     portal.miOrden.mockResolvedValue(ordenBase())
   })
 
@@ -117,7 +127,7 @@ describe('PortalOrden', () => {
   })
 
   it('no muestra el botón de pagar cuando la orden no es pagable', async () => {
-    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: false }))
+    portal.miOrden.mockResolvedValue(ordenBase({ estado: 'en_diagnostico', puede_pagar: false }))
     montar()
 
     expect(
@@ -126,12 +136,174 @@ describe('PortalOrden', () => {
     expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
   })
 
+  it.each([
+    [1, 'El pago se habilita cuando el taller cotice los trabajos pendientes.'],
+    [0, 'El pago se habilita cuando el taller emita el cobro.'],
+  ])(
+    'con la orden lista y sin pago explica qué falta (líneas a cotizar: %s)',
+    async (lineasACotizar, mensaje) => {
+      portal.miOrden.mockResolvedValue(
+        ordenBase({ puede_pagar: false, costo_final: null, lineas_a_cotizar: lineasACotizar }),
+      )
+      montar()
+
+      expect(await screen.findByText(mensaje)).toBeInTheDocument()
+      expect(screen.queryByText('El pago se habilita cuando la orden esté lista.')).not.toBeInTheDocument()
+    },
+  )
+
+  it('con líneas a cotizar el total parcial es lo ya cotizado (total del backend)', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        puede_pagar: false,
+        costo_final: null,
+        costo_estimado: '90000.00',
+        lineas_a_cotizar: 1,
+        total_parcial: true,
+        total: '4500.00',
+      }),
+    )
+    montar()
+
+    expect(await screen.findByText('Total parcial')).toBeInTheDocument()
+    expect(screen.getByText(monto(4500))).toBeInTheDocument()
+    // Ni el estimado ni un $ 0: el total todavía puede cambiar.
+    expect(screen.queryByText(monto(90000))).not.toBeInTheDocument()
+    expect(screen.queryByText(monto(0))).not.toBeInTheDocument()
+  })
+
+  it('con líneas a cotizar y nada cotizado el total parcial dice "A confirmar"', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({ puede_pagar: false, costo_final: null, lineas_a_cotizar: 1, total: null }),
+    )
+    montar()
+
+    expect(await screen.findByText('A confirmar')).toBeInTheDocument()
+  })
+
   it('muestra Pagada y no el botón cuando la orden ya está paga', async () => {
     portal.miOrden.mockResolvedValue(ordenBase({ pagada: true, puede_pagar: false }))
     montar()
 
     expect((await screen.findAllByText('Pagada')).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
+  })
+
+  it('pagada en el taller muestra el medio del pago', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        pagada: true,
+        puede_pagar: false,
+        pago: { estado: 'aprobado', medio: 'efectivo', fecha_pago: '2026-11-23T15:00:00' },
+      }),
+    )
+    montar()
+
+    expect(await screen.findByText(/Pagada en el taller \(efectivo\)/)).toHaveTextContent(
+      'Pagada en el taller (efectivo) · 23/11/2026',
+    )
+  })
+
+  it('pagada online muestra Mercado Pago', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({ pagada: true, puede_pagar: false, pago: { estado: 'aprobado', medio: 'mercadopago' } }),
+    )
+    montar()
+
+    expect(await screen.findByText('Pagada online (Mercado Pago)')).toBeInTheDocument()
+  })
+
+  it('sin datos del taller conserva el botón de pagar', async () => {
+    tallerHook.datos = null
+    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: true }))
+    montar()
+
+    expect(await screen.findByRole('button', { name: /pagar/i })).toBeInTheDocument()
+  })
+
+  it('con pago_online muestra el botón de pagar', async () => {
+    tallerHook.datos = { pago_online: true }
+    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: true }))
+    montar()
+
+    expect(await screen.findByRole('button', { name: /pagar/i })).toBeInTheDocument()
+  })
+
+  it('sin pago_online muestra "Pagás en el taller" en lugar del botón', async () => {
+    tallerHook.datos = { pago_online: false }
+    portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: true }))
+    montar()
+
+    expect(await screen.findByText('Pagás en el taller')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
+  })
+
+  it('las líneas a cotizar se muestran como "A cotizar" y el total es parcial', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        estado: 'en_diagnostico',
+        puede_pagar: false,
+        lineas_a_cotizar: 1,
+        detalles: [
+          {
+            id: 1,
+            descripcion: 'Cambio de aceite',
+            repuesto_nombre: null,
+            cantidad: 1,
+            precio_unitario: null,
+            a_cotizar: true,
+            subtotal: null,
+          },
+          {
+            id: 2,
+            descripcion: 'Pastillas de freno',
+            repuesto_nombre: 'Pastillas',
+            cantidad: 2,
+            precio_unitario: '10000.00',
+            a_cotizar: false,
+            subtotal: '20000.00',
+          },
+        ],
+      }),
+    )
+    montar()
+
+    expect(await screen.findByText('A cotizar')).toBeInTheDocument()
+    expect(screen.getByText('Total parcial')).toBeInTheDocument()
+    // La línea sin precio nunca muestra $ 0.
+    expect(screen.queryByText(monto(0))).not.toBeInTheDocument()
+    // La línea con precio sí muestra sus montos.
+    expect(screen.getByText(monto(10000))).toBeInTheDocument()
+    expect(screen.getAllByText(monto(20000)).length).toBeGreaterThan(0)
+  })
+
+  it('muestra las fechas del servidor en hora de Argentina', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        // 01:30 UTC del 24 = 22:30 del 23 en Argentina.
+        fecha_ingreso: '2026-11-24T01:30:00',
+        // La entrega estimada es un día: no corre a la noche anterior.
+        fecha_estimada_entrega: '2026-11-25T00:00:00',
+        historial: [
+          {
+            id: 1,
+            estado_anterior: 'ingresado',
+            estado_nuevo: 'en_diagnostico',
+            fecha: '2026-11-23T21:30:00',
+            comentario: 'Se revisa el tren delantero',
+            usuario_nombre: 'Juan Pérez',
+          },
+        ],
+      }),
+    )
+    montar()
+
+    // Ingresó el 23 (día en Argentina), no el 24 del string UTC.
+    expect(await screen.findByText('23/11/2026')).toBeInTheDocument()
+    // La entrega estimada muestra el día elegido, 25.
+    expect(screen.getByText('25/11/2026')).toBeInTheDocument()
+    // La línea de tiempo muestra la hora argentina: 21:30 UTC → 18:30.
+    expect(screen.getByText('23/11/2026, 18:30')).toBeInTheDocument()
   })
 
   it('al pagar crea el pago y redirige a url_pago', async () => {

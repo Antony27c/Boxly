@@ -54,9 +54,9 @@ def listar_usuarios(
 def crear_usuario(
     data: UsuarioCreate,
     db: DbSession,
-    _: AdminUser,
+    actor: AdminUser,
 ) -> UsuarioResponse:
-    return service.create_usuario(db, data)
+    return service.create_usuario(db, data, actor)
 @router.get(
         "/mecanicos",
         response_model=list[MecanicoResponse],
@@ -87,9 +87,9 @@ def actualizar_usuario(
     user_id: int,
     data: UsuarioUpdate,
     db: DbSession,
-    _: AdminUser,
+    actor: AdminUser,
 ) -> UsuarioResponse:
-    return service.update_usuario(db, user_id, data)
+    return service.update_usuario(db, user_id, data, actor)
 
 
 @router.delete(
@@ -100,7 +100,7 @@ def actualizar_usuario(
 def eliminar_usuario(
     user_id: int,
     db: DbSession,
-    _: AdminUser,
+    actor: AdminUser,
 ) -> MessageResponse:
-    user = service.delete_usuario(db, user_id)
+    user = service.delete_usuario(db, user_id, actor)
     return MessageResponse(detail=f"Usuario {user.email} desactivado")

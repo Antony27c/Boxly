@@ -70,7 +70,15 @@ def historial_ordenes(
 ) -> list[OrdenResponse]:
     _get_or_404(db, vehiculo_id, mecanico_id)
     ordenes = repository.list_ordenes(db, vehiculo_id, mecanico_id=mecanico_id)
-    return [OrdenResponse.model_validate(o) for o in ordenes]
+    # `mecanico_id` viene de filtro_mecanico: solo está para el mecánico, que no
+    # ve dinero. La marca va sobre la respuesta ya validada y no sobre el ORM:
+    # un atributo suelto en la instancia del ORM se pierde si la sesión la
+    # vuelve a cargar, y FastAPI no revalida una instancia de su response_model.
+    sin_dinero = mecanico_id is not None
+    respuestas = [OrdenResponse.model_validate(o) for o in ordenes]
+    for respuesta in respuestas:
+        respuesta.sin_dinero = sin_dinero
+    return respuestas
 
 
 def create_vehiculo(db: Session, data: VehiculoCreate) -> VehiculoResponse:

@@ -1,6 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db.session import SIN_FILTRO_TALLER
 from app.models.cliente import Cliente
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.paginacion import ParametrosPagina, aplicar, contar
@@ -53,6 +54,26 @@ def contar_usuarios(
     db: Session, *, solo_activos: bool | None = None, rol: RolUsuario | None = None
 ) -> int:
     return contar(db, _stmt_filtrado(solo_activos=solo_activos, rol=rol))
+
+
+def contar_administradores_activos(db: Session) -> int:
+    """Administradores activos del taller en contexto (el filtro ya lo limita).
+    Tiene que quedar al menos uno (docs/Plataforma.md, P1)."""
+    stmt = select(Usuario).where(
+        Usuario.rol == RolUsuario.administrador,
+        Usuario.activo.is_(True),
+    )
+    return contar(db, stmt)
+
+
+def email_existe(db: Session, email: str, *, excluir_id: int | None = None) -> bool:
+    """El email es único en toda la plataforma: la búsqueda saltea el filtro
+    de taller para no chocar con la constraint ni filtrar datos de otro taller."""
+    stmt = select(func.count(Usuario.id)).where(Usuario.email == email.lower().strip())
+    if excluir_id is not None:
+        stmt = stmt.where(Usuario.id != excluir_id)
+    stmt = stmt.execution_options(**{SIN_FILTRO_TALLER: True})
+    return (db.scalar(stmt) or 0) > 0
 
 
 def create(

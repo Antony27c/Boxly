@@ -186,6 +186,7 @@ export default function Clientes() {
       <div className="mt-6 max-w-sm">
         <Field
           label="Buscar"
+          data-lectura
           type="search"
           placeholder="Nombre, DNI, teléfono o correo"
           value={busqueda}

@@ -3,10 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response, status
 
 from app.api.v1.clientes import service
-from app.core.dependencies import PersonalUser, DbSession, filtro_mecanico, require_roles
+from app.core.dependencies import DbSession, PersonalUser, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.usuario import MessageResponse
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
+from app.schemas.usuario import MessageResponse
 
 router = APIRouter(prefix="/clientes", tags=["Clientes"])
 

@@ -1,20 +1,32 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CobroOrden from '@/components/ordenes/CobroOrden'
+import { api } from '@/lib/api'
+import { montoDelServidor, ordenesService } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 // pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
 const monto = (valor) => pesos(valor).replace(/\s/g, ' ')
 
+const taller = vi.hoisted(() => ({ datos: null }))
+
+vi.mock('@/hooks/useTaller', () => ({
+  default: () => ({ taller: taller.datos, cargando: false, error: '', recargar: vi.fn() }),
+}))
+
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ token: 'tok' }) }))
 
 const base = { id: 42, estado: 'Listo', pagada: false, cobro_estado: null, costo_estimado: 150000 }
 
-function mostrar(orden, esMostrador = true) {
-  return render(<CobroOrden orden={{ ...base, ...orden }} esMostrador={esMostrador} onListo={vi.fn()} onCancelar={vi.fn()} />)
+function mostrar(orden, esMostrador = true, onListo = vi.fn()) {
+  return render(<CobroOrden orden={{ ...base, ...orden }} esMostrador={esMostrador} onListo={onListo} onCancelar={vi.fn()} />)
 }
 
 describe('Cobro como ticket de caja', () => {
+  beforeEach(() => {
+    taller.datos = null
+  })
+
   it('muestra el presupuesto y el total enviado con montos en mono', () => {
     const { container } = mostrar({ cobro_estado: 'aprobado', costo_final: 185000, cobro_aprobado_por_nombre: 'Ana' })
     expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
@@ -33,7 +45,40 @@ describe('Cobro como ticket de caja', () => {
     expect(screen.getByText('Propuesto:')).toBeInTheDocument()
     expect(screen.getByText(monto(90000))).toHaveClass('font-mono')
     expect(screen.getByText('Esperando aprobación de administración o recepción.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Monto a cobrar')).toHaveValue('90000')
+    expect(screen.getByLabelText('Monto a cobrar')).toHaveValue('90.000')
+  })
+
+  it('emitir un cobro tipeando "185.000" manda 185000, no 185', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    const onListo = vi.fn()
+    mostrar({}, true, onListo)
+
+    const campo = screen.getByLabelText('Monto a cobrar')
+    expect(campo).toHaveAttribute('inputmode', 'decimal')
+    fireEvent.change(campo, { target: { value: '185.000' } })
+    fireEvent.submit(campo.closest('form'))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalled())
+    expect(post).toHaveBeenCalledWith('/api/v1/ordenes/42/cobro', { monto: 185000 }, 'tok')
+    post.mockRestore()
+  })
+
+  it('con centavos "185.000,50" manda 185000.5 y un monto ambiguo muestra el error', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    mostrar({}, true, vi.fn())
+    const campo = screen.getByLabelText('Monto a cobrar')
+
+    fireEvent.change(campo, { target: { value: '185.50' } })
+    fireEvent.submit(campo.closest('form'))
+    expect(await screen.findByText(/coma para los centavos/)).toBeInTheDocument()
+    expect(post).not.toHaveBeenCalled()
+
+    fireEvent.change(campo, { target: { value: '185.000,50' } })
+    fireEvent.submit(campo.closest('form'))
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/v1/ordenes/42/cobro', { monto: 185000.5 }, 'tok'),
+    )
+    post.mockRestore()
   })
 
   it('pagada muestra lo que pagó el cliente', () => {
@@ -47,5 +92,261 @@ describe('Cobro como ticket de caja', () => {
     const { container } = mostrar({})
     expect(screen.getByText('Todavía no se emitió el cobro de esta orden.')).toBeInTheDocument()
     expect(container.querySelector('.border-dashed')).not.toBeInTheDocument()
+  })
+
+  it('con líneas a cotizar avisa y no deja emitir el cobro', () => {
+    mostrar({ lineas_a_cotizar: 2 })
+    expect(screen.getByText('Cotizá los trabajos pendientes antes de cobrar.')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/monto a cobrar/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cobro|enviar|aprobar/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+  })
+
+  it('con datos del taller muestra el encabezado y el pie del ticket', () => {
+    taller.datos = {
+      nombre: 'Taller El Rayo',
+      direccion: 'Av. San Martín 1234',
+      telefono: '11-5555-1234',
+      cuit: '30712345678',
+      pie_ticket: 'Gracias por tu visita.',
+      dias_garantia: 90,
+    }
+    mostrar({ cobro_estado: 'aprobado', costo_final: 185000 })
+
+    expect(screen.getByText('Taller El Rayo')).toBeInTheDocument()
+    expect(screen.getByText('Av. San Martín 1234')).toBeInTheDocument()
+    expect(screen.getByText('Tel: 11-5555-1234')).toBeInTheDocument()
+    expect(screen.getByText('CUIT: 30-71234567-8')).toBeInTheDocument()
+    expect(screen.getByText('Gracias por tu visita.')).toBeInTheDocument()
+    expect(screen.getByText('Garantía: 90 días')).toBeInTheDocument()
+  })
+
+  it('con datos parciales del taller solo muestra lo que tiene', () => {
+    taller.datos = { nombre: 'Taller El Rayo', dias_garantia: 1 }
+    const { container } = mostrar({})
+
+    expect(screen.getByText('Taller El Rayo')).toBeInTheDocument()
+    expect(screen.queryByText(/CUIT:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tel:/)).not.toBeInTheDocument()
+    expect(screen.getByText('Garantía: 1 día')).toBeInTheDocument()
+    expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
+  })
+
+  it('sin datos del taller el ticket no muestra encabezado ni pie', () => {
+    const { container } = mostrar({})
+
+    expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
+    expect(screen.queryByText(/Garantía:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/CUIT:/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Monto a cobrar precargado', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('sin costo_final se precarga con el total de las líneas cotizadas', async () => {
+    const detalles = vi.spyOn(ordenesService, 'detalles').mockResolvedValue([
+      { id: 1, cantidad: 2, precio_unitario: 5000, subtotal: 10000 },
+      { id: 2, cantidad: 1, precio_unitario: 5000, subtotal: 5000 },
+      { id: 3, cantidad: 1, precio_unitario: null, subtotal: null, a_cotizar: true },
+    ])
+    mostrar({ costo_estimado: null, costo_final: null })
+
+    await waitFor(() => expect(screen.getByLabelText('Monto a cobrar')).toHaveValue('15.000'))
+    expect(detalles).toHaveBeenCalledWith(42, 'tok')
+  })
+
+  it('lo que se tipea no se pisa cuando llegan las líneas', async () => {
+    let resolver
+    vi.spyOn(ordenesService, 'detalles').mockReturnValue(new Promise((r) => (resolver = r)))
+    mostrar({ costo_estimado: null, costo_final: null })
+
+    const campo = screen.getByLabelText('Monto a cobrar')
+    fireEvent.change(campo, { target: { value: '20.000' } })
+    resolver([{ id: 1, cantidad: 1, precio_unitario: 15000, subtotal: 15000 }])
+    await waitFor(() => expect(campo).toHaveValue('20.000'))
+  })
+
+  it('con costo_final no pide las líneas y muestra ese monto', () => {
+    const detalles = vi.spyOn(ordenesService, 'detalles')
+    mostrar({ cobro_estado: 'emitido', costo_final: 18000 })
+    expect(detalles).not.toHaveBeenCalled()
+  })
+})
+
+describe('Anular el cobro emitido', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('pide confirmación con el monto y llama al endpoint de anular', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    const onListo = vi.fn()
+    mostrar({ cobro_estado: 'aprobado', costo_final: 15000 }, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anular cobro' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Anular el cobro' })
+    expect(dialogo).toHaveTextContent(
+      `Se anula el cobro de ${monto(15000)}; el link de pago que tenga el cliente deja de servir.`,
+    )
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Anular cobro' }))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalledWith(expect.stringMatching(/^Cobro anulado/)))
+    expect(post).toHaveBeenCalledWith('/api/v1/ordenes/42/cobro/anular', {}, 'tok')
+  })
+
+  it('si falla, el error queda en la confirmación', async () => {
+    vi.spyOn(ordenesService, 'anularCobro').mockRejectedValue(new Error('No se pudo anular.'))
+    mostrar({ cobro_estado: 'aprobado', costo_final: 15000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Anular cobro' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Anular el cobro' })
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Anular cobro' }))
+    expect(await within(dialogo).findByText('No se pudo anular.')).toBeInTheDocument()
+  })
+
+  it('sin cobro emitido o con la orden pagada no aparece', () => {
+    const { unmount } = mostrar({ cobro_estado: null })
+    expect(screen.queryByRole('button', { name: 'Anular cobro' })).not.toBeInTheDocument()
+    unmount()
+    mostrar({ cobro_estado: 'aprobado', costo_final: 15000, pagada: true })
+    expect(screen.queryByRole('button', { name: 'Anular cobro' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Cobro y el mecánico', () => {
+  it('sin rol de mostrador no muestra montos ni deja proponer un cobro', () => {
+    const { container } = mostrar(
+      { estado: 'Listo', cobro_estado: 'pendiente', monto_propuesto: 90000, costo_estimado: 80000 },
+      false,
+    )
+    expect(screen.getByText('El cobro lo manejan administración y recepción.')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Monto/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /revisión|propuesta|Enviar/ })).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+  })
+})
+
+describe('Registrar pago en el local', () => {
+  const emitido = { cobro_estado: 'aprobado', costo_final: '185000.00' }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('recepción y el admin lo ven con el cobro emitido; el mecánico no', () => {
+    const { unmount } = mostrar(emitido)
+    expect(screen.getByRole('button', { name: 'Registrar pago en el local' })).toBeInTheDocument()
+    unmount()
+    mostrar(emitido, false)
+    expect(screen.queryByRole('button', { name: 'Registrar pago en el local' })).not.toBeInTheDocument()
+  })
+
+  it('sin cobro emitido no se ofrece', () => {
+    mostrar({})
+    expect(screen.queryByRole('button', { name: 'Registrar pago en el local' })).not.toBeInTheDocument()
+  })
+
+  it('abre el modal con el monto precargado y registra el medio y la referencia', async () => {
+    const registrar = vi.spyOn(ordenesService, 'registrarPagoLocal').mockResolvedValue({})
+    const onListo = vi.fn()
+    mostrar(emitido, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
+    const dialogo = screen.getByRole('dialog', { name: 'Registrar pago en el local' })
+    // El monto es el del cobro, solo para leer: no hay campo para tipearlo.
+    expect(within(dialogo).getByText('Monto del cobro')).toBeInTheDocument()
+    expect(within(dialogo).queryByLabelText(/Monto/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Medio de pago')).toHaveValue('efectivo')
+
+    fireEvent.change(screen.getByLabelText('Medio de pago'), { target: { value: 'tarjeta' } })
+    fireEvent.change(screen.getByLabelText('Referencia (opcional)'), { target: { value: 'Op. 123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalledWith('Pago registrado. La orden quedó pagada.'))
+    expect(registrar).toHaveBeenCalledWith(42, { medio: 'tarjeta', monto: 185000, referencia: 'Op. 123' }, 'tok')
+    expect(dialogo).not.toBeInTheDocument()
+  })
+
+  it('muestra el error del backend (monto distinto) sin cerrar el modal', async () => {
+    vi.spyOn(ordenesService, 'registrarPagoLocal').mockRejectedValue(
+      new Error('El monto tiene que ser el del cobro emitido: $ 185,000.00'),
+    )
+    const onListo = vi.fn()
+    mostrar(emitido, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    expect(await screen.findByText('El monto tiene que ser el del cobro emitido: $ 185,000.00')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Registrar pago en el local' })).toBeInTheDocument()
+    expect(onListo).not.toHaveBeenCalled()
+  })
+
+  it('un cobro de 185000,50 se muestra con formato argentino y se envía como 185000.5', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    const onListo = vi.fn()
+    // Así llega el Decimal del servidor: texto con punto decimal.
+    mostrar({ ...emitido, costo_final: '185000.50' }, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
+    const dialogo = screen.getByRole('dialog', { name: 'Registrar pago en el local' })
+    expect(within(dialogo).getByText(/185\.000,50/)).toBeInTheDocument()
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalled())
+    expect(post).toHaveBeenCalledWith(
+      '/api/v1/ordenes/42/pago-local',
+      { medio: 'efectivo', monto: 185000.5, referencia: null },
+      'tok',
+    )
+  })
+
+  it('pagada en el local muestra el medio y la fecha', () => {
+    mostrar({ ...emitido, pagada: true, pago_medio: 'efectivo', pago_fecha: '2026-11-23T21:30:00' })
+    expect(screen.getByText('Pagada en el taller (efectivo) · 23/11/2026, 18:30')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Registrar pago en el local' })).not.toBeInTheDocument()
+  })
+
+  it('montoDelServidor lee el Decimal del servidor y rechaza el formato argentino', () => {
+    expect(montoDelServidor('185000.50')).toBe(185000.5)
+    expect(montoDelServidor(185000.5)).toBe(185000.5)
+    expect(montoDelServidor('185000')).toBe(185000)
+    expect(montoDelServidor('185.000,50')).toBeNull()
+    expect(montoDelServidor('')).toBeNull()
+    expect(montoDelServidor(null)).toBeNull()
+  })
+
+  it('pagada online lo dice', () => {
+    mostrar({ ...emitido, pagada: true, pago_medio: 'mercadopago', pago_fecha: null })
+    expect(screen.getByText('Pagada online (Mercado Pago)')).toBeInTheDocument()
+  })
+})
+
+describe('Pago online duplicado', () => {
+  const duplicado = {
+    id: 12,
+    orden_id: 42,
+    monto: '185000.00',
+    estado: 'duplicado',
+    medio: 'mercadopago',
+    payment_id: '1319283712',
+    creado_en: '2026-11-23T21:30:00',
+    fecha_pago: '2026-11-23T21:30:00',
+  }
+
+  it('muestra el aviso de devolución con monto, fecha y referencia', () => {
+    mostrar({ ...base, pagada: true, pagos: [duplicado] })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Esta orden recibió un pago online de $ 185.000 el 23/11/2026, 18:30 cuando ya estaba pagada. Devolvelo desde tu cuenta de Mercado Pago. Referencia del pago: 1319283712.',
+    )
+  })
+
+  it('sin pagos duplicados no muestra el aviso', () => {
+    mostrar({ ...base, pagos: [{ ...duplicado, estado: 'aprobado' }] })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    mostrar({ ...base })
+    expect(screen.queryAllByRole('alert')).toHaveLength(0)
   })
 })

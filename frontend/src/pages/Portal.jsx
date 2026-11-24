@@ -11,6 +11,8 @@ import { pasosDesdeEstado } from '@/components/portal/pasosRuta'
 import RutaSeguimiento from '@/components/portal/RutaSeguimiento'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import useTaller from '@/hooks/useTaller'
+import { formatearFecha, formatearFechaDia } from '@/lib/fechas'
 import { nombreEstado } from '@/services/ordenes'
 import { pagosService, portalService, puedePagar } from '@/services/portal'
 import { pesos } from '@/utils/formato'
@@ -18,11 +20,12 @@ import { pesos } from '@/utils/formato'
 const TONOS_ESTADO = { listo: 'ok', entregado: 'ok', cancelado: 'peligro', pendiente: 'neutro' }
 const ACENTOS_ESTADO = { listo: 'ok', entregado: 'ok', cancelado: 'danger', pendiente: 'neutro' }
 
-function fecha(iso) {
-  return iso ? new Date(iso).toLocaleDateString('es-AR') : '—'
-}
+const fecha = formatearFecha
+// La entrega estimada es un día elegido por el taller (se guarda como
+// datetime): se muestra el día tal cual, sin conversión de zona.
+const fechaEstimada = formatearFechaDia
 
-function TarjetaOrden({ orden, pagando, onPagar }) {
+function TarjetaOrden({ orden, pagando, onPagar, pagoOnline }) {
   const pagable = puedePagar(orden)
   const pasos = pasosDesdeEstado(orden.estado)
   return (
@@ -34,7 +37,7 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
       >
         <p className="relative mt-1 text-xs text-muted">
           {orden.vehiculo_marca && `${orden.vehiculo_marca} · `}Ingresó el {fecha(orden.fecha_ingreso)}
-          {orden.fecha_estimada_entrega && ` · Entrega estimada ${fecha(orden.fecha_estimada_entrega)}`}
+          {orden.fecha_estimada_entrega && ` · Entrega estimada ${fechaEstimada(orden.fecha_estimada_entrega)}`}
         </p>
         <Chips className="items-center">
           <Patente valor={orden.vehiculo_patente} tamano="sm" />
@@ -59,9 +62,13 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
       <FichaPie>
         <FichaLink to={`/portal/orden/${orden.id}`}>Ver seguimiento</FichaLink>
         {pagable ? (
-          <Button cargando={pagando} onClick={() => onPagar(orden)} className="ml-auto !py-2">
-            Pagar {pesos(orden.costo_final)}
-          </Button>
+          pagoOnline ? (
+            <Button cargando={pagando} onClick={() => onPagar(orden)} className="ml-auto !py-2">
+              Pagar {pesos(orden.costo_final)}
+            </Button>
+          ) : (
+            <span className="ml-auto px-3 text-xs text-muted">Pagás en el taller</span>
+          )
         ) : (
           !orden.pagada && <span className="ml-auto px-3 text-xs text-muted">Se habilita el pago cuando esté lista</span>
         )}
@@ -70,7 +77,7 @@ function TarjetaOrden({ orden, pagando, onPagar }) {
   )
 }
 
-function TarjetaVehiculo({ vehiculo, seleccionado, onAlternar, ordenPagable, pagando, onPagar }) {
+function TarjetaVehiculo({ vehiculo, seleccionado, onAlternar, ordenPagable, pagando, onPagar, pagoOnline }) {
   const activa = vehiculo.orden_activa
   const lista = activa?.estado === 'listo'
   return (
@@ -119,15 +126,18 @@ function TarjetaVehiculo({ vehiculo, seleccionado, onAlternar, ordenPagable, pag
         >
           {seleccionado ? 'Ocultar órdenes' : 'Ver órdenes'}
         </Button>
-        {ordenPagable && (
-          <Button
-            cargando={pagando}
-            className="ml-auto !py-2"
-            onClick={() => onPagar(ordenPagable)}
-          >
-            Pagar {pesos(ordenPagable.costo_final)}
-          </Button>
-        )}
+        {ordenPagable &&
+          (pagoOnline ? (
+            <Button
+              cargando={pagando}
+              className="ml-auto !py-2"
+              onClick={() => onPagar(ordenPagable)}
+            >
+              Pagar {pesos(ordenPagable.costo_final)}
+            </Button>
+          ) : (
+            <span className="ml-auto px-3 text-xs text-muted">Pagás en el taller</span>
+          ))}
       </FichaPie>
     </Ficha>
   )
@@ -147,6 +157,10 @@ const ORDEN_ETAPAS = [
 
 export default function Portal() {
   const { token, usuario } = useAuth()
+  const { taller } = useTaller()
+  // El cobro online depende del taller (docs/Plataforma.md, P3): si el dato
+  // no está (cargando o error) se conserva el comportamiento de siempre.
+  const pagoOnline = taller?.pago_online !== false
   const [pagandoId, setPagandoId] = useState(null)
   const [errorPago, setErrorPago] = useState('')
   const [vehiculoSelId, setVehiculoSelId] = useState(null)
@@ -209,6 +223,7 @@ export default function Portal() {
         ordenPagable={ordenPagable}
         pagando={ordenPagable ? pagandoId === ordenPagable.id : false}
         onPagar={pagar}
+        pagoOnline={pagoOnline}
       />
     )
   }
@@ -219,6 +234,12 @@ export default function Portal() {
         titulo={`Hola, ${usuario?.nombre ?? 'cliente'}`}
         descripcion="Seguí el estado de tus vehículos en el taller y pagá online cuando estén listos."
       />
+
+      {taller?.mensaje_portal?.trim() && (
+        <div className="mt-4">
+          <Alert tipo="info">{taller.mensaje_portal}</Alert>
+        </div>
+      )}
 
       {errorPago && (
         <div className="mt-4">
@@ -236,7 +257,8 @@ export default function Portal() {
             <section className="mt-6">
               <h2 className="font-semibold">Listos para retirar</h2>
               <p className="text-sm text-muted">
-                Ya podés pasar a buscarlos — o pagar online desde sus órdenes.
+                Ya podés pasar a buscarlos
+                {pagoOnline ? ' — o pagar online desde sus órdenes.' : '.'}
               </p>
               <ul className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {listos.map(tarjetaVehiculo)}
@@ -294,6 +316,7 @@ export default function Portal() {
                       orden={orden}
                       pagando={pagandoId === orden.id}
                       onPagar={pagar}
+                      pagoOnline={pagoOnline}
                     />
                   ))}
                 </ul>
@@ -307,6 +330,19 @@ export default function Portal() {
             Tocá «Ver órdenes» en un vehículo para ver sus trabajos por etapa.
           </p>
         )
+      )}
+
+      {(taller?.telefono || (taller?.hora_apertura && taller?.hora_cierre)) && (
+        <footer className="mt-10 border-t border-graphite-700 pt-4 text-sm text-muted">
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {taller?.telefono && <span>Tel: {taller.telefono}</span>}
+            {taller?.hora_apertura && taller?.hora_cierre && (
+              <span>
+                Horario de atención: {taller.hora_apertura} a {taller.hora_cierre}
+              </span>
+            )}
+          </p>
+        </footer>
       )}
     </div>
   )

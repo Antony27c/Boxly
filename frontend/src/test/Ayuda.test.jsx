@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Ayuda from '@/pages/Ayuda'
+import { PREGUNTAS } from '@/components/ayuda/preguntas'
 
 const auth = vi.hoisted(() => ({
   token: 'tok',
@@ -77,7 +78,7 @@ describe('Ayuda', () => {
     expect(
       screen.queryByRole('button', { name: /agendo un turno/i }),
     ).not.toBeInTheDocument()
-    expect(preguntas()).toHaveLength(3)
+    expect(preguntas()).toHaveLength(4)
 
     // "Todas" vuelve a mostrar todo.
     fireEvent.click(screen.getByRole('button', { name: 'Todas' }))
@@ -155,6 +156,44 @@ describe('Ayuda', () => {
     ).toBeInTheDocument()
   })
 
+  it('muestra el link a términos solo para el administrador del taller', () => {
+    montar()
+    expect(
+      screen.getByRole('link', { name: /términos y privacidad/i }),
+    ).toHaveAttribute('href', '/terminos')
+  })
+
+  it('no muestra el link a términos para otros roles', () => {
+    auth.usuario = { id: 3, nombre: 'Ana', apellido: 'Gómez', rol: 'recepcion' }
+    montar()
+    expect(
+      screen.queryByRole('link', { name: /términos y privacidad/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('la respuesta del Dashboard la ven y nombran recepción y administración', () => {
+    // /dashboard es de ROLES_MOSTRADOR: recepción también entra (no es solo admin).
+    auth.usuario = { id: 3, nombre: 'Ana', apellido: 'Gómez', rol: 'recepcion' }
+    montar('/ayuda?p=dashboard')
+
+    expect(screen.getByText(/números del taller, para recepción y administración/i)).toBeInTheDocument()
+  })
+
+  it('como mecánico la ayuda ya no menciona "Proponer cobro"', () => {
+    auth.usuario = { id: 9, nombre: 'Mario', apellido: 'Sosa', rol: 'mecanico' }
+    montar()
+
+    expect(screen.queryByText(/proponer cobro/i)).not.toBeInTheDocument()
+  })
+
+  it('como mecánico la ayuda explica que no carga precios y las líneas quedan a cotizar', () => {
+    auth.usuario = { id: 9, nombre: 'Mario', apellido: 'Sosa', rol: 'mecanico' }
+    montar('/ayuda?p=trabajos-repuestos')
+
+    expect(screen.getByText(/no carga precios/i)).toBeInTheDocument()
+    expect(screen.getByText(/queda "A cotizar" hasta que recepción la cotiza/i)).toBeInTheDocument()
+  })
+
   it('muestra primero las preguntas del rol del usuario', () => {
     auth.usuario = { id: 3, nombre: 'Ana', apellido: 'Gómez', rol: 'recepcion' }
     montar()
@@ -164,5 +203,43 @@ describe('Ayuda', () => {
     const idxGeneral = lista.findIndex((b) => /cierro sesión/i.test(b.textContent))
     expect(idxPersonal).toBeGreaterThanOrEqual(0)
     expect(idxGeneral).toBeGreaterThan(idxPersonal)
+  })
+
+  it('no quedan textos de la oferta vieja: ni "30 días" de prueba ni transferencias para el abono', () => {
+    // "Últimos 30 días" es un período del Dashboard, no la prueba vieja.
+    const textos = PREGUNTAS.flatMap((p) => [p.pregunta, ...p.respuesta]).map((t) =>
+      t.replace(/últimos 30 días/gi, ''),
+    )
+    for (const texto of textos) {
+      expect(texto).not.toMatch(/30 días/i)
+      expect(texto).not.toMatch(/Básico|Taller\+|taller_plus/)
+    }
+    // El abono de Boxly no se paga por transferencia; el pago en el local del
+    // cliente del taller sí puede ser por transferencia.
+    const delAbono = PREGUNTAS.map((p) => [p.pregunta, ...p.respuesta].join(' ')).filter((t) =>
+      /suscripci|abono|\bplan(es)?\b|demo|piloto/i.test(t),
+    )
+    expect(delAbono.length).toBeGreaterThan(0)
+    for (const texto of delAbono) {
+      expect(texto).not.toMatch(/transferencia/i)
+    }
+    const pagoLocal = PREGUNTAS.find((p) => p.id === 'pago-local')
+    expect(pagoLocal.respuesta.join(' ')).toMatch(/efectivo, tarjeta, transferencia u otro/)
+  })
+
+  it('explica la demo de 14 días del plan Pro y el débito automático de Mercado Pago', () => {
+    montar('/ayuda?p=demo')
+    expect(screen.getByText(/plan Pro durante 14 días/i)).toBeInTheDocument()
+    expect(screen.getByText(/3 días siguientes al vencimiento/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /qué es la suscripción/i }))
+    expect(screen.getByText(/débito automático de Mercado Pago/i)).toBeInTheDocument()
+  })
+
+  it('el administrador ve qué trae cada plan, el adicional ARCA y qué es un piloto', () => {
+    montar()
+    for (const nombre of [/qué trae cada plan/i, /adicional ARCA/i, /qué es un piloto/i]) {
+      expect(screen.getByRole('button', { name: nombre })).toBeInTheDocument()
+    }
   })
 })

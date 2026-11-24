@@ -29,6 +29,7 @@ export const PREGUNTAS = [
     respuesta: [
       'Si sos administrador, en la pantalla Hoy vas a ver la tarjeta "Primeros pasos del taller": es la lista de lo básico para configurar una sola vez — cargar los mecánicos, sus horarios, los repuestos que más se usan, un usuario de recepción, el primer cliente con su vehículo y la primera orden.',
       'Cada paso tiene su botón que te lleva directo a la pantalla correspondiente. Cuando la configuración está completa la tarjeta desaparece sola, y también la podés cerrar antes con "Ya lo configuré".',
+      'No hay prueba abierta: el taller arranca con la demo de 14 días del plan Pro, que Boxly otorga después de aprobar la solicitud hecha desde la página de Boxly. El plan y los pagos se manejan en Suscripción (solo administrador).',
     ],
     enlace: { a: '/hoy', texto: 'Hoy' },
   },
@@ -77,7 +78,7 @@ export const PREGUNTAS = [
     pregunta: '¿Cómo busco un cliente o un vehículo?',
     respuesta: [
       'En Clientes hay un buscador por nombre, DNI, teléfono o correo. Con la búsqueda activa revisa todo el listado, no solo la página visible.',
-      'En Vehículos buscás por patente o modelo y podés filtrar por cliente con el desplegable. Cada tarjeta tiene "Ver ficha" para ver toda la información y el historial de reparaciones.',
+      'En Vehículos buscás por patente o modelo y podés filtrar por cliente con el desplegable. Cada tarjeta tiene "Ver ficha" para ver toda la información y el historial de órdenes del vehículo.',
     ],
     enlace: { a: '/vehiculos', texto: 'Vehículos' },
   },
@@ -107,12 +108,24 @@ export const PREGUNTAS = [
     id: 'ficha-vehiculo',
     categoria: 'recepcion',
     roles: ['mostrador', 'mecanico'],
-    pregunta: '¿Dónde veo la ficha y el historial de un vehículo?',
+    pregunta: '¿Dónde veo la ficha y el historial de órdenes de un vehículo?',
     respuesta: [
       'En Vehículos, el botón "Ver ficha" de cada tarjeta muestra patente, marca, modelo, año, color, VIN, observaciones y quién es el titular.',
-      'Más abajo está el "Historial de reparaciones": las órdenes de ese auto con su fecha, etapa y total.',
+      'Más abajo está el historial de órdenes del vehículo: las órdenes de ese auto con su fecha, etapa y total.',
     ],
     enlace: { a: '/vehiculos', texto: 'Vehículos' },
+  },
+  {
+    id: 'whatsapp-manual',
+    categoria: 'recepcion',
+    roles: ['mostrador'],
+    pregunta: '¿Cómo le mando un WhatsApp al cliente?',
+    respuesta: [
+      'Con el botón "WhatsApp": Boxly arma el mensaje y abre tu WhatsApp (la app o WhatsApp Web) con el texto listo para el teléfono del cliente. Lo revisás y lo mandás vos; Boxly no manda nada solo.',
+      'En la orden, el mensaje cambia según la etapa: auto recibido, trabajos a cotizar o auto listo para retirar, con el enlace al portal. En Turnos es la confirmación si el turno está pendiente o el recordatorio si ya está confirmado. En Clientes es un saludo del taller para escribir lo que necesites.',
+      'Si el cliente no tiene teléfono o le falta el código de área, el botón queda apagado y explica por qué: corregí el teléfono en los datos del cliente. Los avisos automáticos por WhatsApp todavía no existen.',
+    ],
+    enlace: { a: '/turnos', texto: 'Turnos' },
   },
 
   // ---------- Órdenes y etapas ----------
@@ -124,7 +137,7 @@ export const PREGUNTAS = [
     respuesta: [
       'Por ingresar: el trabajo está anotado pero el auto todavía no entró. Lo pasa a Ingresado recepción al recibir el vehículo.',
       'Ingresado: el auto ya está en el taller. Recepción le asigna mecánico y el mecánico arranca con "Empezar diagnóstico".',
-      'En diagnóstico: el mecánico revisa la falla y arma el presupuesto; puede pasar a "Esperando repuestos" si falta algo.',
+      'En diagnóstico: el mecánico revisa la falla y carga los trabajos del vehículo (los precios los cotiza recepción); puede pasar a "Esperando repuestos" si falta algo.',
       'Esperando repuestos: el trabajo está frenado hasta que llegue el repuesto; el mecánico lo marca "Listo" cuando retoma.',
       'Listo: el trabajo terminó. Recepción emite el cobro, el administrador lo aprueba y recepción entrega el auto.',
       'Entregado: el cliente retiró el vehículo; la orden queda cerrada. Cancelado: la orden se anuló y no se hace el trabajo.',
@@ -159,8 +172,21 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Cómo cargo los trabajos y repuestos de una orden? ¿Qué pasa con el stock?',
     respuesta: [
-      'En la página de la orden, pestaña "Trabajo": elegís el "Tipo de línea" (Trabajo / mano de obra o Repuesto del inventario), completás la descripción o buscás el repuesto, la cantidad y el precio (en los repuestos se completa solo con el precio del inventario, pero podés cambiarlo) y tocás "Agregar línea".',
+      'En la página de la orden, pestaña "Trabajo": elegís el "Tipo de línea" (Trabajo / mano de obra o Repuesto del inventario), completás la descripción o buscás el repuesto, la cantidad y tocás "Agregar línea". Recepción y administración también cargan el precio (en los repuestos se completa solo con el del inventario, pero se puede cambiar).',
+      'El mecánico no carga precios: el repuesto toma el precio del inventario y la mano de obra queda "A cotizar" hasta que recepción la cotiza con el botón "Cotizar" de la misma línea.',
       'Cada repuesto que se usa descuenta stock del inventario solo. Las líneas se pueden quitar con "Quitar" mientras la orden no esté Entregada ni Cancelada, y el cliente las ve en su portal dentro de "Trabajos y repuestos".',
+    ],
+    enlace: { a: '/ordenes', texto: 'Órdenes' },
+  },
+  {
+    id: 'lineas-a-cotizar',
+    categoria: 'ordenes',
+    roles: ['mostrador', 'mecanico'],
+    pregunta: '¿Qué es una línea "a cotizar" y quién le pone precio?',
+    respuesta: [
+      'Es una línea de la orden sin precio: cuando el mecánico carga mano de obra queda "a cotizar" (el repuesto, en cambio, toma el precio del inventario solo).',
+      'Recepción y administración le ponen precio con el botón "Cotizar" de la misma línea, en la pestaña "Trabajo" de la orden.',
+      'Mientras queden líneas a cotizar el total es parcial ("Total parcial · N a cotizar") y el cobro no se puede emitir; en el portal del cliente esas líneas se ven como "A cotizar", nunca como $0.',
     ],
     enlace: { a: '/ordenes', texto: 'Órdenes' },
   },
@@ -192,7 +218,7 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Qué es la pantalla Hoy?',
     respuesta: [
-      'Para recepción y administración es el resumen del día: los turnos de hoy, los autos listos para entregar, los que no tienen mecánico asignado, los cobros por aprobar (solo administrador) y los repuestos con stock bajo. Desde acá también están los botones "Recibir un auto" y "Cliente nuevo".',
+      'Para recepción y administración es el resumen del día: los turnos de hoy, los autos listos para entregar, los que no tienen mecánico asignado, los cobros por aprobar (solo administrador), los avisos de stock mínimo sin leer y los repuestos con stock bajo. Desde acá también están los botones "Recibir un auto" y "Cliente nuevo".',
       'Para el mecánico la misma pantalla es "Mi trabajo": solo ve sus órdenes abiertas, ordenadas por lo que hay que hacer primero, con el botón de la acción que le toca.',
     ],
     enlace: { a: '/hoy', texto: 'Hoy' },
@@ -203,7 +229,7 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Para qué sirven los filtros del tablero de órdenes?',
     respuesta: [
-      'Los botones de arriba filtran las tarjetas: "Mías" (solo para el mecánico, sus órdenes), "Sin asignar", "Listas para entregar" (las que ya se pueden retirar) y "Cobro pendiente" (las que esperan aprobación de cobro).',
+      'Los botones de arriba filtran las tarjetas: "Mías" (solo para el mecánico, sus órdenes), "Sin asignar", "Listas para entregar" (las que ya se pueden retirar) y, solo para administración y recepción, "Cobro pendiente" (las que esperan aprobación de cobro; el mecánico no ve ese botón porque no maneja cobros).',
       '"Ver cerradas" muestra las órdenes Entregadas y Canceladas. El buscador filtra por patente, cliente, trabajo o mecánico, y en celular cada etapa es una pestaña.',
     ],
     enlace: { a: '/ordenes', texto: 'Órdenes' },
@@ -214,7 +240,7 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Qué es el botón que aparece en cada orden?',
     respuesta: [
-      'Es la "acción principal": lo que te toca hacer ahora según la etapa de la orden y tu rol. Puede ser "Recibir auto", "Asignar mecánico", "Empezar diagnóstico", "Marcar listo", "Esperando repuestos", "Cargar trabajo", "Emitir cobro", "Proponer cobro", "Revisar cobro", "Aprobar cobro" o "Entregar".',
+      'Es la "acción principal": lo que te toca hacer ahora según la etapa de la orden y tu rol. Puede ser "Recibir auto", "Asignar mecánico", "Empezar diagnóstico", "Marcar listo", "Esperando repuestos", "Cargar trabajo", "Emitir cobro", "Revisar cobro", "Aprobar cobro" o "Entregar". El mecánico no ve acciones de cobro: eso lo maneja recepción.',
       'Tocar el botón abre la orden con ese paso ya iniciado; tocar el resto de la tarjeta abre la orden completa.',
     ],
     enlace: { a: '/ordenes', texto: 'Órdenes' },
@@ -228,7 +254,7 @@ export const PREGUNTAS = [
     pregunta: '¿Qué es "Mi trabajo" para el mecánico?',
     respuesta: [
       'Es la pantalla Hoy vista por el mecánico: lista solo sus órdenes abiertas, ordenadas por prioridad (primero las que hay que cerrar: las listas sin cobro, después las que están en diagnóstico).',
-      'Cada fila tiene el botón con la acción que le toca —"Empezar diagnóstico", "Marcar listo", "Esperando repuestos", "Proponer cobro", "Cargar trabajo"— y tocarla abre la orden. En el menú ve Hoy, Órdenes, Inventario y Horarios ("Mi horario").',
+      'Cada fila tiene el botón con la acción que le toca —"Empezar diagnóstico", "Marcar listo", "Esperando repuestos", "Cargar trabajo"— y tocarla abre la orden. No ve acciones de cobro: los precios y el cobro los maneja recepción. En el menú ve Hoy, Órdenes, Inventario y Horarios ("Mi horario").',
     ],
     enlace: { a: '/hoy', texto: 'Hoy' },
   },
@@ -251,9 +277,20 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Cómo funciona el cobro de una orden?',
     respuesta: [
-      'El mecánico propone el monto: con el botón "Proponer cobro" de la orden o completando el monto al pasarla a "Listo".',
-      'Recepción lo revisa y lo emite: "Emitir cobro", "Enviar cobro al cliente" o "Aprobar y enviar al cliente" según el caso. Si el mecánico propuso un monto, queda pendiente hasta que administración o recepción lo apruebe con "Aprobar cobro".',
-      'Cuando el cobro está aprobado, el cliente lo ve en su portal y paga online con Mercado Pago. El estado de cada paso se ve en la pestaña "Cobro" de la orden.',
+      'La pestaña "Cobro" de la orden muestra el estado y el monto. Recepción lo emite con "Emitir cobro" o "Enviar cobro al cliente"; si quedó pendiente, administración lo aprueba con "Aprobar cobro".',
+      'El mecánico no propone ni emite cobros. Las líneas de trabajo que quedaron "A cotizar" las cotiza recepción con el botón "Cotizar" de la pestaña "Trabajo", y mientras haya alguna el cobro no se puede emitir.',
+      'Cuando el cobro está aprobado, el cliente paga en el local y recepción registra el pago con su medio. Si el taller tiene el cobro online habilitado, el cliente también puede pagarlo desde su portal con Mercado Pago.',
+    ],
+    enlace: { a: '/ordenes', texto: 'Órdenes' },
+  },
+  {
+    id: 'pago-local',
+    categoria: 'cobros',
+    roles: ['mostrador'],
+    pregunta: '¿Cómo registro un pago en el local?',
+    respuesta: [
+      'En la pestaña "Cobro" de la orden, con el cobro aprobado, tocá "Registrar pago en el local". Elegí el medio de pago (efectivo, tarjeta, transferencia u otro); el monto es el del cobro aprobado.',
+      'Si querés, anotá una referencia —por ejemplo el número de operación o de comprobante— y confirmá con "Registrar pago". La orden queda "Pagada" y dice cómo se pagó, por ejemplo "Pagada en el taller (efectivo)".',
     ],
     enlace: { a: '/ordenes', texto: 'Órdenes' },
   },
@@ -296,7 +333,7 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Y si hay que cambiar el monto del cobro?',
     respuesta: [
-      'Mientras el cobro no esté pagado se puede corregir: desde la pestaña "Cobro" o el botón de la orden, recepción guarda el "nuevo monto" y el mecánico puede "Actualizar propuesta" si el suyo estaba pendiente de aprobación.',
+      'Lo corrige recepción desde la pestaña "Cobro" o el botón de la orden, guardando el "nuevo monto"; el mecánico no emite ni corrige cobros.',
       'Una vez que el cliente pagó, el monto queda cerrado y la orden solo falta entregarla.',
     ],
     enlace: { a: '/ordenes', texto: 'Órdenes' },
@@ -383,6 +420,18 @@ export const PREGUNTAS = [
     enlace: { a: '/inventario', texto: 'Inventario' },
   },
   {
+    id: 'avisos-stock',
+    categoria: 'inventario',
+    roles: ['mostrador'],
+    pregunta: '¿Qué son los avisos de stock mínimo?',
+    respuesta: [
+      'Cuando un repuesto baja a su stock mínimo o menos —al usarlo en una orden o al corregir el stock—, Boxly deja un aviso con el repuesto, el stock que quedó y la fecha. Aparece en Hoy, arriba de todo, y en Inventario un indicador muestra cuántos hay sin leer.',
+      'Tocá "Entendido" para marcarlo como leído. Hay un solo aviso cada vez que el repuesto cruza el mínimo: cuando vuelve a superarlo, el próximo cruce avisa de nuevo. Con el mínimo en 0 no hay avisos.',
+      'El aviso es solo dentro de Boxly (no llega por correo ni por WhatsApp) y lo ven recepción y el administrador.',
+    ],
+    enlace: { a: '/hoy', texto: 'Hoy' },
+  },
+  {
     id: 'desactivar-repuesto',
     categoria: 'inventario',
     roles: ['mostrador'],
@@ -407,13 +456,119 @@ export const PREGUNTAS = [
     enlace: { a: '/usuarios', texto: 'Usuarios' },
   },
   {
+    id: 'limite-personal',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Cuántos usuarios puedo tener en el taller?',
+    respuesta: [
+      'Depende del plan de suscripción: cada plan define cuántos usuarios del personal entran (los clientes del portal no cuentan). Lo ves en Suscripción y también como contador en Usuarios ("N de M del personal en uso").',
+      'Al llegar al límite el alta de personal queda bloqueada con el aviso "Llegaste al límite de tu plan" y el enlace "Ver planes"; para sumar más hay que pasar a un plan mayor. Ojo: reactivar un usuario también suma personal, así que con el plan lleno no se puede.',
+    ],
+    enlace: { a: '/suscripcion', texto: 'Suscripción' },
+  },
+  {
     id: 'que-puede-rol',
     categoria: 'cuenta',
     pregunta: '¿Qué puede hacer cada rol?',
     respuesta: [
-      'Administrador: todo lo del taller más el Dashboard (productividad y finanzas), la pantalla Usuarios y la aprobación de cobros.',
-      'Recepción: el mostrador —clientes, vehículos, turnos, órdenes, inventario, horarios y emisión de cobros—. Mecánico: "Mi trabajo" con sus órdenes, cambios de etapa, carga de trabajos y propuesta de cobro; ve inventario y su horario.',
+      'Administrador: todo lo de recepción más la pantalla Usuarios, el Panel del taller (datos, auditoría y respaldo), la Suscripción y el acceso de soporte; además aprueba los cobros pendientes.',
+      'Recepción: el mostrador —clientes, vehículos, turnos, órdenes, inventario, horarios, el Dashboard y la emisión de cobros—.',
+      'Mecánico: "Mi trabajo" con sus órdenes asignadas, cambios de etapa con comentario y fotos, carga de trabajos y repuestos sin precio (la mano de obra queda a cotizar), e inventario y su horario en solo lectura.',
       'Cliente: solo su portal, para ver el estado de sus vehículos y pagar online.',
+    ],
+  },
+  {
+    id: 'acceso-soporte',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Qué es el acceso de soporte de Boxly?',
+    respuesta: [
+      'Boxly, la empresa, no ve los datos de tus clientes. Si alguna vez necesita entrar a tu taller para ayudarte, vos se lo permitís desde Configuración → "Acceso de soporte": elegís la duración (1, 4, 24 o 72 horas) y un motivo.',
+      'Mientras dura, Boxly entra en "modo soporte": una franja de aviso arriba de todo, solo lectura (no puede cambiar nada) y los datos personales enmascarados (por ejemplo el DNI se ve ****5678).',
+      'Todo lo que consulta queda registrado: en la misma sección ves el historial de accesos y la actividad de soporte. Podés revocar el acceso cuando quieras y, si vence, se corta solo.',
+    ],
+    enlace: { a: '/configuracion', texto: 'Configuración' },
+  },
+  {
+    id: 'suscripcion',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Qué es la Suscripción y cómo cambio de plan?',
+    respuesta: [
+      'En Suscripción ves el estado del taller (al día, en gracia, solo lectura o suspendida), el plan actual con su precio por mes, cuántos del personal están en uso y el próximo cobro.',
+      'Abajo comparás los planes y "Pasar a este plan" pide confirmación: el precio nuevo rige desde el próximo período. Si tu personal activo supera el límite del plan elegido, Boxly avisa y no deja hacer el cambio.',
+      'El abono se paga con el débito automático de Mercado Pago: con un botón lo activás para que Mercado Pago debite el plan cada mes, o lo cancelás cuando quieras. Debajo está el historial de pagos. Si el débito automático todavía no está habilitado, escribinos.',
+      'La cuenta de Mercado Pago con la que pagás el abono es aparte de la que usa tu taller para cobrarles a sus clientes: nunca se mezclan cuentas ni fondos.',
+    ],
+    enlace: { a: '/suscripcion', texto: 'Suscripción' },
+  },
+  {
+    id: 'que-trae-cada-plan',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Qué trae cada plan?',
+    respuesta: [
+      'Los planes no tienen las mismas funciones: Esencial cubre la gestión diaria y los superiores suman automatización. Además, cada plan define cuánto personal entra.',
+      'Esencial: clientes, vehículos, turnos, órdenes con fotos, historial de órdenes del vehículo, inventario con avisos de stock mínimo, cobros con registro del pago en el local, métricas básicas, portal del cliente, avisos por email y WhatsApp manual (Boxly arma el mensaje y el taller lo manda desde su teléfono).',
+      'Pro: todo Esencial, más avisos automáticos por WhatsApp y Telegram de turnos y estados, y facturación electrónica ARCA incluida, con un cupo mensual de facturas.',
+      'Profesional: todo Pro, más facturas ARCA por mes, recordatorios automáticos de service y personalización de marca.',
+      'Los precios de cada plan los ves en Suscripción.',
+    ],
+    enlace: { a: '/suscripcion', texto: 'Suscripción' },
+  },
+  {
+    id: 'adicional-arca',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Qué es el adicional ARCA?',
+    respuesta: [
+      'La facturación electrónica ARCA sirve para emitir la factura de una reparación desde Boxly, con una acción y tu confirmación. No es para cargar facturas de proveedores ni para emitir facturas sin que nadie intervenga.',
+      'Pro y Profesional la incluyen, con distinto cupo mensual de facturas. En Esencial es un pack aparte que se paga por separado, solo si lo necesitás; el precio todavía no está definido.',
+    ],
+  },
+  {
+    id: 'demo',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Qué pasa cuando termina la demo?',
+    respuesta: [
+      'La demo es el plan Pro durante 14 días y, al vencer, no tiene días de gracia.',
+      'Al entrar después del vencimiento, el administrador ve la pantalla "Gracias por probar Boxly" con una encuesta corta: qué te gustó, qué mejorarías, sugerencias y si pensás contratar. Es opcional, se puede saltear y se responde una sola vez por taller. Después pasás a Suscripción para elegir un plan.',
+      'Durante los 3 días siguientes al vencimiento el taller queda en solo lectura: se puede mirar todo, pero no registrar nada nuevo. Pasados esos 3 días sin pago queda suspendido: nadie ve nada, y el administrador solo puede entrar a Suscripción para pagar.',
+      'Si pagás un plan en cualquier momento, el taller vuelve a funcionar al instante.',
+    ],
+    enlace: { a: '/suscripcion', texto: 'Suscripción' },
+  },
+  {
+    id: 'piloto',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Qué es un piloto?',
+    respuesta: [
+      'Es un acceso sin cargo que Boxly le da a talleres elegidos, con el plan y la fecha de fin que fija en cada caso. No es gratis para siempre: tiene un vencimiento.',
+      'Para seguir usando Boxly después del piloto, elegís un plan y lo pagás desde Suscripción.',
+    ],
+    enlace: { a: '/suscripcion', texto: 'Suscripción' },
+  },
+  {
+    id: 'suscripcion-vencida',
+    categoria: 'cuenta',
+    roles: ['mostrador', 'mecanico'],
+    pregunta: '¿Qué pasa si se vence el pago de la suscripción?',
+    respuesta: [
+      'Los primeros 7 días el taller sigue funcionando con un aviso ámbar para regularizar antes del corte.',
+      'Del día 8 al 30 el taller queda en "solo lectura": el personal y los clientes solo pueden mirar, no registrar nada nuevo; el administrador igual puede entrar a Suscripción para pagar.',
+      'A partir del día 31 queda "suspendida": solo el administrador entra, y solo a Suscripción para regularizar; el resto del personal ve un aviso para hablar con el administrador. Al pagar, todo vuelve a la normalidad.',
+    ],
+  },
+  {
+    id: 'terminos',
+    categoria: 'cuenta',
+    roles: ['admin'],
+    pregunta: '¿Por qué me pide aceptar los términos y privacidad?',
+    respuesta: [
+      'Boxly es una plataforma con varios talleres: los términos y la política de privacidad regulan el servicio. La primera vez que entrás como administrador, Boxly te lleva a leerlos y aceptarlos con un botón.',
+      'Se acepta una vez por versión: si Boxly actualiza el texto, te lo vuelve a pedir. El resto del personal y los clientes no ven esa pantalla.',
     ],
   },
   {
@@ -447,17 +602,17 @@ export const PREGUNTAS = [
     categoria: 'cuenta',
     pregunta: '¿Cómo uso Boxly desde el celular?',
     respuesta: [
-      'La pantalla se adapta sola: abajo aparece una barra con las secciones principales y un botón "Más" para el resto (Inventario, Horarios, Dashboard, Usuarios).',
+      'La pantalla se adapta sola: abajo aparece una barra con las secciones principales y un botón "Más" para el resto (según tu rol: Inventario, Horarios, Dashboard, Usuarios, Panel del taller o Suscripción).',
       'En la página de una orden, el botón con la acción que te toca queda fijo abajo para no tener que buscarlo. Todo se usa con el navegador del teléfono, sin instalar nada.',
     ],
   },
   {
     id: 'dashboard',
     categoria: 'cuenta',
-    roles: ['admin'],
+    roles: ['mostrador'],
     pregunta: '¿Qué muestra el Dashboard?',
     respuesta: [
-      'Es la pantalla de números del taller (solo administrador): órdenes cerradas, facturado, tiempo promedio y órdenes en curso por mecánico, con una comparativa que podés cambiar de métrica y ajustar el período (últimos 30 días, este trimestre, últimos 6 meses o fechas a mano).',
+      'Es la pantalla de números del taller, para recepción y administración: órdenes cerradas, facturado, tiempo promedio y órdenes en curso por mecánico, con una comparativa que podés cambiar de métrica y ajustar el período (últimos 30 días, este trimestre, últimos 6 meses o fechas a mano).',
       'Abajo están las finanzas y el "mejor mecánico" del trimestre.',
     ],
     enlace: { a: '/dashboard', texto: 'Dashboard' },
@@ -480,7 +635,7 @@ export const PREGUNTAS = [
     roles: ['cliente'],
     pregunta: '¿Cómo veo el estado de mi auto?',
     respuesta: [
-      'En "Mis órdenes" cada tarjeta muestra la etapa actual, la entrega estimada y el total. Tocá "Ver seguimiento" para ver el recorrido completo: cada etapa por la que pasó, con la descripción y las fotos que subió el taller, más el diagnóstico y los trabajos y repuestos.',
+      'En "Mis órdenes" cada tarjeta muestra la etapa actual, la entrega estimada y el total (si hay trabajos a cotizar, el total es parcial). Tocá "Ver seguimiento" para ver el recorrido completo: cada etapa por la que pasó, con la descripción y las fotos que subió el taller, más el diagnóstico y los trabajos y repuestos.',
       'En "Mis vehículos" también ves el estado de cada auto: si tiene un trabajo en curso te lleva directo a su seguimiento.',
     ],
     enlace: { a: '/portal', texto: 'Mis órdenes' },
@@ -492,6 +647,7 @@ export const PREGUNTAS = [
     pregunta: '¿Cómo pago mi orden?',
     respuesta: [
       'Cuando el taller termina el trabajo y emite el cobro, la orden aparece en "Listas para pagar" con el botón "Pagar" y el monto. Tocándolo te lleva al pago seguro con Mercado Pago.',
+      'Si alguna línea del trabajo dice "A cotizar", el total que ves es parcial y puede cambiar hasta que el taller la cotice. Y si tu taller no cobra online, la orden te avisa "Pagás en el taller" en vez del botón de pago.',
       'Si el pago fue rechazado, la orden avisa "El último intento de pago fue rechazado. Podés intentarlo de nuevo." Cuando el pago se acredita, la orden queda "Pagada" y el taller te entrega el auto.',
     ],
     enlace: { a: '/portal', texto: 'Mis órdenes' },

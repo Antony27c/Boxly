@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { BotonesAccion, ModalAsignarMecanico } from '@/components/ordenes/AccionesOrdenDetalle'
+import { BotonesAccion, ModalAsignarMecanico, WhatsAppOrden } from '@/components/ordenes/AccionesOrdenDetalle'
 import CambioEstado from '@/components/ordenes/CambioEstado'
 import CobroOrden from '@/components/ordenes/CobroOrden'
+import AnularCobro from '@/components/ordenes/AnularCobro'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
 import HistorialOrden from '@/components/ordenes/HistorialOrden'
 import ImagenesOrden from '@/components/ordenes/ImagenesOrden'
@@ -19,8 +20,17 @@ import Patente from '@/components/ui/Patente'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
-import { ROLES_ADMIN, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { accionPrincipal, estadoCobro, ordenesService, proximosEstados } from '@/services/ordenes'
+import { formatearFechaHora, formatearFechaLarga } from '@/lib/fechas'
+import { ROLES_ADMIN, ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
+import {
+  accionVisible,
+  estadoCobro,
+  ordenesService,
+  pagosDuplicados,
+  proximosEstados,
+  textoPagada,
+  textoPagoDuplicado,
+} from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 const TONOS = {
@@ -44,13 +54,9 @@ const ACENTOS = {
   Cancelado: 'danger',
 }
 
-function fechaLegible(fecha) {
-  return new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-}
+// "3 de noviembre de 2026": orden.fecha ya viene como día (YYYY-MM-DD) y la
+// entrega estimada se recorta a su día antes de llamar.
+const fechaLegible = formatearFechaLarga
 
 function renderOpcionLink({ a, texto, className, role, onClick }) {
   return (
@@ -67,6 +73,7 @@ export default function OrdenDetalle() {
   const [parametros, setParametros] = useSearchParams()
   const esMostrador = tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
   const esAdmin = tieneAcceso(ROLES_ADMIN, usuario?.rol)
+  const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
 
   const [aCambiar, setACambiar] = useState(null)
   const [conCobro, setConCobro] = useState(null)
@@ -94,9 +101,9 @@ export default function OrdenDetalle() {
   const [accionIniciada, setAccionIniciada] = useState(false)
   if (quiereAccion && orden && !accionIniciada) {
     setAccionIniciada(true)
-    const inicial = accionPrincipal(orden, usuario?.rol)
+    const inicial = accionVisible(orden, usuario?.rol)
     if (inicial?.tipo === 'etapa') setACambiar({ destino: inicial.destino ?? null })
-    else if (inicial?.tipo === 'cobro') setConCobro(orden)
+    else if (inicial?.tipo === 'cobro' && !inicial.deshabilitada) setConCobro(orden)
     else if (inicial?.tipo === 'asignar') setConAsignar(true)
   }
   useEffect(() => {
@@ -128,8 +135,12 @@ export default function OrdenDetalle() {
     )
   }
 
-  const accion = accionPrincipal(orden, usuario?.rol)
-  const mostrarCobro = estadoCobro(orden) !== null
+  const accion = accionVisible(orden, usuario?.rol)
+  // El mecánico no ve el cobro: no puede emitirlo ni proponerlo (S3).
+  const mostrarCobro = estadoCobro(orden) !== null && !esMecanico
+  // Cobros online duplicados (Q1): la orden ya estaba paga y hay que devolver
+  // la plata a mano por Mercado Pago. Solo lo gestiona el mostrador.
+  const duplicados = esMostrador ? pagosDuplicados(orden) : []
   const pestanas = [
     { id: 'trabajo', texto: 'Trabajo' },
     { id: 'fotos', texto: 'Fotos' },
@@ -192,12 +203,17 @@ export default function OrdenDetalle() {
             {orden.vehiculo_patente && <Patente valor={orden.vehiculo_patente} tamano="lg" />}
             <Chips className="!mt-0">
               <Chip mono>Orden {orden.codigo ?? `#${orden.id}`}</Chip>
-              {orden.pagada && <Chip tono="ok">Pagada</Chip>}
+              {!esMecanico && orden.pagada && <Chip tono="ok">Pagada</Chip>}
             </Chips>
           </div>
           <div className="relative mt-4 hidden sm:block">
             <BotonesAccion accion={accion} onElegir={ejecutarAccion} />
           </div>
+          {esMostrador && (
+            <div className="relative mt-3">
+              <WhatsAppOrden orden={orden} />
+            </div>
+          )}
         </FichaCabecera>
 
         <div className="grid sm:grid-cols-2">
@@ -213,7 +229,7 @@ export default function OrdenDetalle() {
         </div>
 
         <FichaSeccion>
-          <dl className="grid gap-3 py-1 text-sm sm:grid-cols-3">
+          <dl className={`grid gap-3 py-1 text-sm ${esMecanico ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
             <div>
               <dt className="text-muted">Ingreso</dt>
               <dd className="mt-0.5">{orden.fecha ? fechaLegible(orden.fecha) : '—'}</dd>
@@ -226,10 +242,26 @@ export default function OrdenDetalle() {
                   : '—'}
               </dd>
             </div>
-            <div>
-              <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
-              <dd className="mt-0.5 font-semibold">{orden.total ? pesos(orden.total) : 'A presupuestar'}</dd>
-            </div>
+            {/* El mecánico no ve montos (MC1). */}
+            {!esMecanico && (
+              <div>
+                {/* Ya pagada, el encabezado dice cómo se pagó (igual que la pestaña Cobro). */}
+                {estadoCobro(orden) === 'pagada' ? (
+                  <>
+                    <dt className="text-muted">Cobro</dt>
+                    <dd className="mt-0.5 font-semibold text-ok">
+                      {textoPagada(orden.pago_medio)}
+                      {Number(orden.costo_final) > 0 ? ` · ${pesos(orden.costo_final)}` : ''}
+                    </dd>
+                  </>
+                ) : (
+                  <>
+                    <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
+                    <dd className="mt-0.5 font-semibold">{orden.total ? pesos(orden.total) : 'A presupuestar'}</dd>
+                  </>
+                )}
+              </div>
+            )}
           </dl>
         </FichaSeccion>
 
@@ -245,6 +277,16 @@ export default function OrdenDetalle() {
           </FichaSeccion>
         )}
       </Ficha>
+
+      {duplicados.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {duplicados.map((pago, indice) => (
+            <Alert key={pago.id ?? pago.payment_id ?? indice} tipo="warning">
+              {textoPagoDuplicado(pago)}
+            </Alert>
+          ))}
+        </div>
+      )}
 
       <div
         role="tablist"
@@ -278,7 +320,16 @@ export default function OrdenDetalle() {
           aria-labelledby="pestana-trabajo"
           className="mt-6 rounded-box border border-graphite-700 bg-graphite-800 p-5"
         >
-          <DetallesOrden key={version} orden={orden} />
+          {/* Sin cambiar version: las líneas ya se recargaron solas; solo se vuelve a
+              leer la orden (total, líneas a cotizar, cobro) y el seguimiento. */}
+          <DetallesOrden
+            key={version}
+            orden={orden}
+            onCambio={() => {
+              recargar()
+              recargarSeguimiento()
+            }}
+          />
         </div>
       )}
 
@@ -312,9 +363,25 @@ export default function OrdenDetalle() {
           className="mt-6 rounded-box border border-graphite-700 bg-graphite-800 p-5"
         >
           {estadoCobro(orden) === 'pagada' ? (
-            <p className="text-sm text-ok">El cliente ya pagó {pesos(orden.costo_final)}.</p>
+            <p className="text-sm text-ok">
+              {textoPagada(orden.pago_medio)}: {pesos(orden.costo_final)}
+              {orden.pago_fecha && ` · ${formatearFechaHora(orden.pago_fecha)}`}
+            </p>
           ) : (
-            <BannerCobro orden={orden} esMostrador={esMostrador} onAbrir={() => setConCobro(orden)} />
+            <>
+              <BannerCobro orden={orden} esMostrador={esMostrador} onAbrir={() => setConCobro(orden)} />
+              {esMostrador && estadoCobro(orden) === 'aprobado' && (
+                <div className="mt-3 flex justify-end">
+                  <AnularCobro
+                    orden={orden}
+                    onListo={(mensaje) => {
+                      avisar(mensaje)
+                      recargarTodo()
+                    }}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -364,7 +431,7 @@ export default function OrdenDetalle() {
         descripcion={
           esMostrador
             ? 'Revisá el monto y envialo al cliente para que lo pague online.'
-            : 'Proponé el monto a cobrar; administración o recepción lo aprueba.'
+            : 'El cobro lo manejan administración y recepción.'
         }
         ancho="max-w-md"
         onCerrar={() => setConCobro(null)}

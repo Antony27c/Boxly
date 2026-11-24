@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -11,9 +9,13 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.pagos import mercadopago
 from app.core.config import get_settings
+from app.core.mercadopago import VENTANA_FIRMA_SEG, firma_valida, url_de_pago
+from app.db.session import SIN_FILTRO_TALLER, fijar_taller
+from app.models.auditoria import Auditoria
 from app.models.orden import Orden
 from app.models.pago import Pago
-from app.models.usuario import RolUsuario, Usuario
+from app.models.taller import TALLER_PRINCIPAL_ID
+from app.models.usuario import RolUsuario, Usuario, es_admin
 from app.schemas.pago import PagoResponse, PreferenciaPagoResponse
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,18 @@ ESTADOS_MP = {
     "charged_back": "reembolsado",
 }
 RETORNOS = {"success": "aprobado", "failure": "rechazado", "pending": "pendiente"}
+
+
+def pagos_online_configurados() -> bool:
+    """Mercado Pago con token, o el simulador en desarrollo."""
+    settings = get_settings()
+    return bool(settings.mp_access_token) or (settings.environment == "dev" and settings.debug)
+
+
+def cobra_online(taller_id: int) -> bool:
+    # Cobro online solo en el taller principal: los demás talleres todavía no
+    # tienen credenciales propias de Mercado Pago (docs/Plataforma.md, P3).
+    return taller_id == TALLER_PRINCIPAL_ID and pagos_online_configurados()
 
 
 def puede_pagar(orden: Orden) -> bool:
@@ -61,15 +75,19 @@ def _pago_del_usuario(db: Session, usuario: Usuario, pago_id: int) -> Pago:
     return pago
 
 
-def _pago_bloqueado(db: Session, pago_id: int) -> Pago | None:
+def _pago_bloqueado(db: Session, pago_id: int, *, sin_filtro: bool = False) -> Pago | None:
     """Pago con lock de fila para actualizarlo (FOR UPDATE; se ignora en SQLite)."""
-    return db.scalar(select(Pago).where(Pago.id == pago_id).with_for_update())
+    stmt = select(Pago).where(Pago.id == pago_id).with_for_update()
+    if sin_filtro:
+        stmt = stmt.execution_options(**{SIN_FILTRO_TALLER: True})
+    return db.scalar(stmt)
 
 
 def _aplicar_estado(pago: Pago, estado: str, payment_id: str | None) -> None:
     # "aprobado" no vuelve atrás, salvo un reembolso; "reembolsado" es terminal
-    # y solo tiene sentido sobre un pago que llegó a cobrarse.
-    if pago.estado == "reembolsado":
+    # y solo tiene sentido sobre un pago que llegó a cobrarse. "duplicado"
+    # también es terminal: el cobro existe en MP pero la orden ya estaba paga.
+    if pago.estado in ("reembolsado", "duplicado"):
         return
     if pago.estado == "aprobado" and estado != "reembolsado":
         return
@@ -79,6 +97,15 @@ def _aplicar_estado(pago: Pago, estado: str, payment_id: str | None) -> None:
     pago.payment_id = payment_id or pago.payment_id
     if estado == "aprobado":
         pago.fecha_pago = datetime.now(timezone.utc)
+
+
+def marcar_aprobado(pago: Pago, payment_id: str | None = None) -> None:
+    """Deja el pago aprobado y, con él, la orden pagada (`Orden.pagada`).
+
+    Es el mismo camino para el pago online aprobado y para el registrado en el
+    local: fija la fecha del pago, que es la que cuentan las métricas.
+    """
+    _aplicar_estado(pago, "aprobado", payment_id)
 
 
 def _pendiente_vigente(orden: Orden) -> Pago | None:
@@ -101,6 +128,13 @@ def _preferencia_vigente(token: str, pago: Pago) -> dict | None:
 
 def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoResponse:
     orden = _orden_bloqueada_del_usuario(db, usuario, orden_id)
+    # Cobro online solo en el taller principal: los demás talleres todavía no
+    # tienen credenciales propias de Mercado Pago (docs/Plataforma.md, P3).
+    if orden.taller_id != TALLER_PRINCIPAL_ID:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este taller todavía no tiene cobro online",
+        )
     if orden.pagada:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La orden ya está pagada")
     if orden.estado not in PAGABLES:
@@ -114,9 +148,7 @@ def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoR
             detail="La orden todavía no tiene un monto final",
         )
     settings = get_settings()
-    if not settings.mp_access_token and not (
-        settings.environment == "dev" and settings.debug
-    ):
+    if not pagos_online_configurados():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Los pagos online no están configurados",
@@ -160,6 +192,8 @@ def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoR
                     referencia=str(pago.id),
                     back_urls=back_urls,
                     notification_url=notificacion,
+                    # Determinística por pago: el monto de un pago no cambia.
+                    idempotency_key=f"pago-{pago.id}",
                 )
             except mercadopago.MercadoPagoError:
                 db.rollback()
@@ -168,11 +202,20 @@ def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoR
                     detail="No pudimos comunicarnos con Mercado Pago",
                 ) from None
             pago.preference_id = preferencia.get("id")
-        url_pago = (
-            preferencia.get("init_point")
-            or preferencia.get("sandbox_init_point")
-            or back_urls["pending"]
+        url_mp = url_de_pago(
+            preferencia,
+            token=settings.mp_access_token,
+            produccion=settings.environment == "prod",
         )
+        if url_mp is None and settings.environment == "prod":
+            # La preferencia ya existe en MP y queda referenciada por el pago:
+            # se commitea antes de fallar para no dejarla huérfana.
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Mercado Pago no devolvió el link de pago",
+            )
+        url_pago = url_mp or back_urls["pending"]
 
     db.commit()
     db.refresh(pago)
@@ -200,7 +243,49 @@ def _consultar_mp(token: str, payment_id: str) -> dict:
         ) from None
 
 
-def _actualizar_desde_mp(pago: Pago, info: dict, payment_id: str) -> None:
+def _marcar_duplicado(
+    db: Session, pago: Pago, orden: Orden, mp_id: str, origen: str,
+    *, motivo: str = "la orden ya estaba paga",
+) -> None:
+    """El cobro online llegó aprobado pero la orden no puede acreditarlo
+    (ya estaba paga, o el cobro se anuló después — F4b): no se aprueba —
+    queda 'duplicado' para que el taller devuelva la plata a mano, con una
+    fila en su auditoría."""
+    logger.error(
+        "Pago %s de la orden %s: Mercado Pago aprobó el cobro %s pero %s; "
+        "queda 'duplicado' para devolución manual",
+        pago.id,
+        orden.id,
+        mp_id,
+        motivo,
+    )
+    pago.estado = "duplicado"
+    pago.payment_id = mp_id or pago.payment_id
+    ruta = (
+        "/api/v1/pagos/webhook"
+        if origen == "webhook"
+        else f"/api/v1/pagos/{pago.id}/confirmar"
+    )
+    db.add(
+        Auditoria(
+            taller_id=pago.taller_id,
+            soporte=False,
+            metodo="POST",
+            ruta=ruta,
+            entidad="pago",
+            entidad_id=pago.id,
+            estado_http=200,
+            detalle=(
+                f"Pago online {mp_id} aprobado en Mercado Pago pero {motivo} "
+                f"({orden.codigo}): marcado 'duplicado' para devolución manual"
+            )[:500],
+        )
+    )
+
+
+def _actualizar_desde_mp(
+    db: Session, pago: Pago, info: dict, payment_id: str, *, origen: str
+) -> None:
     estado = ESTADOS_MP.get(info.get("status"), "pendiente")
     try:
         cobrado = Decimal(str(info.get("transaction_amount")))
@@ -217,7 +302,33 @@ def _actualizar_desde_mp(pago: Pago, info: dict, payment_id: str) -> None:
             esperado,
         )
         estado = "rechazado"
-    _aplicar_estado(pago, estado, str(info.get("id") or payment_id))
+    mp_id = str(info.get("id") or payment_id)
+    if estado == "aprobado" and pago.estado in ("pendiente", "rechazado"):
+        # Lock de la orden: el chequeo de "ya está paga" queda serializado con
+        # el pago local y con otros webhooks de la misma orden (en Postgres;
+        # en SQLite el FOR UPDATE se ignora).
+        orden = db.scalar(
+            select(Orden).where(Orden.id == pago.orden_id).with_for_update()
+        )
+        if orden is not None:
+            if orden.costo_final is None:
+                # F4b: el cobro se anuló después de generado este pago online
+                # (los pendientes quedan rechazados al anular, pero MP puede
+                # haber cobrado igual). La plata quedó en MP y la orden ya no
+                # tiene monto vigente: 'duplicado' para devolución manual.
+                # Solo costo_final decide: un pago online se puede crear con
+                # costo_final aunque cobro_estado no diga 'aprobado'.
+                _marcar_duplicado(
+                    db, pago, orden, mp_id, origen,
+                    motivo="el cobro de la orden fue anulado",
+                )
+                return
+            if any(
+                p.estado == "aprobado" for p in orden.pagos if p.id != pago.id
+            ):
+                _marcar_duplicado(db, pago, orden, mp_id, origen)
+                return
+    _aplicar_estado(pago, estado, mp_id)
 
 
 def _payment_id_ajeno(db: Session, pago: Pago, mp_id: str) -> bool:
@@ -235,48 +346,68 @@ def verificar_firma_webhook(
 ) -> None:
     """Valida el header x-signature de Mercado Pago (HMAC-SHA256 del manifest).
 
-    Sin MP_WEBHOOK_SECRET configurado no hay con qué verificar: se avisa y se sigue.
+    Sin MP_WEBHOOK_SECRET configurado no hay con qué verificar: en producción se
+    rechaza; en desarrollo se avisa y se sigue. La comparación y la frescura
+    del timestamp son las de app/core/mercadopago.py (compartidas con el webhook
+    de suscripciones).
     """
-    secret = get_settings().mp_webhook_secret
+    settings = get_settings()
+    secret = settings.mp_webhook_secret
     if not secret:
+        if settings.environment == "prod":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Firma de webhook inválida",
+            )
         logger.warning(
             "Webhook de Mercado Pago recibido sin MP_WEBHOOK_SECRET: no se valida la firma"
         )
         return
-    partes = {}
-    for trozo in (x_signature or "").split(","):
-        clave, sep, valor = trozo.partition("=")
-        if sep:
-            partes[clave.strip()] = valor.strip()
-    ts, v1 = partes.get("ts"), partes.get("v1")
-    if not ts or not v1 or not x_request_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Firma de webhook inválida"
-        )
-    manifest = f"id:{payment_id or ''};request-id:{x_request_id};ts:{ts};"
-    esperado = hmac.new(
-        secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-    if not hmac.compare_digest(esperado, v1):
+    # En producción el ts tiene que ser reciente: una firma vieja no se puede
+    # reenviar (el ts es parte del manifest firmado).
+    ventana = VENTANA_FIRMA_SEG if settings.environment == "prod" else None
+    if not firma_valida(
+        secret, payment_id, x_signature, x_request_id, ventana_seg=ventana
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Firma de webhook inválida"
         )
 
 
 def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None) -> None:
+    """Procesa un webhook de la cuenta de MP de los talleres.
+
+    El procesamiento sigue síncrono a propósito (no hay infraestructura de
+    colas y el handler es corto): el cliente HTTP de MP tiene timeout de 10 s
+    (app/core/mercadopago.py), muy por debajo del timeout de MP. Si la
+    consulta a MP falla de forma transitoria (red, 5xx, 429) se responde 503
+    para que MP reintente; con un error permanente (4xx) el aviso se ignora
+    con 200, igual que un taller o referencia desconocidos.
+    """
     token = get_settings().mp_access_token
     if tipo != "payment" or not payment_id or not payment_id.isdigit() or not token:
         return
     try:
         info = mercadopago.obtener_pago(token, payment_id)
     except mercadopago.MercadoPagoError as exc:
-        # El webhook responde 200 igual: si MP reintenta, lo hace por su cuenta.
+        if exc.transitorio:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No pudimos consultar el pago en Mercado Pago",
+            ) from exc
         logger.warning("No se pudo consultar el pago %s en Mercado Pago: %s", payment_id, exc)
         return
     referencia = str(info.get("external_reference") or "")
-    pago = _pago_bloqueado(db, int(referencia)) if referencia.isdigit() else None
+    # El webhook no tiene usuario: el pago se busca en toda la plataforma y
+    # después la sesión queda en el taller del pago antes de tocar nada.
+    pago = (
+        _pago_bloqueado(db, int(referencia), sin_filtro=True)
+        if referencia.isdigit()
+        else None
+    )
     if pago is None:
         return
+    fijar_taller(db, pago.taller_id)
     mp_id = str(info.get("id") or payment_id)
     if _payment_id_ajeno(db, pago, mp_id):
         logger.warning(
@@ -284,7 +415,7 @@ def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None)
             mp_id,
         )
         return
-    _actualizar_desde_mp(pago, info, payment_id)
+    _actualizar_desde_mp(db, pago, info, payment_id, origen="webhook")
     db.commit()
 
 
@@ -307,7 +438,7 @@ def confirmar_pago(db: Session, usuario: Usuario, pago_id: int, payment_id: str)
                 mp_id,
             )
         else:
-            _actualizar_desde_mp(pago, info, payment_id)
+            _actualizar_desde_mp(db, pago, info, payment_id, origen="confirmar")
             db.commit()
             db.refresh(pago)
     return PagoResponse.model_validate(pago)
@@ -318,7 +449,7 @@ def simular_pago(db: Session, usuario: Usuario, pago_id: int, estado: str) -> Pa
     settings = get_settings()
     if not (settings.environment == "dev" and settings.debug):
         raise _no_encontrado("Recurso no encontrado")
-    if usuario.rol != RolUsuario.administrador:
+    if not es_admin(usuario):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tenés permisos para esta acción",

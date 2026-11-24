@@ -96,7 +96,7 @@ def datos():
         # Mecánico B: una entregada (4 h), una en curso y una cancelada.
         o3 = orden("OT-3", "entregado", _dt(2026, 1, 15, 8), _dt(2026, 1, 15, 12), Decimal("500.00"), mec_b)
         o4 = orden("OT-4", "listo", _dt(2026, 1, 16, 8), None, None, mec_b)
-        o5 = orden("OT-5", "cancelado", _dt(2026, 1, 17, 8), None, None, mec_b)
+        orden("OT-5", "cancelado", _dt(2026, 1, 17, 8), None, None, mec_b)
 
         # Entregada sin mecánico: suma a finanzas pero no a métricas por mecánico.
         o6 = orden("OT-6", "entregado", _dt(2026, 1, 20, 8), _dt(2026, 1, 20, 12), Decimal("700.00"), None)
@@ -104,21 +104,30 @@ def datos():
         # Líneas de repuestos: egresos por mes de la orden (mano de obra y
         # órdenes no entregadas quedan afuera).
         db.add_all([
-            DetalleOrden(orden_id=o1.id, repuesto_id=rep_a.id, descripcion="Filtro", cantidad=2, precio_unitario=Decimal("100.00")),
-            DetalleOrden(orden_id=o1.id, repuesto_id=None, descripcion="Mano de obra", cantidad=1, precio_unitario=Decimal("999.00")),
-            DetalleOrden(orden_id=o2.id, repuesto_id=rep_a.id, descripcion="Filtro", cantidad=1, precio_unitario=Decimal("50.00")),
-            DetalleOrden(orden_id=o3.id, repuesto_id=rep_b.id, descripcion="Pastillas", cantidad=4, precio_unitario=Decimal("25.00")),
-            DetalleOrden(orden_id=o6.id, repuesto_id=rep_b.id, descripcion="Pastillas", cantidad=3, precio_unitario=Decimal("10.00")),
-            DetalleOrden(orden_id=o7.id, repuesto_id=rep_a.id, descripcion="Filtro", cantidad=5, precio_unitario=Decimal("20.00")),
-            DetalleOrden(orden_id=o4.id, repuesto_id=rep_b.id, descripcion="No cuenta", cantidad=10, precio_unitario=Decimal("999.00")),
+            DetalleOrden(orden_id=o1.id, repuesto_id=rep_a.id, descripcion="Filtro",
+                         cantidad=2, precio_unitario=Decimal("100.00")),
+            DetalleOrden(orden_id=o1.id, repuesto_id=None, descripcion="Mano de obra",
+                         cantidad=1, precio_unitario=Decimal("999.00")),
+            DetalleOrden(orden_id=o2.id, repuesto_id=rep_a.id, descripcion="Filtro",
+                         cantidad=1, precio_unitario=Decimal("50.00")),
+            DetalleOrden(orden_id=o3.id, repuesto_id=rep_b.id, descripcion="Pastillas",
+                         cantidad=4, precio_unitario=Decimal("25.00")),
+            DetalleOrden(orden_id=o6.id, repuesto_id=rep_b.id, descripcion="Pastillas",
+                         cantidad=3, precio_unitario=Decimal("10.00")),
+            DetalleOrden(orden_id=o7.id, repuesto_id=rep_a.id, descripcion="Filtro",
+                         cantidad=5, precio_unitario=Decimal("20.00")),
+            DetalleOrden(orden_id=o4.id, repuesto_id=rep_b.id, descripcion="No cuenta",
+                         cantidad=10, precio_unitario=Decimal("999.00")),
         ])
 
         # Pagos: aprobados dentro/fuera de rango y uno pendiente.
         db.add_all([
             Pago(orden_id=o1.id, monto=Decimal("800.00"), estado="aprobado", fecha_pago=_dt(2026, 1, 12, 10)),
-            Pago(orden_id=o2.id, monto=Decimal("2000.00"), estado="aprobado", fecha_pago=_dt(2026, 1, 13, 10)),
+            Pago(orden_id=o2.id, monto=Decimal("2000.00"), estado="aprobado", medio="efectivo",
+                 fecha_pago=_dt(2026, 1, 13, 10)),
             Pago(orden_id=o1.id, monto=Decimal("50.00"), estado="pendiente", fecha_pago=_dt(2026, 1, 12, 11)),
-            Pago(orden_id=o2.id, monto=Decimal("9999.00"), estado="aprobado", fecha_pago=_dt(2025, 12, 31, 10)),
+            Pago(orden_id=o2.id, monto=Decimal("9999.00"), estado="aprobado",
+                 fecha_pago=_dt(2025, 12, 31, 10)),
         ])
         db.commit()
         return {
@@ -170,7 +179,12 @@ def test_finanzas_contra_datos_sembrados(api, datos):
     data = r.json()
 
     assert data["ingresos"] == "5100.00"        # 1000+2000+500+700+900
-    assert data["cobrado_online"] == "2800.00"   # 800+2000 aprobados en rango
+    assert data["cobrado"] == "2800.00"   # 800+2000 aprobados en rango
+    # 800 por Mercado Pago y 2000 en efectivo en el local; los demás medios en 0.
+    assert data["cobrado_por_medio"] == {
+        "mercadopago": "800.00", "efectivo": "2000.00", "tarjeta": "0.00",
+        "transferencia": "0.00", "otro": "0.00",
+    }
     assert data["egresos_repuestos"] == "480.00"  # 380 enero + 100 febrero
     assert data["balance"] == "4620.00"
 

@@ -7,9 +7,9 @@ Create Date: 2026-10-27 12:00:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'd4e8a1c7b2f9'
@@ -29,7 +29,8 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['mecanico_id'], ['usuarios.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_horarios_mecanico_mecanico_id'), 'horarios_mecanico', ['mecanico_id'], unique=False)
+    op.create_index(op.f('ix_horarios_mecanico_mecanico_id'), 'horarios_mecanico', ['mecanico_id'],
+                    unique=False)
 
     with op.batch_alter_table('turnos') as batch_op:
         batch_op.add_column(sa.Column('mecanico_id', sa.Integer(), nullable=True))

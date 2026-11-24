@@ -7,9 +7,9 @@ Create Date: 2026-10-27 20:00:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'e7a3c9b15d20'
@@ -33,7 +33,9 @@ def upgrade() -> None:
             'fk_ordenes_cobro_aprobado_por_id_usuarios', 'usuarios', ['cobro_aprobado_por_id'], ['id']
         )
 
-    op.execute("UPDATE ordenes SET cobro_estado = 'aprobado' WHERE costo_final IS NOT NULL AND costo_final > 0")
+    op.execute(
+        "UPDATE ordenes SET cobro_estado = 'aprobado' WHERE costo_final IS NOT NULL AND costo_final > 0"
+    )
 
 
 def downgrade() -> None:

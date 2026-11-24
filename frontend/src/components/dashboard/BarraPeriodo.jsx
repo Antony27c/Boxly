@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import { PRESETS } from '@/utils/periodos'
-import { aISO } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
 
 const CLASE_CHIP = (activo) =>
   `min-h-[40px] shrink-0 rounded-lg border px-3.5 py-2 text-sm font-semibold transition-colors ${
@@ -21,7 +21,7 @@ const CLASE_CHIP = (activo) =>
  */
 export default function BarraPeriodo({ rango, onCambio, onExportar }) {
   const navigate = useNavigate()
-  const hoy = useMemo(() => aISO(new Date()), [])
+  const hoy = useMemo(() => hoyAR(), [])
   const [personalizado, setPersonalizado] = useState(false)
   const [borrador, setBorrador] = useState(rango)
   const [patente, setPatente] = useState('')
@@ -94,6 +94,7 @@ export default function BarraPeriodo({ rango, onCambio, onExportar }) {
             <Field
               label="Desde"
               type="date"
+              data-lectura
               className="w-40"
               value={borrador.desde}
               max={borrador.hasta}
@@ -102,6 +103,7 @@ export default function BarraPeriodo({ rango, onCambio, onExportar }) {
             <Field
               label="Hasta"
               type="date"
+              data-lectura
               className="w-40"
               value={borrador.hasta}
               min={borrador.desde}
@@ -125,6 +127,7 @@ export default function BarraPeriodo({ rango, onCambio, onExportar }) {
       <form onSubmit={buscarPatente} className="sm:max-w-xs">
         <Field
           label="Buscar por patente"
+          data-lectura
           type="search"
           placeholder="Ej.: AB123CD"
           value={patente}

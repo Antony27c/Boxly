@@ -79,6 +79,10 @@ class MiOrdenDetalle(BaseModel):
     historial: list[HistorialResponse]
     imagenes: list[ImagenOrdenResponse] = []
     detalles: list[DetalleOrdenResponse]
+    lineas_a_cotizar: int = 0
+    # True cuando hay líneas sin cotizar: `total` solo suma lo ya cotizado.
+    total_parcial: bool = False
+    total: Optional[Decimal] = None
     pagada: bool = False
     puede_pagar: bool = False
     pago: Optional[PagoResponse] = None

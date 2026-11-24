@@ -7,9 +7,9 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
+from app.main import app
 from app.models import Cliente, Orden, Repuesto, Usuario, Vehiculo
 from app.models.usuario import RolUsuario
-from app.main import app
 
 
 @pytest.fixture

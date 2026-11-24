@@ -30,7 +30,10 @@ class FinanzasResponse(BaseModel):
     desde: date
     hasta: date
     ingresos: Decimal
-    cobrado_online: Decimal
+    # Pagos aprobados en el período: online (Mercado Pago) y en el local.
+    cobrado: Decimal
+    # Desglose por medio: mercadopago, efectivo, tarjeta, transferencia, otro.
+    cobrado_por_medio: dict[str, Decimal]
     egresos_repuestos: Decimal
     balance: Decimal
     mensual: list[BalanceMensualResponse]

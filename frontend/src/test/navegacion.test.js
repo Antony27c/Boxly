@@ -16,10 +16,17 @@ describe('menuSegunRol', () => {
     expect(rutas(mas)).toEqual(['/inventario', '/horarios', '/dashboard'])
   })
 
-  it('administrador: mismos principales que recepción y Dashboard/Usuarios en Más', () => {
+  it('administrador: mismos principales que recepción y Dashboard/Usuarios/Panel del taller en Más', () => {
     const { principales, mas } = menuSegunRol('administrador')
     expect(rutas(principales)).toEqual(['/hoy', '/ordenes', '/turnos', '/clientes', '/vehiculos'])
-    expect(rutas(mas)).toEqual(['/inventario', '/horarios', '/dashboard', '/usuarios'])
+    expect(rutas(mas)).toEqual(['/inventario', '/horarios', '/dashboard', '/usuarios', '/admin', '/suscripcion'])
+  })
+
+  it('superadmin: solo la plataforma (Talleres y Sistema), sin el menú del taller', () => {
+    const { principales, mas } = menuSegunRol('superadmin')
+    expect(rutas(principales)).toEqual(['/plataforma', '/plataforma/planes', '/plataforma/solicitudes', '/plataforma/encuestas', '/plataforma/sistema'])
+    expect(mas).toEqual([])
+    expect(inicioSegunRol('superadmin')).toBe('/plataforma')
   })
 
   it('mecánico: Mi trabajo en /hoy, sin Turnos ni Clientes', () => {

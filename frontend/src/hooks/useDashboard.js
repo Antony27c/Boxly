@@ -4,7 +4,8 @@ import { metricasService } from '@/services/metricas'
 import { ordenesService, estadoCobro } from '@/services/ordenes'
 import { repuestosService } from '@/services/repuestos'
 import { turnosService } from '@/services/turnos'
-import { aISO, lunesDe, sumarDias } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
+import { lunesDe, sumarDias } from '@/utils/fechas'
 import { nombreMes } from '@/utils/formato'
 import { diasEntre, rangoAnterior, variacion } from '@/utils/periodos'
 
@@ -74,7 +75,7 @@ export default function useDashboard(rango) {
 
   // Semana en curso: de lunes a domingo. No depende del rango elegido.
   const cargarTurnos = useCallback((token) => {
-    const lunes = lunesDe(aISO(new Date()))
+    const lunes = lunesDe(hoyAR())
     return turnosService.listar({ desde: lunes, hasta: sumarDias(lunes, 6) }, token)
   }, [])
 

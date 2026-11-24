@@ -1,16 +1,71 @@
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
+/* Códigos estables que el backend suma a algunos errores ({detail, codigo}).
+   El frontend reconoce los errores por acá y nunca por el texto del detail,
+   que se puede reescribir sin aviso. */
+export const CODIGOS_ERROR = {
+  suscripcionSoloLectura: 'suscripcion_solo_lectura',
+  suscripcionSuspendida: 'suscripcion_suspendida',
+  limitePersonal: 'limite_personal',
+  planPersonalExcedido: 'plan_personal_excedido',
+  tallerSuspendido: 'taller_suspendido',
+  soporteSoloLectura: 'soporte_solo_lectura',
+  soporteSinAcceso: 'soporte_sin_acceso',
+}
+
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, codigo = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.codigo = codigo
   }
+}
+
+/** ¿El error vino del servidor con este código estable? */
+export function tieneCodigo(error, codigo) {
+  return error instanceof ApiError && error.codigo === codigo
 }
 
 let onNoAutorizado = null
 export function setUnauthorizedHandler(fn) {
   onNoAutorizado = fn
+}
+
+/* Modo soporte (P6): el SoporteContext fija el taller visitado y cada
+   request del taller sale con el header X-Taller-Soporte. */
+let tallerSoporte = null
+export function setTallerSoporte(id) {
+  tallerSoporte = id ?? null
+}
+
+/* Cuando el backend responde 403 con el código `soporte_sin_acceso` (el
+   taller revocó o venció el acceso), el contexto sale del modo soporte con un
+   aviso. */
+let onSoportePerdido = null
+export function setSoportePerdidoHandler(fn) {
+  onSoportePerdido = fn
+}
+
+/* Oyentes de los 403: cada uno recibe (error, { ruta, metodo }) y decide si
+   le importa por `error.codigo` (por ejemplo, useSuscripcion recarga el
+   estado ante un bloqueo por suscripción). Devuelve la desuscripción. */
+const oyentesAcceso = new Set()
+export function alErrorDeAcceso(handler) {
+  oyentesAcceso.add(handler)
+  return () => {
+    oyentesAcceso.delete(handler)
+  }
+}
+
+function avisarErrorDeAcceso(error, contexto) {
+  for (const handler of [...oyentesAcceso]) {
+    try {
+      handler(error, contexto)
+    } catch {
+      // Un oyente roto no tiene que tapar el error original del request.
+    }
+  }
 }
 
 function mensajeSegunEstado(status, detalle) {
@@ -30,6 +85,7 @@ export function urlArchivo(ruta) {
 async function enviar(path, { method = 'GET', body, token, form = false } = {}) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
+  if (tallerSoporte != null) headers['X-Taller-Soporte'] = String(tallerSoporte)
 
   let payload
   if (body instanceof FormData) {
@@ -63,8 +119,14 @@ async function enviar(path, { method = 'GET', body, token, form = false } = {}) 
     const campo = datos?.errores?.[0]?.campo?.split(' -> ').pop()
     const base = detalle ?? 'Hay un error en los datos enviados'
     if (campo) detalle = `${base}: revisá el campo ${campo}.`
+    const codigo = typeof datos?.codigo === 'string' ? datos.codigo : null
+    const error = new ApiError(mensajeSegunEstado(response.status, detalle), response.status, codigo)
     if (response.status === 401 && token && onNoAutorizado) onNoAutorizado()
-    throw new ApiError(mensajeSegunEstado(response.status, detalle), response.status)
+    if (response.status === 403) {
+      if (codigo === CODIGOS_ERROR.soporteSinAcceso && onSoportePerdido) onSoportePerdido(detalle)
+      avisarErrorDeAcceso(error, { ruta: path, metodo: method })
+    }
+    throw error
   }
 
   return { datos, headers: response.headers }

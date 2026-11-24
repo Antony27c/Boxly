@@ -1,0 +1,192 @@
+/* ==========================================================================
+   Identidad visual de la landing de Boxly (docs/Landing.md).
+   La importan los componentes de components/landing/* (Encabezado la trae).
+
+   Clases compartidas — usarlas en TODAS las secciones para que la página
+   se vea pareja:
+
+   .landing-seccion      <section> de una sección: padding vertical generoso.
+                         Se alterna sola: las secciones pares (2.ª, 4.ª…)
+                         dentro de <main> reciben fondo suave. Para forzar el
+                         fondo alterno en una sección impar, agregar
+                         .landing-seccion--acento.
+   .landing-seccion--hero  variante para la primera sección (más aire arriba).
+   .landing-caja         contenedor interior: ancho máximo y márgenes.
+                         Va como primer hijo de .landing-seccion.
+   .landing-titulo       título de sección (h2). Para el h1 del hero no.
+   .landing-bajada       bajada/subtítulo debajo del título.
+   .landing-tarjeta      tarjeta: fondo, borde y radio del sistema.
+   .landing-chip         pastilla chica de una línea (etiquetas, estados).
+   .landing-boton        botón principal (dorado). Para <a> o <button>.
+   .landing-boton--secundario  variante con fondo de tarjeta.
+   .landing-revelar      aparición suave al entrar en pantalla (scroll).
+                         Agregarla al contenido que quieras animar; donde el
+                         navegador no soporta scroll-driven animations el
+                         contenido se ve normal, sin animación.
+   .landing-saltar       link "Saltar al contenido" (solo visible con foco).
+   ========================================================================== */
+
+.landing-seccion {
+  padding-block: clamp(3.25rem, 7vw, 5.5rem);
+}
+
+/* Fondo alterno automático: secciones pares dentro de <main>. */
+main > section.landing-seccion:nth-of-type(even),
+.landing-seccion--acento {
+  background: rgb(var(--c-g800) / 0.55);
+}
+
+.landing-seccion--hero {
+  padding-top: clamp(4.5rem, 11vw, 8rem);
+  padding-bottom: clamp(3.5rem, 8vw, 6.5rem);
+}
+
+.landing-caja {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+.landing-titulo {
+  font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: rgb(var(--c-ink));
+}
+
+.landing-bajada {
+  margin-top: 0.875rem;
+  max-width: 42rem;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: rgb(var(--c-muted));
+}
+
+.landing-tarjeta {
+  background: rgb(var(--c-g800));
+  border: 1px solid rgb(var(--c-g600));
+  border-radius: 0.875rem;
+  padding: 1.375rem;
+}
+
+.landing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgb(var(--c-amber-texto));
+  background: rgb(var(--c-amber) / 0.14);
+  border: 1px solid rgb(var(--c-amber) / 0.35);
+}
+
+.landing-boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.6875rem 1.375rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: rgb(var(--c-sobre-amber));
+  background: rgb(var(--c-amber));
+  transition:
+    background-color 160ms ease,
+    transform 120ms ease;
+}
+
+.landing-boton:hover {
+  background: rgb(var(--c-amber-soft));
+}
+
+.landing-boton:active {
+  transform: scale(0.98);
+}
+
+.landing-boton--secundario {
+  color: rgb(var(--c-ink));
+  background: rgb(var(--c-g700));
+  border: 1px solid rgb(var(--c-g600));
+}
+
+.landing-boton--secundario:hover {
+  background: rgb(var(--c-g600));
+}
+
+/* Aparición suave al hacer scroll. Con scroll-driven animations el elemento
+   sube 16px y aparece mientras entra en pantalla; sin soporte (o con
+   prefers-reduced-motion) queda visible directo. */
+@keyframes landing-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .landing-revelar {
+    animation: landing-entrar linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 45%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-revelar {
+    animation: none;
+  }
+}
+
+/* "Saltar al contenido": invisible hasta que recibe foco (teclado). */
+.landing-saltar {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 60;
+  transform: translateY(-300%);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--c-sobre-amber));
+  background: rgb(var(--c-amber));
+  box-shadow: 0 8px 24px -12px rgb(0 0 0 / 0.5);
+  transition: transform 160ms ease;
+}
+
+.landing-saltar:focus-visible {
+  transform: translateY(0);
+}
+
+/* Tarjetas de planes (components/landing/planes). Pro va destacado y, en
+   pantallas anchas, más alto que los demás; Profesional, con un borde superior
+   que le da peso de "lo más completo". Sin transform: la animación de
+   .landing-revelar ya lo usa. */
+.landing-plan--destacado {
+  border-color: rgb(var(--c-amber));
+  box-shadow: 0 18px 40px -22px rgb(var(--c-amber) / 0.55);
+}
+
+@media (min-width: 768px) {
+  .landing-plan--destacado {
+    z-index: 1;
+    margin-block: -1rem;
+    padding-block: 2.25rem;
+  }
+}
+
+.landing-plan--completo {
+  border-top: 3px solid rgb(var(--c-ink) / 0.55);
+}

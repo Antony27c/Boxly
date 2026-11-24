@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IngresoRapido from '@/components/ordenes/IngresoRapido'
+import { hoyAR } from '@/lib/fechas'
 
 const apiMock = vi.hoisted(() => ({ get: vi.fn(), patch: vi.fn() }))
 const vehiculos = vi.hoisted(() => ({
@@ -79,6 +80,15 @@ async function buscarPatente(valor) {
   fireEvent.change(input, { target: { value: valor } })
   fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
 }
+
+// "Buscar" busca ya; la búsqueda automática (debounce de 300ms) no repite
+// la misma patente: una sola búsqueda.
+async function esperarPatenteNueva() {
+  await screen.findByText('Patente nueva, cargamos el auto.')
+  expect(apiMock.get).toHaveBeenCalledTimes(1)
+}
+
+const pausa = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
 
 describe('IngresoRapido', () => {
   beforeEach(() => {
@@ -317,5 +327,114 @@ describe('IngresoRapido', () => {
 
     expect(await screen.findByText('Patente nueva, cargamos el auto.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Es un cliente nuevo' })).toBeInTheDocument()
+  })
+
+  it('con patente nueva valida cliente, vehículo y trabajo sin crear nada', async () => {
+    apiMock.get.mockResolvedValue([])
+    montar()
+    await buscarPatente('XY987ZY')
+    await esperarPatenteNueva()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recibir auto' }))
+    expect(
+      await screen.findByText('Elegí un cliente de la lista o cargalo como nuevo.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Ingresá la marca.')).toBeInTheDocument()
+    expect(screen.getByText('Ingresá el modelo.')).toBeInTheDocument()
+    expect(screen.getByText('Contanos qué trabajo hay que hacerle.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Es un cliente nuevo' }))
+    fireEvent.change(screen.getByLabelText('DNI'), { target: { value: '123' } })
+    fireEvent.change(screen.getByLabelText('Teléfono (opcional)'), { target: { value: 'abc' } })
+    fireEvent.change(screen.getByLabelText('Año (opcional)'), { target: { value: '18' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Recibir auto' }))
+    expect(await screen.findByText('Ingresá el nombre.')).toBeInTheDocument()
+    expect(screen.getByText('Ingresá el apellido.')).toBeInTheDocument()
+    expect(screen.getByText('Ingresá el DNI (de 6 a 20 caracteres).')).toBeInTheDocument()
+    expect(screen.getByText('El teléfono no tiene un formato válido.')).toBeInTheDocument()
+    expect(screen.getByText('Revisá el año (por ejemplo 2017).')).toBeInTheDocument()
+    expect(clientes.crear).not.toHaveBeenCalled()
+    expect(ordenes.crear).not.toHaveBeenCalled()
+
+    // Corregir un campo borra solo su error.
+    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Juan' } })
+    expect(screen.queryByText('Ingresá el nombre.')).not.toBeInTheDocument()
+    expect(screen.getByText('Ingresá el apellido.')).toBeInTheDocument()
+  })
+
+  it('con patente nueva y cliente existente usa su id, con mecánico, entrega y chips', async () => {
+    apiMock.get.mockResolvedValue([])
+    apiMock.patch.mockResolvedValue({})
+    mecanicos.listar.mockResolvedValue([{ id: 9, nombre: 'Mario', apellido: 'Gómez' }])
+    clientes.listarPaginado.mockResolvedValue({ items: [CLIENTE], total: 1 })
+    vehiculos.crear.mockResolvedValue({ id: 12, patente: 'XY987ZY', cliente_id: 3 })
+    const { onListo, onCerrar } = montar()
+    await buscarPatente('XY987ZY')
+    await esperarPatenteNueva()
+
+    // El Autocomplete espera antes de buscar: con la máquina cargada, más margen.
+    const espera = { timeout: 3000 }
+    const campoCliente = screen.getByLabelText('Cliente')
+    fireEvent.focus(campoCliente)
+    fireEvent.change(campoCliente, { target: { value: 'Pér' } })
+    fireEvent.click(await screen.findByRole('option', { name: /Pérez, Juan/ }, espera))
+    expect(await screen.findByText('· DNI 20111222', {}, espera)).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Marca'), { target: { value: 'Ford' } })
+    fireEvent.change(screen.getByLabelText('Modelo'), { target: { value: 'Ka' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Service' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Frenos' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Service' }))
+    expect(screen.getByLabelText('Trabajo a realizar')).toHaveValue('Service, Frenos')
+    await screen.findByRole('option', { name: 'Gómez, Mario' }, espera)
+    fireEvent.change(screen.getByLabelText('Mecánico (opcional)'), { target: { value: '9' } })
+    const entrega = screen.getByLabelText('Entrega estimada (opcional)')
+    expect(entrega).toHaveAttribute('min', hoyAR())
+    fireEvent.change(entrega, { target: { value: '2030-01-15' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Recibir auto' }))
+
+    await waitFor(() => expect(onCerrar).toHaveBeenCalled(), espera)
+    expect(clientes.crear).not.toHaveBeenCalled()
+    expect(vehiculos.crear).toHaveBeenCalledWith(
+      { cliente_id: 3, patente: 'XY987ZY', marca: 'Ford', modelo: 'Ka', anio: null },
+      'tok',
+    )
+    expect(ordenes.crear).toHaveBeenCalledWith(
+      { vehiculo_id: 12, mecanico_id: 9, descripcion: 'Service, Frenos', total: 0 },
+      'tok',
+    )
+    expect(ordenes.cambiarEstado).toHaveBeenCalledWith(7, 'Ingresado', 'Auto recibido en el taller.', 'tok')
+    expect(apiMock.patch).toHaveBeenCalledWith(
+      '/api/v1/ordenes/7',
+      { fecha_estimada_entrega: '2030-01-15T12:00:00' },
+      'tok',
+    )
+    expect(avisar).toHaveBeenCalledWith('Auto XY987ZY recibido en el taller.', expect.anything())
+    expect(onListo).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }))
+  })
+
+  it('escribir el cliente justo después de Buscar no se pierde ni se repite la búsqueda', async () => {
+    apiMock.get.mockResolvedValue([])
+    montar()
+    await buscarPatente('XY987ZY')
+    await screen.findByText('Patente nueva, cargamos el auto.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Es un cliente nuevo' }))
+    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Juan' } })
+    // Pasa de largo la espera de la búsqueda automática (300ms).
+    await act(() => pausa(500))
+
+    expect(screen.getByLabelText('Nombre')).toHaveValue('Juan')
+    expect(apiMock.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('Cambiar el vehículo vuelve a la patente vacía', async () => {
+    apiMock.get.mockResolvedValue([VEHICULO])
+    montar()
+    await buscarPatente('AB123CD')
+    expect(await screen.findByText(/Titular: Pérez, Juan/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar' }))
+    expect(await screen.findByLabelText('Patente')).toHaveValue('')
+    expect(screen.queryByLabelText('Trabajo a realizar')).not.toBeInTheDocument()
   })
 })

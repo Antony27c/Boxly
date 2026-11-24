@@ -3,14 +3,45 @@ import { BOTON_PIE, Chip, Chips, Ficha, FichaCabecera, FichaPie } from '@/compon
 import { nombreRol } from '@/services/usuarios'
 import { iniciales } from '@/utils/ficha'
 
-// Acento por rol: administrador dorado, mecánico azul y recepción verde.
+// Acento por rol: el superadmin va en grafito (por encima del administrador
+// dorado), mecánico azul y recepción verde.
 const ACENTO_ROL = {
+  superadmin: 'neutro',
   administrador: 'amber',
   mecanico: 'azul',
   recepcion: 'ok',
 }
 
-export default function TarjetaUsuario({ usuario, onEditar, onAlternarEstado, onEliminar }) {
+// El avatar de iniciales acompaña al acento; solo el superadmin se despega del dorado.
+const FONDO_AVATAR = {
+  superadmin: 'bg-graphite-600 text-ink',
+}
+
+/* Tarjeta de un usuario del sistema.
+   - `esPropio`: es la cuenta del usuario logueado (sin Desactivar ni Cerrar sesiones).
+   - `soloSuperadmin`: quien mira es administrador y la cuenta es de un admin o
+     superadmin: se ve la ficha pero sin acciones, con el chip "Solo superadmin".
+   - `esSuperadmin`: quien mira es superadmin: ve además Restablecer contraseña
+     y Cerrar sesiones.
+   - `ultimoAdmin`: es el único administrador activo del taller: Desactivar y
+     Eliminar quedan deshabilitados con la explicación (el servidor responde 409). */
+const MOTIVO_ULTIMO_ADMIN =
+  'Es el único administrador activo del taller: no se puede desactivar ni eliminar.'
+
+export default function TarjetaUsuario({
+  usuario,
+  esPropio = false,
+  soloSuperadmin = false,
+  esSuperadmin = false,
+  ultimoAdmin = false,
+  onEditar,
+  onAlternarEstado,
+  onEliminar,
+  onRestablecer,
+  onCerrarSesiones,
+}) {
+  const idMotivo = `motivo-ultimo-admin-${usuario.id}`
+  const bloqueo = ultimoAdmin ? { disabled: true, 'aria-describedby': idMotivo } : {}
   return (
     <Ficha acento={ACENTO_ROL[usuario.rol] ?? 'neutro'}>
       <FichaCabecera
@@ -19,7 +50,9 @@ export default function TarjetaUsuario({ usuario, onEditar, onAlternarEstado, on
         aside={
           <span
             aria-hidden="true"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-amber text-sm font-bold text-sobre-amber"
+            className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${
+              FONDO_AVATAR[usuario.rol] ?? 'bg-amber text-sobre-amber'
+            }`}
           >
             {iniciales(usuario)}
           </span>
@@ -36,15 +69,43 @@ export default function TarjetaUsuario({ usuario, onEditar, onAlternarEstado, on
       </FichaCabecera>
 
       <FichaPie>
-        <Button variante="fantasma" className={BOTON_PIE} onClick={onEditar}>
-          Editar
-        </Button>
-        <Button variante="fantasma" className={BOTON_PIE} onClick={onAlternarEstado}>
-          {usuario.activo ? 'Desactivar' : 'Activar'}
-        </Button>
-        <Button variante="fantasma" className={`${BOTON_PIE} ml-auto hover:!text-danger`} onClick={onEliminar}>
-          Eliminar
-        </Button>
+        {soloSuperadmin ? (
+          <Chip tono="ambar">Solo superadmin</Chip>
+        ) : (
+          <>
+            <Button variante="fantasma" className={BOTON_PIE} onClick={onEditar}>
+              Editar
+            </Button>
+            {esSuperadmin && (
+              <Button variante="fantasma" className={BOTON_PIE} icono="llave" onClick={onRestablecer}>
+                Restablecer contraseña
+              </Button>
+            )}
+            {esSuperadmin && !esPropio && (
+              <Button variante="fantasma" className={BOTON_PIE} icono="salir" onClick={onCerrarSesiones}>
+                Cerrar sesiones
+              </Button>
+            )}
+            {!esPropio && (
+              <Button variante="fantasma" className={BOTON_PIE} onClick={onAlternarEstado} {...bloqueo}>
+                {usuario.activo ? 'Desactivar' : 'Activar'}
+              </Button>
+            )}
+            <Button
+              variante="fantasma"
+              className={`${BOTON_PIE} ml-auto hover:!text-danger`}
+              onClick={onEliminar}
+              {...bloqueo}
+            >
+              Eliminar
+            </Button>
+            {ultimoAdmin && (
+              <p id={idMotivo} className="w-full px-3 pb-1 text-xs text-muted">
+                {MOTIVO_ULTIMO_ADMIN}
+              </p>
+            )}
+          </>
+        )}
       </FichaPie>
     </Ficha>
   )

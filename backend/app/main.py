@@ -9,7 +9,11 @@ from sqlalchemy import text
 # Importar modelos para que Base.metadata los registre.
 import app.models  # noqa: F401
 from app.api.v1.router import api_router
+from app.core.auditoria import AuditoriaMiddleware
+from app.core.body_limit import LimiteTamanoBody
 from app.core.config import UPLOADS_DIR, get_settings
+from app.core.enmascarado import EnmascaradoSoporteMiddleware
+from app.core.errores import registrar_manejador_errores
 from app.core.exceptions import register_exception_handlers
 from app.core.logging_config import configurar_logging
 from app.core.rate_limit import configurar_rate_limit
@@ -42,11 +46,22 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
         # La paginación devuelve el total en este header; hay que exponerlo
-        # para que el frontend pueda leerlo desde el navegador.
-        expose_headers=["X-Total-Count"],
+        # para que el frontend pueda leerlo desde el navegador. Content-Disposition
+        # trae el nombre de los archivos que se descargan (respaldo y auditoría).
+        expose_headers=["X-Total-Count", "Content-Disposition"],
     )
 
+    # Registra cada POST/PUT/PATCH/DELETE de /api/v1 en la tabla auditoria.
+    app.add_middleware(AuditoriaMiddleware)
+    # En modo soporte (header X-Taller-Soporte) enmascara DNI, teléfonos y emails.
+    app.add_middleware(EnmascaradoSoporteMiddleware)
+    # Límite de tamaño del body (413): se registra último para ser el más externo
+    # y cortar el request antes de que el resto de los middlewares lo procesen.
+    app.add_middleware(LimiteTamanoBody)
+
     register_exception_handlers(app)
+    # Errores de negocio con código estable para el frontend (Q4).
+    registrar_manejador_errores(app)
     configurar_rate_limit(app)
     app.include_router(api_router)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

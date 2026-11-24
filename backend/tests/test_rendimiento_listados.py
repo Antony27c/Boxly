@@ -6,7 +6,7 @@ selectinload. Además se cubre el filtro por rango de fechas de turnos, la
 paginación con limit/offset y el header X-Total-Count.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +15,7 @@ from sqlalchemy import event
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
+from app.main import app
 from app.models import (
     Cliente,
     Orden,
@@ -24,7 +25,6 @@ from app.models import (
     Vehiculo,
 )
 from app.models.usuario import RolUsuario
-from app.main import app
 
 BASE = "/api/v1"
 

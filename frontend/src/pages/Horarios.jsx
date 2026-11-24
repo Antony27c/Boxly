@@ -18,8 +18,9 @@ import { ROLES_ADMIN, ROLES_MOSTRADOR } from '@/routes/navegacion'
 import { clientesService } from '@/services/clientes'
 import { DIAS_SEMANA, mecanicosService } from '@/services/mecanicos'
 import { nombreEstado } from '@/services/ordenes'
+import { formatearFecha, hoyAR } from '@/lib/fechas'
 import { ETIQUETAS_ESTADO } from '@/utils/etiquetas'
-import { aISO, etiquetaDia, lunesDe, sumarDias } from '@/utils/fechas'
+import { etiquetaDia, lunesDe, sumarDias } from '@/utils/fechas'
 
 const TONOS_TURNO = {
   pendiente: 'neutro',
@@ -47,15 +48,13 @@ function horasTotales(horarios) {
   return Math.round((total / 60) * 10) / 10
 }
 
-function fechaCorta(iso) {
-  return iso ? new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '—'
-}
+const fechaCorta = formatearFecha
 
 export default function Horarios() {
   const { token, usuario } = useAuth()
   const esAdmin = ROLES_ADMIN.includes(usuario?.rol)
   const esMostrador = ROLES_MOSTRADOR.includes(usuario?.rol)
-  const hoy = aISO(new Date())
+  const hoy = hoyAR()
 
   const [mecanicoId, setMecanicoId] = useState(esMostrador ? null : usuario?.id)
   const [inicioSemana, setInicioSemana] = useState(() => lunesDe(hoy))

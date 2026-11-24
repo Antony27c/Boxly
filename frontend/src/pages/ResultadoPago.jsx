@@ -7,6 +7,8 @@ import Button from '@/components/ui/Button'
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import useTaller from '@/hooks/useTaller'
+import { formatearFechaHora } from '@/lib/fechas'
 import { pagosService } from '@/services/portal'
 
 const ESTADOS = {
@@ -38,6 +40,10 @@ function pesos(valor) {
 
 export default function ResultadoPago() {
   const { token } = useAuth()
+  const { taller } = useTaller()
+  // Si el taller no tiene cobro online (docs/Plataforma.md, P3) no se ofrece
+  // reintentar el pago; sin dato del taller se conserva lo de siempre.
+  const pagoOnline = taller?.pago_online !== false
   const [parametros] = useSearchParams()
   const pagoId = parametros.get('pago_id')
   const paymentId = parametros.get('payment_id') ?? parametros.get('collection_id')
@@ -125,7 +131,7 @@ export default function ResultadoPago() {
             {pago.fecha_pago && (
               <div className="col-span-2">
                 <dt className="text-muted">Fecha</dt>
-                <dd>{new Date(pago.fecha_pago).toLocaleString('es-AR')}</dd>
+                <dd>{formatearFechaHora(pago.fecha_pago)}</dd>
               </div>
             )}
           </dl>
@@ -153,11 +159,16 @@ export default function ResultadoPago() {
           )}
 
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            {pago.estado === 'rechazado' && (
-              <Button cargando={procesando} onClick={reintentar}>
-                Reintentar pago
-              </Button>
-            )}
+            {pago.estado === 'rechazado' &&
+              (pagoOnline ? (
+                <Button cargando={procesando} onClick={reintentar}>
+                  Reintentar pago
+                </Button>
+              ) : (
+                <span className="inline-flex items-center px-3 text-sm text-muted">
+                  Pagás en el taller
+                </span>
+              ))}
             {pago.estado === 'pendiente' && !simulado && (
               <Button variante="secundario" cargando={cargando} onClick={recargar}>
                 Actualizar estado

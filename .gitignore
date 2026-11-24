@@ -24,3 +24,6 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Windows: archivo "nul" que se crea por accidente con redirects
+nul

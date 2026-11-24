@@ -1,4 +1,6 @@
 import { api, urlArchivo } from '@/lib/api'
+import { diaServidor, formatearFechaHora } from '@/lib/fechas'
+import { formatearMontoAR, parsearMontoAR } from '@/lib/montos'
 
 const RECURSO = '/api/v1/ordenes'
 
@@ -13,6 +15,16 @@ const CODIGOS = {
 }
 
 export const ESTADOS_ORDEN = Object.keys(CODIGOS)
+
+/* Monto que manda el servidor → número exacto, o null si no es un monto.
+   Los Decimal llegan como texto con punto decimal ("185000.50") o como
+   número; el formato argentino ("185.000,50") es solo para mostrar y acá
+   se rechaza, para no confundir puntos de miles con decimales. */
+export function montoDelServidor(valor) {
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null
+  const texto = String(valor ?? '').trim()
+  return /^\d+(\.\d+)?$/.test(texto) ? Number(texto) : null
+}
 
 const TRANSICIONES = {
   Pendiente: ['Ingresado', 'Cancelado'],
@@ -36,6 +48,12 @@ export const DESCRIPCION_ESTADOS = {
 
 export const ESTADOS_COBRABLES = ['Listo', 'Entregado']
 
+// 'pendiente' ya no se genera: el mecánico no propone cobros ni ve montos
+// (S3 y MC1). Se deja solo para administración y recepción, porque puede haber
+// órdenes viejas con cobro_estado 'pendiente' y monto_propuesto que todavía se
+// aprueban con POST /ordenes/{id}/cobro/aprobar. Borrar esta rama (y la de
+// "Revisar/Aprobar cobro" en accionPrincipal, TarjetaOrden, CobroOrden y el filtro
+// "Cobro pendiente") recién cuando una migración resuelva esas órdenes.
 export function estadoCobro(orden) {
   if (orden.pagada) return 'pagada'
   if (orden.cobro_estado === 'aprobado' && Number(orden.costo_final) > 0) return 'aprobado'
@@ -45,6 +63,55 @@ export function estadoCobro(orden) {
 
 export function proximosEstados(estado) {
   return TRANSICIONES[estado] ?? []
+}
+
+export const MOTIVO_A_COTIZAR = 'Cotizá los trabajos pendientes antes de cobrar.'
+
+/* Con el cobro emitido las líneas no se tocan: el backend responde 409 con
+   este código (se reconoce por el código, nunca por el texto) y hay que
+   anular el cobro antes de cambiarlas. */
+export const CODIGO_COBRO_EMITIDO = 'cobro_emitido'
+export const AVISO_COBRO_EMITIDO = 'El cobro ya está emitido: anulalo para cambiar las líneas.'
+
+/* ¿La orden tiene un cobro emitido y sin pagar? Mira solo cobro_estado, que
+   llega aunque falte el monto (el mecánico no recibe costo_final, MC1). */
+export function cobroEmitido(orden) {
+  return orden?.cobro_estado === 'aprobado' && !orden.pagada
+}
+
+// Medios del pago registrado en el local (POST /ordenes/{id}/pago-local).
+export const MEDIOS_PAGO_LOCAL = [
+  { valor: 'efectivo', texto: 'Efectivo' },
+  { valor: 'tarjeta', texto: 'Tarjeta' },
+  { valor: 'transferencia', texto: 'Transferencia' },
+  { valor: 'otro', texto: 'Otro' },
+]
+
+/* "Pagada en el taller (efectivo)" o "Pagada online (Mercado Pago)" según el
+   medio del pago aprobado; sin medio conocido, solo "Pagada". */
+export function textoPagada(medio) {
+  if (medio === 'mercadopago') return 'Pagada online (Mercado Pago)'
+  const local = MEDIOS_PAGO_LOCAL.find((opcion) => opcion.valor === medio)
+  return local ? `Pagada en el taller (${local.texto.toLowerCase()})` : 'Pagada'
+}
+
+/* Pago duplicado (Q1): un cobro online aprobado que llegó cuando la orden ya
+   estaba paga — la plata está cobrada dos veces y el taller la devuelve a
+   mano por Mercado Pago. El backend los expone en orden.pagos (PagoResponse);
+   si el campo no viene, la lista queda vacía y no se muestra nada. */
+export function pagosDuplicados(orden) {
+  const pagos = orden?.pagos
+  if (!Array.isArray(pagos)) return []
+  return pagos.filter((pago) => pago?.estado === 'duplicado')
+}
+
+// Texto del aviso de devolución: monto, fecha del cobro y la referencia de
+// Mercado Pago cuando viene.
+export function textoPagoDuplicado(pago) {
+  const monto = formatearMontoAR(pago?.monto)
+  const cuando = formatearFechaHora(pago?.fecha_pago ?? pago?.creado_en)
+  const referencia = pago?.payment_id ? ` Referencia del pago: ${pago.payment_id}.` : ''
+  return `Esta orden recibió un pago online${monto ? ` de $ ${monto}` : ''} el ${cuando} cuando ya estaba pagada. Devolvelo desde tu cuenta de Mercado Pago.${referencia}`
 }
 
 const ROL_ADMIN = ['admin', 'administrador']
@@ -58,7 +125,7 @@ const ROL_MECANICO = ['mecanico', 'mecánico']
  * tipo:
  *  - 'etapa'   → abrir el cambio de etapa con `destino` preseleccionado
  *  - 'asignar' → elegir mecánico
- *  - 'cobro'   → abrir el cobro (emitir, proponer, revisar o aprobar)
+ *  - 'cobro'   → abrir el cobro (emitir, revisar o aprobar; solo mostrador)
  *  - 'abrir'   → ir a la página de la orden (/ordenes/:id) a cargar trabajo
  * `secundaria` (opcional) es una segunda acción del mismo formato.
  */
@@ -90,9 +157,21 @@ export function accionPrincipal(orden, rol) {
     case 'Listo': {
       const cobro = estadoCobro(orden)
       if (cobro === 'sin_cobro') {
-        if (esMostrador) return { tipo: 'cobro', texto: 'Emitir cobro' }
-        return esMecanico ? { tipo: 'cobro', texto: 'Proponer cobro' } : null
+        // Con líneas a cotizar el backend rechaza el cobro (409, S3): el botón
+        // queda deshabilitado con el motivo y se ofrece ir a cotizar.
+        if (esMostrador && Number(orden.lineas_a_cotizar ?? 0) > 0) {
+          return {
+            tipo: 'cobro',
+            texto: 'Emitir cobro',
+            deshabilitada: true,
+            motivo: MOTIVO_A_COTIZAR,
+            trabajo: { tipo: 'abrir', texto: 'Cotizar trabajos' },
+          }
+        }
+        // El mecánico no propone cobros (MC1): con la orden lista no le toca nada.
+        return esMostrador ? { tipo: 'cobro', texto: 'Emitir cobro' } : null
       }
+      // Solo órdenes viejas con cobro propuesto (ver estadoCobro).
       if (cobro === 'pendiente') {
         if (esAdmin) return { tipo: 'cobro', texto: 'Aprobar cobro' }
         return esMostrador ? { tipo: 'cobro', texto: 'Revisar cobro' } : null
@@ -112,7 +191,10 @@ export function desdeApi(orden) {
   return {
     ...orden,
     estado: nombreEstado(orden.estado),
-    fecha: orden.fecha_ingreso?.slice(0, 10) ?? '',
+    // El día del ingreso en hora del taller (el datetime del servidor viene
+    // en UTC sin zona: recortar el string correría el día en los ingresos
+    // de la noche).
+    fecha: diaServidor(orden.fecha_ingreso) ?? '',
     descripcion: orden.descripcion_ingreso,
     mecanico: orden.mecanico_nombre ?? '',
     total: Number(orden.costo_final ?? orden.costo_estimado ?? 0),
@@ -133,6 +215,28 @@ export function sePuedeEliminar(orden) {
 
 export function sePuedeEditarDetalle(orden) {
   return orden?.estado !== 'Entregado' && orden?.estado !== 'Cancelado'
+}
+
+// Línea "a cotizar" (S3): el backend la marca con a_cotizar o con
+// precio_unitario null; en ambos casos no suma al total.
+export function lineaACotizar(detalle) {
+  return detalle?.a_cotizar === true || detalle?.precio_unitario == null
+}
+
+/* La acción principal que se puede mostrar: el mecánico no emite, propone ni
+   aprueba cobros (el backend le responde 403); por las dudas la acción 'cobro'
+   nunca se le ofrece. */
+export function accionVisible(orden, rol) {
+  const accion = accionPrincipal(orden, rol)
+  if (accion?.tipo === 'cobro' && ROL_MECANICO.includes(rol)) return null
+  return accion
+}
+
+/* Para las tarjetas y filas, donde no entra el motivo de un botón deshabilitado:
+   si la acción no se puede hacer todavía, se ofrece la que la destraba (cotizar). */
+export function accionEjecutable(orden, rol) {
+  const accion = accionVisible(orden, rol)
+  return accion?.deshabilitada ? (accion.trabajo ?? null) : accion
 }
 
 export function imagenDesdeApi(imagen) {
@@ -169,34 +273,43 @@ export const ordenesService = {
 
   obtener: (id, token) => api.get(`${RECURSO}/${id}`, token).then(desdeApi),
 
-  crear: (orden, token) =>
-    api
-      .post(
-        RECURSO,
-        {
-          vehiculo_id: Number(orden.vehiculo_id),
-          mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
-          descripcion_ingreso: orden.descripcion,
-          costo_estimado: Number(orden.total) || null,
-        },
-        token,
-      )
-      .then(desdeApi),
+  // El servidor responde 403 si el mecánico manda costo_estimado o costo_final
+  // (MC1): el presupuesto viaja solo con `incluirCosto` (administración o
+  // recepción) y si hay un monto; si no, la clave no se manda.
+  crear: (orden, token, { incluirCosto = false } = {}) => {
+    const cuerpo = {
+      vehiculo_id: Number(orden.vehiculo_id),
+      mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
+      descripcion_ingreso: orden.descripcion,
+    }
+    const costo = incluirCosto ? parsearMontoAR(orden.total) || null : null
+    if (costo != null) cuerpo.costo_estimado = costo
+    return api.post(RECURSO, cuerpo, token).then(desdeApi)
+  },
 
   detalles: (ordenId, token) => api.get(`${RECURSO}/${ordenId}/detalles`, token),
 
-  agregarDetalle: (ordenId, linea, token) =>
-    api.post(
-      `${RECURSO}/${ordenId}/detalles`,
-      {
-        repuesto_id: linea.repuesto_id ? Number(linea.repuesto_id) : null,
-        descripcion: linea.descripcion?.trim() || null,
-        cantidad: Number(linea.cantidad) || 1,
-        precio_unitario:
-          linea.precio_unitario !== '' && linea.precio_unitario != null
-            ? Number(linea.precio_unitario)
-            : null,
-      },
+  agregarDetalle: (ordenId, linea, token) => {
+    const cuerpo = {
+      repuesto_id: linea.repuesto_id ? Number(linea.repuesto_id) : null,
+      descripcion: linea.descripcion?.trim() || null,
+      cantidad: Number(linea.cantidad) || 1,
+    }
+    // El mecánico no manda precio (S3): si viene undefined la clave no viaja.
+    if (linea.precio_unitario !== undefined) {
+      cuerpo.precio_unitario =
+        linea.precio_unitario !== '' && linea.precio_unitario != null
+          ? parsearMontoAR(linea.precio_unitario)
+          : null
+    }
+    return api.post(`${RECURSO}/${ordenId}/detalles`, cuerpo, token)
+  },
+
+  // Cotizar o corregir el precio de una línea (administrador o recepción, S3).
+  cotizarDetalle: (ordenId, detalleId, precio, token) =>
+    api.patch(
+      `${RECURSO}/${ordenId}/detalles/${detalleId}`,
+      { precio_unitario: parsearMontoAR(precio) },
       token,
     ),
 
@@ -212,25 +325,47 @@ export const ordenesService = {
 
   enviarAviso: (id, token) => api.post(`${RECURSO}/${id}/notificaciones`, {}, token),
 
+  // Los montos tipeados llegan como texto en formato argentino ("185.000,50")
+  // o ya como número: parsearMontoAR resuelve los dos (lib/montos.js).
   emitirCobro: (id, monto, token) =>
-    api.post(`${RECURSO}/${id}/cobro`, { monto: Number(monto) }, token).then(desdeApi),
+    api.post(`${RECURSO}/${id}/cobro`, { monto: parsearMontoAR(monto) }, token).then(desdeApi),
+
+  // `monto` es el del cobro emitido tal como lo mandó el servidor
+  // (costo_final): se envía ese número exacto, nunca algo tipeado.
+  registrarPagoLocal: (id, { medio, monto, referencia }, token) => {
+    const exacto = montoDelServidor(monto)
+    if (exacto == null || exacto <= 0) {
+      return Promise.reject(new Error('La orden no tiene un cobro emitido con monto válido.'))
+    }
+    return api
+      .post(
+        `${RECURSO}/${id}/pago-local`,
+        { medio, monto: exacto, referencia: referencia?.trim() || null },
+        token,
+      )
+      .then(desdeApi)
+  },
+
+  // Anula el cobro emitido (administración o recepción): el link de pago del
+  // cliente deja de servir y las líneas se pueden volver a cambiar.
+  anularCobro: (id, token) => api.post(`${RECURSO}/${id}/cobro/anular`, {}, token).then(desdeApi),
 
   aprobarCobro: (id, monto, token) =>
     api
-      .post(`${RECURSO}/${id}/cobro/aprobar`, monto ? { monto: Number(monto) } : {}, token)
+      .post(`${RECURSO}/${id}/cobro/aprobar`, monto ? { monto: parsearMontoAR(monto) } : {}, token)
       .then(desdeApi),
 
-  actualizar: (id, orden, token) =>
-    api
-      .patch(
-        `${RECURSO}/${id}`,
-        {
-          estado: CODIGOS[orden.estado],
-          mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
-          descripcion_ingreso: orden.descripcion,
-          costo_estimado: Number(orden.total) || 0,
-        },
-        token,
-      )
-      .then(desdeApi),
+  // costo_estimado viaja solo con `incluirCosto` (el formulario de la orden de
+  // administración o recepción). Sin la opción no se toca el presupuesto: así
+  // el mecánico no recibe un 403 (MC1) y asignar un mecánico no pisa el
+  // presupuesto con el total de la orden (que puede ser el costo_final).
+  actualizar: (id, orden, token, { incluirCosto = false } = {}) => {
+    const cuerpo = {
+      estado: CODIGOS[orden.estado],
+      mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
+      descripcion_ingreso: orden.descripcion,
+    }
+    if (incluirCosto) cuerpo.costo_estimado = parsearMontoAR(orden.total) ?? 0
+    return api.patch(`${RECURSO}/${id}`, cuerpo, token).then(desdeApi)
+  },
 }

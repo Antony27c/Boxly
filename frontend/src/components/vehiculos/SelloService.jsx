@@ -1,3 +1,5 @@
+import { formatearFechaCorta } from '@/lib/fechas'
+
 // Sello de goma de la libreta de service: fecha, servicio y estado de una orden.
 // Va al costado del renglón, levemente torcido como un sello a mano, sin tapar
 // el texto. Los trabajos terminados se estampan en ámbar; el resto en tinta.
@@ -6,11 +8,7 @@ const GIROS = ['-rotate-3', 'rotate-2', '-rotate-1', 'rotate-3']
 
 function fechaCorta(fecha) {
   if (!fecha) return 's/f'
-  return new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-  })
+  return formatearFechaCorta(fecha)
 }
 
 function tono(estado) {

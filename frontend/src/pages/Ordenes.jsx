@@ -141,8 +141,10 @@ export default function Ordenes() {
   }
 
   async function guardar(datosOrden) {
-    if (enEdicion) await ordenesService.actualizar(enEdicion.id, datosOrden, token)
-    else await ordenesService.crear(datosOrden, token)
+    // Solo administración y recepción mandan el presupuesto (MC1).
+    const opciones = { incluirCosto: esMostrador }
+    if (enEdicion) await ordenesService.actualizar(enEdicion.id, datosOrden, token, opciones)
+    else await ordenesService.crear(datosOrden, token, opciones)
     avisar(enEdicion ? 'Orden actualizada.' : 'Orden de trabajo creada.')
     setFormularioAbierto(false)
     setEnEdicion(null)

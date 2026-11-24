@@ -13,15 +13,21 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+
+from app.core.ip import ip_cliente
 
 
 def _rate_limit_habilitado() -> bool:
     return os.getenv("RATE_LIMIT_ENABLED", "true").strip().lower() != "false"
 
 
+def clave_por_ip(request: Request) -> str:
+    """Clave del límite: la IP de la conexión (app.core.ip), nunca X-Forwarded-For."""
+    return ip_cliente(request) or "sin-ip"
+
+
 # Nace apagado: lo activa configurar_rate_limit() según la variable de entorno.
-limiter = Limiter(key_func=get_remote_address, enabled=False)
+limiter = Limiter(key_func=clave_por_ip, enabled=False)
 
 
 async def _handler_429(request: Request, exc: RateLimitExceeded) -> JSONResponse:

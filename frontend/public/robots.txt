@@ -1,0 +1,27 @@
+# Boxly: se indexan solo las páginas públicas (/, /boxly y /privacidad).
+# La app privada (personal del taller, portal del cliente y plataforma) no se indexa.
+User-agent: *
+Disallow: /api/
+Disallow: /login
+Disallow: /activar
+Disallow: /inicio
+Disallow: /hoy
+Disallow: /ordenes
+Disallow: /turnos
+Disallow: /clientes
+Disallow: /vehiculos
+Disallow: /inventario
+Disallow: /horarios
+Disallow: /dashboard
+Disallow: /finanzas
+Disallow: /usuarios
+Disallow: /admin
+Disallow: /suscripcion
+Disallow: /terminos
+Disallow: /ayuda
+Disallow: /configuracion
+Disallow: /portal
+Disallow: /plataforma
+
+# Dominio provisorio: confirmar antes de publicar.
+Sitemap: https://boxly.com.ar/sitemap.xml

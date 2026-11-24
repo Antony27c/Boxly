@@ -4,9 +4,9 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models import Cliente, Orden, Repuesto, Usuario, Vehiculo
-from app.models.usuario import RolUsuario
 from app.main import app
+from app.models import Cliente, Orden, Repuesto, Taller, Usuario, Vehiculo
+from app.models.usuario import RolUsuario
 
 ROLES = ["administrador", "recepcion", "mecanico", "cliente", "sin_token"]
 
@@ -26,6 +26,8 @@ def datos():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
+        # el límite del plan se prueba en test_suscripciones.py
+        db.get(Taller, 1).plan_codigo = "pro"
         usuarios = {
             "administrador": Usuario(nombre="Admin", apellido="Taller", email="admin@x.com",
                                      password_hash=hash_password("x"), rol=RolUsuario.administrador),
@@ -123,6 +125,10 @@ CASOS = [
      _esp(200, 200, 403, 403, 401)),
     ("POST", "/api/v1/ordenes/{orden_id}/notificaciones", None,
      _esp(201, 403, 403, 403, 401)),
+    # La orden del fixture no tiene cobro emitido: administración y recepción
+    # llegan al service y reciben 409; el resto lo frena el rol.
+    ("POST", "/api/v1/ordenes/{orden_id}/cobro/anular", None,
+     _esp(409, 409, 403, 403, 401)),
     # --- users ---
     ("GET", "/api/v1/users", None,
      _esp(200, 403, 403, 403, 401)),

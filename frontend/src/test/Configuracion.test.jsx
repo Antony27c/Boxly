@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Configuracion from '@/pages/Configuracion'
 import { TemaProvider } from '@/context/TemaContext'
 import { ToastProvider } from '@/context/ToastContext'
+import { ZonaSoloLectura } from '@/context/SoloLecturaContext'
 
 const auth = vi.hoisted(() => ({
   usuario: { id: 1, nombre: 'Ana', apellido: 'Gómez', email: 'ana@taller.com', rol: 'recepcion' },
@@ -16,6 +17,15 @@ vi.mock('@/context/AuthContext', () => ({
     autenticado: true,
     cargandoSesion: false,
   }),
+}))
+
+vi.mock('@/services/soporte', () => ({
+  soporteService: {
+    listarAccesos: vi.fn().mockResolvedValue([]),
+    crearAcceso: vi.fn(),
+    revocarAcceso: vi.fn(),
+    listarActividad: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
 }))
 
 const USUARIO_ADMIN = {
@@ -120,5 +130,36 @@ describe('Configuracion', () => {
     expect(
       screen.getByText(/Para cambiar tu contraseña, pedile al administrador del taller/),
     ).toBeInTheDocument()
+  })
+})
+
+describe('Configuracion en solo lectura', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.className = ''
+    auth.usuario = { id: 1, nombre: 'Ana', apellido: 'Gómez', email: 'ana@taller.com', rol: 'recepcion' }
+  })
+
+  it('las preferencias de este dispositivo siguen andando: no escriben en el servidor', () => {
+    auth.usuario = USUARIO_ADMIN
+    render(
+      <MemoryRouter>
+        <TemaProvider>
+          <ToastProvider>
+            <ZonaSoloLectura activo>
+              <Configuracion />
+            </ZonaSoloLectura>
+          </ToastProvider>
+        </TemaProvider>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('radio', { name: /Oscuro/ })).toBeEnabled()
+    expect(screen.getByRole('switch', { name: 'Reducir animaciones' })).toBeEnabled()
+    screen.getAllByRole('radio').forEach((opcion) => expect(opcion).toBeEnabled())
+    expect(screen.getByRole('button', { name: /Primeros pasos/i })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Reducir animaciones' }))
+    expect(document.documentElement).toHaveClass('reducir-movimiento')
   })
 })

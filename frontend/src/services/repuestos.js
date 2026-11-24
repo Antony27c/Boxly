@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import { parsearMontoAR } from '@/lib/montos'
 
 const RECURSO = '/api/v1/repuestos'
 
@@ -14,7 +15,7 @@ function aPayloadApi(repuesto) {
     descripcion: String(repuesto.descripcion ?? '').trim(),
     stock: Number(repuesto.stock),
     stock_minimo: Number(repuesto.stock_minimo),
-    precio: Number(String(repuesto.precio).replace(',', '.')),
+    precio: parsearMontoAR(repuesto.precio),
   }
 }
 
@@ -62,4 +63,11 @@ export const repuestosService = {
 
   ingresarStock: (repuesto, cantidad, token) =>
     api.post(`${RECURSO}/${repuesto.id}/ingresos`, { cantidad: Number(cantidad) }, token),
+
+  /* Avisos internos de stock mínimo (administrador y recepción), más nuevos
+     primero. Por defecto solo los que nadie marcó como leídos. */
+  avisos: (token, { soloNoLeidos = true } = {}) =>
+    api.get(`${RECURSO}/avisos${soloNoLeidos ? '?solo_no_leidas=true' : ''}`, token),
+
+  marcarLeido: (id, token) => api.post(`${RECURSO}/avisos/${id}/leer`, {}, token),
 }

@@ -88,9 +88,12 @@ export default function LucesTema({ variante = 'compacta', etiqueta = 'Tema', on
 
   return (
     <div>
+      {/* El tema es una preferencia de este dispositivo: no escribe en el
+          servidor, así que en solo lectura sigue andando. */}
       <div
         role="radiogroup"
         aria-label={etiqueta}
+        data-lectura
         className={
           amplia ? 'grid gap-3 sm:grid-cols-3' : 'grid grid-cols-3 gap-1 rounded-box bg-graphite-700 p-1'
         }

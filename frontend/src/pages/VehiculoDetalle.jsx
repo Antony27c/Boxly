@@ -13,7 +13,7 @@ import { ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
 import { clientesService } from '@/services/clientes'
 import { turnosService } from '@/services/turnos'
 import { vehiculosService } from '@/services/vehiculos'
-import { aISO } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
 
 // Turnos que todavía cuentan como "próximo service" en la libreta.
 const TURNOS_VIGENTES = ['pendiente', 'confirmado']
@@ -60,7 +60,7 @@ function textoDueno({ cliente, cargando, error }) {
 export default function VehiculoDetalle() {
   const { id } = useParams()
   const { usuario } = useAuth()
-  const hoy = aISO(new Date())
+  const hoy = hoyAR()
   // "Pedir turno" y "Nueva orden" son para mostrador: los mecánicos no
   // tienen acceso a /turnos y el backend no los deja crear órdenes.
   const esMostrador = tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)

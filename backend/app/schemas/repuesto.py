@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.sin_dinero import SinDineroMixin
+
 
 def _vacio_a_none(value):
     if isinstance(value, str):
@@ -56,12 +58,18 @@ class RepuestoUpdate(BaseModel):
         return _vacio_a_none(value)
 
 
-class RepuestoResponse(RepuestoBase):
+class RepuestoResponse(SinDineroMixin, RepuestoBase):
+    """Repuesto para el personal. El mecánico ve nombre, código y stock, pero
+    no el precio (``sin_dinero``): avisa qué repuestos usó, no los cotiza."""
+
     model_config = ConfigDict(from_attributes=True)
+    _CAMPOS_DINERO = {"precio": None}
 
     id: int
     activo: bool
     stock_bajo: bool = False
+    # Opcional solo en la respuesta: va en null cuando se oculta el dinero.
+    precio: Optional[Decimal] = None
 
 
 class IngresoStockRequest(BaseModel):

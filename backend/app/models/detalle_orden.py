@@ -23,7 +23,8 @@ class DetalleOrden(Base):
     )
     descripcion: Mapped[str] = mapped_column(String(200), nullable=False)
     cantidad: Mapped[int] = mapped_column(nullable=False, default=1)
-    precio_unitario: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # NULL = "a cotizar": línea cargada por el mecánico, sin precio todavía (docs/Suscripciones.md, S3).
+    precio_unitario: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
 
     orden: Mapped["Orden"] = relationship(back_populates="detalles")
     repuesto: Mapped[Optional["Repuesto"]] = relationship(back_populates="detalles")

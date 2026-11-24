@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -121,6 +123,8 @@ def get_mi_orden(db: Session, usuario: Usuario, orden_id: int) -> MiOrdenDetalle
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Orden no encontrada",
         )
+    detalles = orden_service.listar_detalles(db, orden.id)
+    lineas_a_cotizar = sum(1 for d in detalles if d.a_cotizar)
     return MiOrdenDetalle(
         id=orden.id,
         codigo=orden.codigo,
@@ -138,7 +142,12 @@ def get_mi_orden(db: Session, usuario: Usuario, orden_id: int) -> MiOrdenDetalle
         pasos=_armar_pasos(orden),
         historial=orden_service.obtener_historial_orden(db, orden.id),
         imagenes=orden_service.listar_imagenes(db, orden.id),
-        detalles=orden_service.listar_detalles(db, orden.id),
+        detalles=detalles,
+        lineas_a_cotizar=lineas_a_cotizar,
+        total_parcial=lineas_a_cotizar > 0,
+        total=sum(
+            (d.subtotal for d in detalles if d.subtotal is not None), Decimal("0")
+        ),
         pagada=orden.pagada,
         puede_pagar=puede_pagar(orden),
         pago=PagoResponse.model_validate(orden.pagos[-1]) if orden.pagos else None,

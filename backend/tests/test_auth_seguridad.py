@@ -3,9 +3,9 @@ e invalidación de tokens al cambiar la contraseña."""
 
 from datetime import datetime, timedelta, timezone
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-import jwt
 
 from app.core.config import get_settings
 from app.core.rate_limit import configurar_rate_limit, limiter

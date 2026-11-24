@@ -65,6 +65,10 @@ class Settings(BaseSettings):
 
     mp_access_token: str | None = None
     mp_webhook_secret: str | None = None
+    # Cuenta de Mercado Pago DE BOXLY (distinta de la de los talleres): cobra las
+    # suscripciones mensuales de los talleres (docs/Suscripciones.md, tarea S2).
+    boxly_mp_access_token: str | None = None
+    boxly_mp_webhook_secret: str | None = None
     frontend_url: str = "http://localhost:5173"
     backend_public_url: str | None = None
 
@@ -76,6 +80,11 @@ class Settings(BaseSettings):
     smtp_from_name: str = "Boxly Taller Mecánico"
     smtp_from_email: str = ""
     smtp_tls: bool = True
+
+    # Envío por API HTTPS (alternativa al SMTP, para hostings que bloquean el SMTP saliente).
+    # Si hay una clave, se usa ese proveedor; si no, SMTP.
+    resend_api_key: str = ""
+    brevo_api_key: str = ""
 
     # SOLO DEMO: la contraseña inicial de cada cliente es su DNI/CUIT y no hace falta el correo
     # de verificación. Es insegura (el DNI no es secreto): apagarla antes de uso real.
@@ -113,6 +122,17 @@ class Settings(BaseSettings):
                     "JWT_SECRET_KEY sigue siendo un placeholder de ejemplo; "
                     "generá un secreto real en producción."
                 )
+            # Estas URLs viajan a Mercado Pago (back_urls, notification_url) y
+            # el pagador vuelve por ellas: en producción, solo por TLS.
+            for nombre, valor in (
+                ("FRONTEND_URL", self.frontend_url),
+                ("BACKEND_PUBLIC_URL", self.backend_public_url),
+            ):
+                if valor and not valor.startswith("https://"):
+                    raise ValueError(
+                        f"Configuración inválida para producción: {nombre} tiene "
+                        "que usar https://."
+                    )
         elif not (self.jwt_secret_key or "").strip():
             # Sin JWT_SECRET_KEY en desarrollo se usa un secreto inseguro solo
             # para poder levantar la API en local.

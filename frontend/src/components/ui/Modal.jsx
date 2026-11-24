@@ -79,9 +79,11 @@ export default function Modal({ titulo, descripcion, abierto, onCerrar, children
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-5">
+      {/* Cerrar es leer: en solo lectura el modal se tiene que poder cerrar. */}
       <button
         type="button"
         aria-label="Cerrar"
+        data-lectura
         className="absolute inset-0 animate-fade-in cursor-default bg-black/40"
         onClick={onCerrar}
       />
@@ -109,6 +111,7 @@ export default function Modal({ titulo, descripcion, abierto, onCerrar, children
             type="button"
             onClick={onCerrar}
             aria-label="Cerrar"
+            data-lectura
             className="flex min-h-10 min-w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-graphite-700 hover:text-ink"
           >
             <Icono nombre="cerrar" className="h-4 w-4" />

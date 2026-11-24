@@ -1,4 +1,6 @@
 // Roles del sistema (los valores que devuelve el backend) agrupados por permiso.
+export const ROLES_SUPERADMIN = ['superadmin']
+// El superadmin opera la plataforma: no está en los roles del taller (docs/Plataforma.md).
 export const ROLES_ADMIN = ['admin', 'administrador']
 export const ROLES_MOSTRADOR = [...ROLES_ADMIN, 'recepcion', 'recepcionista']
 export const ROLES_MECANICO = ['mecanico', 'mecánico']
@@ -7,6 +9,7 @@ export const ROLES_CLIENTE = ['cliente']
 
 // Etiqueta legible del rol para mostrar a las personas ("Recepción", no "recepcion").
 export function etiquetaRol(rol) {
+  if (ROLES_SUPERADMIN.includes(rol)) return 'Superadmin'
   if (ROLES_ADMIN.includes(rol)) return 'Administrador'
   if (ROLES_MECANICO.includes(rol)) return 'Mecánico'
   if (ROLES_MOSTRADOR.includes(rol)) return 'Recepción'
@@ -33,6 +36,20 @@ const MAS_MOSTRADOR = [
 
 const MAS_ADMIN = [...MAS_MOSTRADOR, { a: '/usuarios', texto: 'Usuarios', icono: 'usuarios' }]
 
+const MAS_ADMIN_TALLER = [
+  ...MAS_ADMIN,
+  { a: '/admin', texto: 'Panel del taller', icono: 'ajustes' },
+  { a: '/suscripcion', texto: 'Suscripción', icono: 'dinero' },
+]
+
+const PRINCIPALES_SUPERADMIN = [
+  { a: '/plataforma', texto: 'Talleres', icono: 'herramienta' },
+  { a: '/plataforma/planes', texto: 'Planes', icono: 'dinero' },
+  { a: '/plataforma/solicitudes', texto: 'Solicitudes', icono: 'clientes' },
+  { a: '/plataforma/encuestas', texto: 'Encuestas', icono: 'info' },
+  { a: '/plataforma/sistema', texto: 'Sistema', icono: 'dashboard' },
+]
+
 const PRINCIPALES_MECANICO = [
   { a: '/hoy', texto: 'Mi trabajo', icono: 'hoy' },
   { a: '/ordenes', texto: 'Órdenes', icono: 'ordenes' },
@@ -43,8 +60,11 @@ const MAS_MECANICO = [{ a: '/horarios', texto: 'Horarios', icono: 'horarios' }]
 
 // Devuelve { principales, mas } para el rol dado. Un rol desconocido no ve nada.
 export function menuSegunRol(rol) {
+  if (ROLES_SUPERADMIN.includes(rol)) {
+    return { principales: [...PRINCIPALES_SUPERADMIN], mas: [] }
+  }
   if (ROLES_ADMIN.includes(rol)) {
-    return { principales: [...PRINCIPALES_MOSTRADOR], mas: MAS_ADMIN }
+    return { principales: [...PRINCIPALES_MOSTRADOR], mas: MAS_ADMIN_TALLER }
   }
   if (ROLES_MECANICO.includes(rol)) {
     return { principales: [...PRINCIPALES_MECANICO], mas: [...MAS_MECANICO] }
@@ -62,6 +82,7 @@ export function menuSegunRol(rol) {
 // Todo el personal del taller arranca en "Hoy" (el resumen del día);
 // el cliente sigue en su portal.
 export function inicioSegunRol(rol) {
+  if (ROLES_SUPERADMIN.includes(rol)) return '/plataforma'
   if (ROLES_CLIENTE.includes(rol)) return '/portal'
   if (ROLES_TALLER.includes(rol)) return '/hoy'
   return '/login'
@@ -79,6 +100,13 @@ export const navegacion = [
   { a: '/horarios', texto: 'Horarios', roles: ROLES_TALLER },
   { a: '/dashboard', texto: 'Dashboard', roles: ROLES_MOSTRADOR },
   { a: '/usuarios', texto: 'Usuarios', roles: ROLES_ADMIN },
+  { a: '/admin', texto: 'Panel del taller', roles: ROLES_ADMIN },
+  { a: '/plataforma', texto: 'Talleres', roles: ROLES_SUPERADMIN },
+  { a: '/plataforma/sistema', texto: 'Sistema', roles: ROLES_SUPERADMIN },
+  { a: '/plataforma/planes', texto: 'Planes', roles: ROLES_SUPERADMIN },
+  { a: '/plataforma/solicitudes', texto: 'Solicitudes', roles: ROLES_SUPERADMIN },
+  { a: '/plataforma/encuestas', texto: 'Encuestas', roles: ROLES_SUPERADMIN },
+  { a: '/suscripcion', texto: 'Suscripción', roles: ROLES_ADMIN },
 ]
 
 export function tieneAcceso(roles, rol) {

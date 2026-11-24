@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
-import TarjetaOrden from '@/components/ordenes/TarjetaOrden'
+import TarjetaOrden, { BannerCobro } from '@/components/ordenes/TarjetaOrden'
 
 const VEHICULO = { id: 7, patente: 'AB123CD', marca: 'Fiat', modelo: 'Cronos', cliente_id: 1 }
 const CLIENTE = { id: 1, nombre: 'Ana', apellido: 'Pérez' }
@@ -43,6 +43,50 @@ function montar(props) {
 }
 
 describe('TarjetaOrden', () => {
+  it('al mecánico no le muestra montos ni cobro, aunque vengan o falten los campos', () => {
+    const { container, unmount } = montar({
+      usuario: MECANICO,
+      orden: orden({
+        estado: 'Listo',
+        mecanico: 'Mario',
+        mecanico_id: 3,
+        total: 50000,
+        cobro_estado: 'pendiente',
+        monto_propuesto: 50000,
+        pagos: [{ id: 1, estado: 'duplicado' }],
+      }),
+    })
+    expect(screen.queryByText(/A presupuestar|Cobro|Pago duplicado|Sin cobro/)).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/\$|NaN|undefined/)
+    unmount()
+
+    // Sin ningún campo de dinero (MC1).
+    const { container: sinDinero } = montar({
+      usuario: MECANICO,
+      orden: { id: 2, codigo: 'OT-002', estado: 'Listo', descripcion: 'Frenos', mecanico: 'Mario', mecanico_id: 3, vehiculo_id: 7 },
+    })
+    expect(screen.queryByRole('button', { name: /cobro/i })).not.toBeInTheDocument()
+    expect(sinDinero.textContent).not.toMatch(/\$|NaN|undefined/)
+  })
+
+  it('al administrador le sigue mostrando el monto propuesto viejo', () => {
+    render(
+      <BannerCobro
+        orden={orden({ estado: 'Listo', cobro_estado: 'pendiente', monto_propuesto: 90000 })}
+        esMostrador
+        onAbrir={() => {}}
+      />,
+    )
+    expect(screen.getByText(/Cobro propuesto .*90\.000/)).toBeInTheDocument()
+  })
+
+  it('el banner del cobro no se le muestra al mecánico', () => {
+    const { container } = render(
+      <BannerCobro orden={orden({ estado: 'Listo', cobro_estado: 'pendiente', monto_propuesto: 90000 })} onAbrir={() => {}} />,
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
+
   it('muestra un solo botón primario para recepción en Pendiente', () => {
     montar({ usuario: RECEPCION })
 
@@ -126,6 +170,35 @@ describe('TarjetaOrden', () => {
     montar({ usuario: RECEPCION, orden: orden({ estado: 'Listo' }) })
     fireEvent.click(screen.getByRole('button', { name: /Acciones de la orden/ }))
     expect(screen.queryByRole('menuitem', { name: 'Eliminar' })).not.toBeInTheDocument()
+  })
+
+  it('con líneas a cotizar la tarjeta lista ofrece cotizar en vez de cobrar', () => {
+    const onAccion = vi.fn()
+    montar({ orden: orden({ estado: 'Listo', lineas_a_cotizar: 1 }), onAccion })
+
+    expect(screen.queryByRole('button', { name: /Emitir cobro/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Cotizar trabajos/ }))
+    expect(onAccion).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), { tipo: 'abrir', texto: 'Cotizar trabajos' })
+  })
+
+  it('el banner de cobro queda deshabilitado con el motivo mientras haya líneas a cotizar', () => {
+    const onAbrir = vi.fn()
+    render(<BannerCobro orden={orden({ estado: 'Listo', lineas_a_cotizar: 2 })} esMostrador onAbrir={onAbrir} />)
+
+    const boton = screen.getByRole('button', { name: 'Generar cobro' })
+    expect(boton).toBeDisabled()
+    expect(boton).toHaveAccessibleDescription(
+      'Cotizá los trabajos pendientes antes de cobrar. Faltan 2 líneas.',
+    )
+    fireEvent.click(boton)
+    expect(onAbrir).not.toHaveBeenCalled()
+  })
+
+  it('el banner de cobro se habilita cuando no quedan líneas a cotizar', () => {
+    render(<BannerCobro orden={orden({ estado: 'Listo', lineas_a_cotizar: 0 })} esMostrador onAbrir={() => {}} />)
+
+    expect(screen.getByText('Todavía no se emitió el cobro.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Generar cobro' })).toBeEnabled()
   })
 
   it('la patente se muestra como patente Mercosur y el link la anuncia', () => {
@@ -226,5 +299,31 @@ describe('TarjetaOrden', () => {
 
     expect(screen.getByText('Sin asignar')).toHaveClass('text-amber-texto')
     expect(screen.getByText('A presupuestar')).toBeInTheDocument()
+  })
+
+  it('marca la orden con el chip Pago duplicado cuando hay un cobro duplicado', () => {
+    montar({
+      usuario: RECEPCION,
+      orden: orden({
+        estado: 'Listo',
+        pagada: true,
+        pagos: [
+          { id: 9, estado: 'aprobado', monto: 185000 },
+          { id: 10, estado: 'duplicado', monto: 185000, payment_id: '1319283712' },
+        ],
+      }),
+    })
+
+    expect(screen.getByText('Pago duplicado')).toBeInTheDocument()
+    expect(screen.getByText('Pagada')).toBeInTheDocument()
+  })
+
+  it('sin pagos duplicados no muestra el chip', () => {
+    montar({
+      usuario: RECEPCION,
+      orden: orden({ pagos: [{ id: 9, estado: 'aprobado', monto: 185000 }] }),
+    })
+
+    expect(screen.queryByText('Pago duplicado')).not.toBeInTheDocument()
   })
 })

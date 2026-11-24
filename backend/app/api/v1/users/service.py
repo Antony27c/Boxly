@@ -1,16 +1,24 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.v1.suscripcion.service import personal_activo
 from app.api.v1.users import repository
 from app.core.config import get_settings
+from app.core.errores import LIMITE_PERSONAL, ErrorConCodigo
 from app.core.security import (
     create_access_token,
     decode_invitation_token,
     hash_password,
     verify_password,
 )
+from app.core.suscripcion import reservar_cupo
+from app.db.session import CLAVE_TALLER
+from app.models import Plan, Taller
 from app.models.cliente import Cliente
-from app.models.usuario import RolUsuario, Usuario
+from app.models.usuario import ROLES_PERSONAL, RolUsuario, Usuario
 from app.schemas.paginacion import ParametrosPagina
 from app.schemas.usuario import (
     ActivacionInfo,
@@ -26,6 +34,10 @@ from app.schemas.usuario import (
 # Hash bcrypt de una contraseña cualquiera: cuando el email no existe se verifica
 # contra este para que la respuesta tarde lo mismo y no se pueda enumerar usuarios.
 _HASH_DUMMY = "$2b$12$D5nmqropdACIU8iLQjEjGewyaEd1qk.04sX1PfmTKXgcR0AwcpDzC"
+
+# El superadmin es de la plataforma: nadie del taller puede crearlo ni asignarlo
+# (docs/Plataforma.md, P1).
+_MSG_SIN_SUPERADMIN = "No se puede crear ni asignar el rol superadmin"
 
 
 def _to_response(user: Usuario) -> UsuarioResponse:
@@ -173,22 +185,85 @@ def activar_cuenta(db: Session, data: ActivacionRequest) -> TokenResponse:
     return TokenResponse(access_token=token, usuario=_to_response(user))
 
 
-def create_usuario(db: Session, data: UsuarioCreate) -> UsuarioResponse:
-    if repository.get_by_email(db, data.email):
+def _exigir_sin_superadmin(rol: RolUsuario | None) -> None:
+    if rol == RolUsuario.superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_MSG_SIN_SUPERADMIN,
+        )
+
+
+def _exigir_cupo_personal(db: Session, taller_id: int | None) -> None:
+    """Límite de personal del plan del taller (docs/Suscripciones.md, S1):
+    crear o reactivar personal por encima de ``max_personal`` → 409.
+    Las cuentas de cliente no cuentan y ``max_personal`` null no limita."""
+    if taller_id is None:
+        return
+    taller = db.get(Taller, taller_id)
+    plan = db.get(Plan, taller.plan_codigo) if taller is not None else None
+    if plan is None or plan.max_personal is None:
+        return
+    if personal_activo(db, taller_id) >= plan.max_personal:
+        raise ErrorConCodigo(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Tu plan permite hasta {plan.max_personal} usuarios del personal. "
+                "Pasá a un plan mayor para sumar más."
+            ),
+            codigo=LIMITE_PERSONAL,
+        )
+
+
+@contextmanager
+def _cupo_reservado(db: Session, taller_id: int | None) -> Iterator[None]:
+    """Reserva el cupo de personal del taller hasta el commit (ver
+    ``reservar_cupo``). Hay que envolver el conteo Y el commit
+    (repository.create/update commitean)."""
+    if taller_id is not None:
+        reservar_cupo(db, taller_id)
+    yield
+
+
+def _validar_no_ultimo_admin(db: Session, user: Usuario, payload: dict) -> None:
+    """No se puede dejar el taller sin administrador activo: ni desactivándolo
+    ni cambiándole el rol (docs/Plataforma.md, P1). El filtro de taller ya
+    limita el conteo a los administradores del taller del actor."""
+    if user.rol != RolUsuario.administrador or not user.activo:
+        return
+    pierde_admin = payload.get("activo") is False or (
+        payload.get("rol") is not None and payload["rol"] != RolUsuario.administrador
+    )
+    if pierde_admin and repository.contar_administradores_activos(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tiene que quedar al menos un administrador activo en el taller",
+        )
+
+
+def create_usuario(db: Session, data: UsuarioCreate, actor: Usuario) -> UsuarioResponse:
+    _exigir_sin_superadmin(data.rol)
+    if repository.email_existe(db, data.email):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ya existe un usuario con ese email",
         )
     cliente_id = _validar_cliente(db, data.rol, data.cliente_id)
-    user = repository.create(
-        db,
-        nombre=data.nombre,
-        apellido=data.apellido,
-        email=data.email,
-        password_hash=hash_password(data.password),
-        rol=data.rol,
-        cliente_id=cliente_id,
-    )
+    # El hash va afuera del lock: es lo lento del alta.
+    password_hash = hash_password(data.password)
+    ocupa_cupo = data.rol in ROLES_PERSONAL
+    taller_id = db.info.get(CLAVE_TALLER)
+    with _cupo_reservado(db, taller_id if ocupa_cupo else None):
+        if ocupa_cupo:
+            _exigir_cupo_personal(db, taller_id)
+        user = repository.create(
+            db,
+            nombre=data.nombre,
+            apellido=data.apellido,
+            email=data.email,
+            password_hash=password_hash,
+            rol=data.rol,
+            cliente_id=cliente_id,
+        )
     return _to_response(user)
 
 
@@ -216,7 +291,9 @@ def get_usuario(db: Session, user_id: int) -> UsuarioResponse:
     return _to_response(user)
 
 
-def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioResponse:
+def update_usuario(
+    db: Session, user_id: int, data: UsuarioUpdate, actor: Usuario
+) -> UsuarioResponse:
     user = repository.get_by_id(db, user_id)
     if user is None:
         raise HTTPException(
@@ -225,10 +302,26 @@ def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioRes
         )
 
     payload = data.model_dump(exclude_unset=True)
+
+    if payload.get("activo") is False and actor.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No podés desactivar tu propio usuario",
+        )
+
+    _exigir_sin_superadmin(payload.get("rol"))
+    _validar_no_ultimo_admin(db, user, payload)
+
+    # Reactivar personal (o pasar a un rol del personal estando activo) ocupa
+    # un lugar del plan: si ya contaba, no gasta cupo nuevo.
+    rol_nuevo = payload.get("rol") or user.rol
+    activo_nuevo = payload.get("activo", user.activo)
+    ya_contaba = user.rol in ROLES_PERSONAL and user.activo
+    ocupa_cupo = rol_nuevo in ROLES_PERSONAL and activo_nuevo and not ya_contaba
+
     if "email" in payload:
         email = payload["email"].lower().strip()
-        existing = repository.get_by_email(db, email)
-        if existing and existing.id != user.id:
+        if repository.email_existe(db, email, excluir_id=user.id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Ya existe un usuario con ese email",
@@ -252,17 +345,27 @@ def update_usuario(db: Session, user_id: int, data: UsuarioUpdate) -> UsuarioRes
     if "apellido" in payload and isinstance(payload["apellido"], str):
         payload["apellido"] = payload["apellido"].strip()
 
-    updated = repository.update(db, user, payload)
+    # El cupo se controla al final, con el lock tomado hasta el commit.
+    with _cupo_reservado(db, user.taller_id if ocupa_cupo else None):
+        if ocupa_cupo:
+            _exigir_cupo_personal(db, user.taller_id)
+        updated = repository.update(db, user, payload)
     return _to_response(updated)
 
 
-def delete_usuario(db: Session, user_id: int) -> UsuarioResponse:
+def delete_usuario(db: Session, user_id: int, actor: Usuario) -> UsuarioResponse:
     user = repository.get_by_id(db, user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado",
         )
+    if actor.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No podés desactivar tu propio usuario",
+        )
+    _validar_no_ultimo_admin(db, user, {"activo": False})
     return _to_response(repository.soft_delete(db, user))
 
 def list_mecanicos(db: Session) -> list[MecanicoResponse]:

@@ -4,9 +4,9 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
+from app.main import app
 from app.models import Cliente, Turno, Usuario
 from app.models.usuario import RolUsuario
-from app.main import app
 
 
 @pytest.fixture
@@ -46,7 +46,9 @@ def test_rechaza_horarios_fuera_de_la_grilla(api, datos, hora):
 
 def test_mover_un_turno_a_hora_invalida_se_rechaza(api, datos):
     turno = _crear(api, datos, "08:00:00").json()
-    r = api.put(f"/api/v1/turnos/{turno['id']}", headers=datos["h"], json={"fecha_hora": "2030-01-07T09:30:00"})
+    r = api.put(
+        f"/api/v1/turnos/{turno['id']}", headers=datos["h"], json={"fecha_hora": "2030-01-07T09:30:00"}
+    )
     assert r.status_code == 422
 
 

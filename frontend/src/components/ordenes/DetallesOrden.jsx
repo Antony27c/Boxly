@@ -1,13 +1,25 @@
 import { useCallback, useMemo, useState } from 'react'
 import Alert from '@/components/ui/Alert'
 import Autocomplete from '@/components/ui/Autocomplete'
+import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Loader from '@/components/ui/Loader'
 import Select from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
-import { ordenesService, sePuedeEditarDetalle } from '@/services/ordenes'
+import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
+import { ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
+import { tieneCodigo } from '@/lib/api'
+import {
+  AVISO_COBRO_EMITIDO,
+  CODIGO_COBRO_EMITIDO,
+  cobroEmitido,
+  estadoCobro,
+  lineaACotizar,
+  ordenesService,
+  sePuedeEditarDetalle,
+} from '@/services/ordenes'
 import { repuestosService } from '@/services/repuestos'
 import { pesos } from '@/utils/formato'
 
@@ -19,9 +31,29 @@ const VACIO = {
   precio_unitario: '',
 }
 
-export default function DetallesOrden({ orden }) {
-  const { token } = useAuth()
+// onCambio: avisa a la página que cambiaron las líneas (el total, las líneas a
+// cotizar y con eso si se puede cobrar), para que vuelva a leer la orden.
+const ORDEN_PAGADA = 'La orden ya está pagada'
+
+export default function DetallesOrden({ orden, onCambio }) {
+  const { token, usuario } = useAuth()
   const editable = sePuedeEditarDetalle(orden)
+  // S3 y MC1: el mecánico no carga ni ve precios (el backend no se los manda);
+  // elige el repuesto y la cantidad, y administración y recepción cotizan.
+  const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
+  const verPrecios = !esMecanico
+  // Con la orden pagada las líneas quedan fijas: se ven los botones, pero
+  // deshabilitados y con la explicación (el backend también lo rechaza).
+  const pagada = Boolean(orden.pagada) || estadoCobro(orden) === 'pagada'
+  // Lo mismo con el cobro emitido: hay que anularlo antes. Si la orden que se
+  // tiene está vieja y el servidor responde 409 cobro_emitido, se bloquea igual.
+  const [emitidoEnServidor, setEmitidoEnServidor] = useState(false)
+  const bloqueo = pagada
+    ? { titulo: ORDEN_PAGADA, aviso: `${ORDEN_PAGADA}: no se pueden agregar ni quitar líneas.` }
+    : cobroEmitido(orden) || emitidoEnServidor
+      ? { titulo: 'El cobro ya está emitido', aviso: AVISO_COBRO_EMITIDO }
+      : null
+  const puedeCotizar = editable && !bloqueo && tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
 
   const cargarDetalles = useCallback((t) => ordenesService.detalles(orden.id, t), [orden.id])
   const cargarRepuestos = useCallback(
@@ -38,15 +70,24 @@ export default function DetallesOrden({ orden }) {
   const [guardando, setGuardando] = useState(false)
   const [quitando, setQuitando] = useState(null)
   const [textoRepuesto, setTextoRepuesto] = useState('')
+  const [cotizando, setCotizando] = useState(null)
+  const [precioCotizar, setPrecioCotizar] = useState('')
+  const [guardandoCotizar, setGuardandoCotizar] = useState(null)
 
   const opcionesRepuesto = useMemo(
     () =>
       (repuestos ?? []).map((repuesto) => ({
         valor: repuesto.id,
         texto: repuesto.nombre,
-        detalle: `${repuesto.codigo ?? ''} · ${pesos(repuesto.precio)} · stock ${repuesto.stock}`,
+        detalle: [
+          repuesto.codigo,
+          verPrecios ? pesos(repuesto.precio) : null,
+          `stock ${repuesto.stock ?? 0}`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
       })),
-    [repuestos],
+    [repuestos, verPrecios],
   )
 
   const repuestoElegido = useMemo(
@@ -58,13 +99,14 @@ export default function DetallesOrden({ orden }) {
     () => (detalles ?? []).reduce((suma, item) => suma + Number(item.subtotal ?? 0), 0),
     [detalles],
   )
+  const lineasACotizar = useMemo(() => (detalles ?? []).filter(lineaACotizar).length, [detalles])
 
   function cambiar(campo, valor) {
     setDatos((previo) => {
       const siguiente = { ...previo, [campo]: valor }
       if (campo === 'repuesto_id') {
         const repuesto = (repuestos ?? []).find((item) => item.id === Number(valor))
-        siguiente.precio_unitario = repuesto ? String(repuesto.precio) : ''
+        siguiente.precio_unitario = repuesto ? formatearMontoAR(repuesto.precio) : ''
       }
       return siguiente
     })
@@ -83,16 +125,21 @@ export default function DetallesOrden({ orden }) {
     } else if (!datos.descripcion.trim()) {
       encontrados.descripcion = 'Describí el trabajo.'
     }
-    if (String(datos.precio_unitario).trim() === '') {
-      encontrados.precio_unitario = 'Ingresá el precio.'
-    } else if (Number.isNaN(Number(datos.precio_unitario)) || Number(datos.precio_unitario) < 0) {
-      encontrados.precio_unitario = 'El precio debe ser un número mayor o igual a 0.'
+    // El mecánico no valida precio: no lo carga (el repuesto toma el del
+    // inventario y la mano de obra queda a cotizar por recepción).
+    if (!esMecanico) {
+      if (String(datos.precio_unitario).trim() === '') {
+        encontrados.precio_unitario = 'Ingresá el precio.'
+      } else if (parsearMontoAR(datos.precio_unitario) === null) {
+        encontrados.precio_unitario = MENSAJE_MONTO_INVALIDO
+      }
     }
     return encontrados
   }
 
   async function agregar(evento) {
     evento.preventDefault()
+    if (bloqueo) return
     const encontrados = validar()
     setErrores(encontrados)
     if (Object.keys(encontrados).length > 0) return
@@ -106,30 +153,73 @@ export default function DetallesOrden({ orden }) {
           repuesto_id: datos.tipo === 'repuesto' ? datos.repuesto_id : null,
           descripcion: datos.tipo === 'trabajo' ? datos.descripcion : '',
           cantidad: datos.cantidad,
-          precio_unitario: datos.precio_unitario,
+          ...(esMecanico ? {} : { precio_unitario: parsearMontoAR(datos.precio_unitario) }),
         },
         token,
       )
       setDatos(VACIO)
       setTextoRepuesto('')
       await recargar()
+      onCambio?.()
     } catch (problema) {
-      setErrorApi(problema.message)
+      manejarError(problema)
     } finally {
       setGuardando(false)
     }
   }
 
   async function quitar(detalle) {
+    if (bloqueo) return
     setQuitando(detalle.id)
     setErrorApi('')
     try {
       await ordenesService.quitarDetalle(orden.id, detalle.id, token)
       await recargar()
+      onCambio?.()
+    } catch (problema) {
+      manejarError(problema)
+    } finally {
+      setQuitando(null)
+    }
+  }
+
+  // 409 cobro_emitido: en vez del texto del servidor se muestra el aviso de
+  // líneas bloqueadas y se le pide a la página que relea la orden.
+  function manejarError(problema) {
+    if (tieneCodigo(problema, CODIGO_COBRO_EMITIDO)) {
+      setEmitidoEnServidor(true)
+      setErrorApi('')
+      onCambio?.()
+      return
+    }
+    setErrorApi(problema.message)
+  }
+
+  function abrirCotizar(detalle) {
+    setCotizando(detalle.id)
+    setPrecioCotizar('')
+    setErrorApi('')
+  }
+
+  async function cotizar(evento, detalle) {
+    evento.preventDefault()
+    const precio = parsearMontoAR(precioCotizar)
+    if (precio === null) {
+      setErrorApi(precioCotizar.trim() ? MENSAJE_MONTO_INVALIDO : 'Ingresá el precio.')
+      return
+    }
+    setGuardandoCotizar(detalle.id)
+    setErrorApi('')
+    try {
+      await ordenesService.cotizarDetalle(orden.id, detalle.id, precio, token)
+      setCotizando(null)
+      setPrecioCotizar('')
+      await recargar()
+      onCambio?.()
     } catch (problema) {
       setErrorApi(problema.message)
     } finally {
-      setQuitando(null)
+      setGuardandoCotizar(null)
     }
   }
 
@@ -157,43 +247,92 @@ export default function DetallesOrden({ orden }) {
         </p>
       ) : (
         <ul className="space-y-3">
-          {detalles.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-start justify-between gap-3 rounded-box border border-graphite-700 p-3 text-sm"
-            >
-              <div>
-                <p className="font-medium">{item.descripcion}</p>
-                <p className="mt-0.5 text-muted">
-                  {item.repuesto_id ? 'Repuesto' : 'Mano de obra'} · {item.cantidad} ×{' '}
-                  {pesos(item.precio_unitario)}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="font-medium">{pesos(item.subtotal)}</span>
-                {editable && (
-                  <Button
-                    variante="fantasma"
-                    cargando={quitando === item.id}
-                    disabled={guardando}
-                    onClick={() => quitar(item)}
+          {detalles.map((item) => {
+            const pendiente = lineaACotizar(item)
+            return (
+              <li
+                key={item.id}
+                className="rounded-box border border-graphite-700 p-3 text-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{item.descripcion}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted">
+                      {item.repuesto_id ? 'Repuesto' : 'Mano de obra'} · {item.cantidad}
+                      {verPrecios && (pendiente ? ' · precio a definir' : ` × ${pesos(item.precio_unitario)}`)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {verPrecios &&
+                      (pendiente ? (
+                        <Badge tono="ambar">A cotizar</Badge>
+                      ) : (
+                        <span className="font-medium">{pesos(item.subtotal)}</span>
+                      ))}
+                    {puedeCotizar && pendiente && cotizando !== item.id && (
+                      <Button variante="fantasma" onClick={() => abrirCotizar(item)}>
+                        Cotizar
+                      </Button>
+                    )}
+                    {editable && (
+                      <Button
+                        variante="fantasma"
+                        cargando={quitando === item.id}
+                        disabled={guardando || Boolean(bloqueo)}
+                        title={bloqueo?.titulo}
+                        onClick={() => quitar(item)}
+                      >
+                        Quitar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {cotizando === item.id && (
+                  <form
+                    onSubmit={(evento) => cotizar(evento, item)}
+                    noValidate
+                    className="mt-3 flex flex-wrap items-end gap-2 border-t border-graphite-700 pt-3"
                   >
-                    Quitar
-                  </Button>
+                    <Field
+                      label="Precio a cotizar"
+                      inputMode="decimal"
+                      value={precioCotizar}
+                      onChange={(e) => setPrecioCotizar(e.target.value)}
+                      disabled={guardandoCotizar === item.id}
+                      placeholder="15.000"
+                      className="w-full sm:w-44"
+                    />
+                    <Button type="submit" cargando={guardandoCotizar === item.id}>
+                      Guardar precio
+                    </Button>
+                    <Button
+                      type="button"
+                      variante="fantasma"
+                      onClick={() => setCotizando(null)}
+                      disabled={guardandoCotizar === item.id}
+                    >
+                      Cancelar
+                    </Button>
+                  </form>
                 )}
-              </div>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       )}
 
-      <div className="flex justify-between border-t border-graphite-700 pt-3 text-sm">
-        <span className="text-muted">Total de líneas</span>
-        <span className="font-semibold">{pesos(totalLineas)}</span>
-      </div>
+      {verPrecios && (
+        <div className="flex justify-between border-t border-graphite-700 pt-3 text-sm">
+          <span className="text-muted">
+            {lineasACotizar > 0 ? `Total parcial · ${lineasACotizar} a cotizar` : 'Total de líneas'}
+          </span>
+          <span className="font-semibold">{pesos(totalLineas)}</span>
+        </div>
+      )}
 
       {editable && (
         <form onSubmit={agregar} noValidate className="space-y-4 border-t border-graphite-700 pt-4">
+          {bloqueo && <Alert tipo="info">{bloqueo.aviso}</Alert>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select
               label="Tipo de línea"
@@ -241,19 +380,21 @@ export default function DetallesOrden({ orden }) {
               error={errores.cantidad}
               disabled={guardando}
             />
-            <Field
-              label="Precio unitario"
-              inputMode="decimal"
-              value={datos.precio_unitario}
-              onChange={(e) => cambiar('precio_unitario', e.target.value)}
-              error={errores.precio_unitario}
-              disabled={guardando}
-              ayuda={datos.tipo === 'repuesto' ? 'Se completa solo; podés cambiarlo.' : undefined}
-              placeholder="15000"
-            />
+            {esMecanico ? null : (
+              <Field
+                label="Precio unitario"
+                inputMode="decimal"
+                value={datos.precio_unitario}
+                onChange={(e) => cambiar('precio_unitario', e.target.value)}
+                error={errores.precio_unitario}
+                disabled={guardando}
+                ayuda={datos.tipo === 'repuesto' ? 'Se completa solo; podés cambiarlo.' : undefined}
+                placeholder="15.000"
+              />
+            )}
           </div>
           <div className="flex justify-end">
-            <Button type="submit" cargando={guardando}>
+            <Button type="submit" cargando={guardando} disabled={Boolean(bloqueo)} title={bloqueo?.titulo}>
               {guardando ? 'Agregando…' : 'Agregar línea'}
             </Button>
           </div>

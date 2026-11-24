@@ -175,6 +175,7 @@ export default function Vehiculos() {
       <div className="mt-6 grid gap-4 sm:max-w-2xl sm:grid-cols-2">
         <Field
           label="Buscar por patente o modelo"
+          data-lectura
           type="search"
           placeholder="Ej.: AC482KL"
           value={patente}
@@ -183,6 +184,7 @@ export default function Vehiculos() {
         <Select
           label="Cliente"
           value={clienteFiltro}
+          data-lectura
           onChange={(e) => cambiarCliente(e.target.value)}
           opciones={[
             { valor: '', texto: 'Todos los clientes' },

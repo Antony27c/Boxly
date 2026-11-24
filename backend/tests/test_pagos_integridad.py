@@ -1,6 +1,11 @@
 """Integridad de pagos: reuso del pendiente, monto vigente, reembolsos,
 lock de fila y payment_id único de Mercado Pago."""
+import os
+import sqlite3
+import subprocess
+import sys
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -10,9 +15,9 @@ from app.api.v1.pagos import mercadopago, service
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models import Cliente, Orden, Pago, Usuario, Vehiculo
-from app.models.usuario import RolUsuario
 from app.main import app
+from app.models import Auditoria, Cliente, Orden, Pago, Usuario, Vehiculo
+from app.models.usuario import RolUsuario
 
 
 @pytest.fixture
@@ -247,3 +252,140 @@ def test_confirmar_ignora_payment_id_ya_asignado_a_otro_pago(api, datos, monkeyp
     assert r.status_code == 200 and r.json()["estado"] == "pendiente"
     with SessionLocal() as db:
         assert db.get(Pago, datos["pago"]).payment_id is None
+
+
+# --- Pago online aprobado con la orden ya paga (R2, bug 1) ---------------------
+
+
+def _emitir_cobro(datos):
+    with SessionLocal() as db:
+        db.get(Orden, datos["orden"]).cobro_estado = "aprobado"
+        db.commit()
+
+
+def _pagar_en_el_local(api, datos):
+    r = api.post(
+        f"/api/v1/ordenes/{datos['orden']}/pago-local",
+        headers=datos["admin"],
+        json={"medio": "efectivo", "monto": "1500.00"},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_mp_aprobado_despues_del_pago_local_queda_duplicado(api, datos, monkeypatch):
+    """El cliente abrió el checkout (pago pendiente) y después pagó en el
+    local: el intento online queda rechazado. Si MP igual lo aprueba, el pago
+    NO se aprueba — queda 'duplicado' para devolución manual, la orden no se
+    toca y queda una fila en la auditoría del taller."""
+    _emitir_cobro(datos)
+    _pagar_en_el_local(api, datos)
+    _settings(monkeypatch, mp_access_token="token")
+    monkeypatch.setattr(
+        mercadopago, "obtener_pago",
+        lambda *a, **k: _pago_mp("777", referencia=str(datos["pago"])),
+    )
+    assert _webhook(api, "777").status_code == 200
+    with SessionLocal() as db:
+        pago = db.get(Pago, datos["pago"])
+        assert pago.estado == "duplicado"
+        assert pago.payment_id == "777"
+        # El pago que vale es el del local: sigue siendo el único aprobado.
+        aprobados = [
+            p for p in db.query(Pago).filter_by(orden_id=datos["orden"])
+            if p.estado == "aprobado"
+        ]
+        assert len(aprobados) == 1 and aprobados[0].medio == "efectivo"
+        orden = db.get(Orden, datos["orden"])
+        assert orden.pagada is True and orden.costo_final == Decimal("1500.00")
+        filas = db.query(Auditoria).filter_by(entidad="pago", entidad_id=pago.id).all()
+        assert len(filas) == 1
+        assert filas[0].taller_id == 1
+        assert "duplicado" in filas[0].detalle
+
+
+def test_confirmar_aprobado_despues_del_pago_local_queda_duplicado(api, datos, monkeypatch):
+    """El mismo caso llegando por /confirmar (el cliente vuelve de MP): el
+    pago queda 'duplicado' y la respuesta lo muestra."""
+    _emitir_cobro(datos)
+    _pagar_en_el_local(api, datos)
+    _settings(monkeypatch, mp_access_token="token")
+    monkeypatch.setattr(
+        mercadopago, "obtener_pago",
+        lambda *a, **k: _pago_mp("779", referencia=str(datos["pago"])),
+    )
+    r = _confirmar(api, datos, "779")
+    assert r.status_code == 200 and r.json()["estado"] == "duplicado"
+    with SessionLocal() as db:
+        assert db.get(Pago, datos["pago"]).estado == "duplicado"
+        assert db.query(Auditoria).filter_by(entidad="pago").count() == 1
+
+
+def test_mp_aprobado_tras_rechazo_sin_otro_pago_si_avisa(api, datos, monkeypatch):
+    """rechazado -> aprobado sigue valiendo cuando la orden NO está paga:
+    el candado es 'otro pago aprobado', no el estado anterior del intento."""
+    _settings(monkeypatch, mp_access_token="token")
+    with SessionLocal() as db:
+        db.get(Pago, datos["pago"]).estado = "rechazado"
+        db.commit()
+    monkeypatch.setattr(
+        mercadopago, "obtener_pago",
+        lambda *a, **k: _pago_mp("778", referencia=str(datos["pago"])),
+    )
+    assert _webhook(api, "778").status_code == 200
+    with SessionLocal() as db:
+        assert db.get(Pago, datos["pago"]).estado == "aprobado"
+        assert db.get(Orden, datos["orden"]).pagada is True
+        assert db.query(Auditoria).filter_by(entidad="pago").count() == 0
+
+
+def test_duplicado_es_terminal_frente_a_avvisos_posteriores(api, datos, monkeypatch):
+    """Una vez 'duplicado' no vuelve atrás: un aviso 'approved' repetido no
+    cambia nada (la marca que pide la devolución manual queda)."""
+    _emitir_cobro(datos)
+    _pagar_en_el_local(api, datos)
+    _settings(monkeypatch, mp_access_token="token")
+    monkeypatch.setattr(
+        mercadopago, "obtener_pago",
+        lambda *a, **k: _pago_mp("780", referencia=str(datos["pago"])),
+    )
+    assert _webhook(api, "780").status_code == 200
+    with SessionLocal() as db:
+        assert db.get(Pago, datos["pago"]).estado == "duplicado"
+    assert _webhook(api, "780").status_code == 200
+    with SessionLocal() as db:
+        assert db.get(Pago, datos["pago"]).estado == "duplicado"
+
+
+def test_la_migracion_habilita_el_estado_duplicado(tmp_path):
+    """alembic upgrade -> downgrade -> upgrade: el check de pagos acepta y
+    luego deja de aceptar 'duplicado' según la revisión."""
+    db_path = tmp_path / "alembic_dup.db"
+    entorno = {**os.environ, "DATABASE_URL": f"sqlite:///{db_path.as_posix()}"}
+    backend = Path(__file__).resolve().parents[1]
+
+    def _alembic(*args):
+        return subprocess.run(
+            [sys.executable, "-m", "alembic", *args],
+            cwd=backend,
+            env=entorno,
+            capture_output=True,
+            text=True,
+        )
+
+    def _check():
+        conexion = sqlite3.connect(db_path)
+        try:
+            return conexion.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='pagos'"
+            ).fetchone()[0]
+        finally:
+            conexion.close()
+
+    assert _alembic("upgrade", "head").returncode == 0
+    assert "'duplicado'" in _check()
+
+    assert _alembic("downgrade", "e4c8a2f6b1d9").returncode == 0
+    assert "'duplicado'" not in _check()
+
+    assert _alembic("upgrade", "head").returncode == 0
+    assert "'duplicado'" in _check()

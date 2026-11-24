@@ -226,6 +226,8 @@ Todas se definen en `backend/.env` (partir de `.env.example`). Las sensibles **n
 | `SMTP_FROM_NAME` | `Boxly Taller Mecánico` | Nombre del remitente. |
 | `SMTP_FROM_EMAIL` | — | Dirección del remitente; si está vacía usa `SMTP_USER`. |
 | `SMTP_TLS` | `true` | Conexión cifrada. |
+| `RESEND_API_KEY` | — | Opcional. Si está, los correos salen por la API HTTPS de Resend y se ignora el SMTP. El remitente tiene que ser de un dominio verificado en Resend. |
+| `BREVO_API_KEY` | — | Opcional. Igual que Resend, con la API de Brevo; el remitente tiene que estar verificado en Brevo. |
 
 Se usan para: invitación al portal del cliente, aviso de activación de cuenta, notificación de cambio de estado de la orden y aviso de cobro.
 
@@ -250,7 +252,7 @@ Se usan para: invitación al portal del cliente, aviso de activación de cuenta,
 
 ### Email con Gmail
 
-Los correos salen por SMTP de Gmail. Gmail no acepta la contraseña normal: hay que generar una **App Password** (requiere verificación en 2 pasos) y ponerla en `SMTP_PASSWORD`. Si falta configuración, los avisos quedan registrados como `omitido`/`fallido` en la tabla `notificaciones` sin romper la operación.
+Los correos salen por SMTP de Gmail. Gmail no acepta la contraseña normal: hay que generar una **App Password** (requiere verificación en 2 pasos) y ponerla en `SMTP_PASSWORD`. Si el servidor bloquea el SMTP saliente, con `RESEND_API_KEY` o `BREVO_API_KEY` los correos salen por HTTPS (`python -m scripts.probar_email destinatario@ejemplo.com` manda uno de prueba). Si falta configuración, los avisos quedan registrados como `omitido`/`fallido` en la tabla `notificaciones` sin romper la operación.
 
 ## API
 
@@ -277,18 +279,25 @@ Resumen de routers (roles: **A**dministrador, **R**ecepción, **M**ecánico, **C
 
 ## Datos de demo
 
-`python -m scripts.seed_demo` carga el catálogo de marcas y modelos, 2 clientes con cuenta, vehículos, repuestos (2 con stock bajo), turnos y órdenes con historial, repuestos, mano de obra, pagos y notificaciones. Las fechas son relativas al día en que se corre.
+`python -m scripts.seed_demo` carga el catálogo de marcas y modelos y datos de demo en **dos talleres**: el taller principal (id 1, el de siempre) y el **Taller Norte** (id 2). Cada uno tiene sus clientes, vehículos, repuestos, órdenes con historial, turnos y horarios; la unicidad de DNI, patente y código es por taller.
 
-| Usuario | Rol | Para probar |
-|---|---|---|
-| `admin@boxly.com` | Administrador | Todo el sistema |
-| `recepcion@boxly.com` | Recepción | Clientes, vehículos, turnos y órdenes |
-| `mecanico@boxly.com` | Mecánico (Mario) | Solo sus órdenes y vehículos |
-| `mecanico2@boxly.com` | Mecánico (Lucía) | Solo sus órdenes y vehículos |
-| `cliente@boxly.com` | Cliente (Juan Perez) | Portal: tiene la orden `OT-DEMO-10` lista para pagar |
-| `cliente2@boxly.com` | Cliente (Laura Gomez) | Portal: orden con pago rechazado y reintentado, y una cancelada |
+| Usuario | Taller | Rol | Para probar |
+|---|---|---|---|
+| `superadmin@boxly.com` | Plataforma | Superadmin | Panel de control: cuentas, auditoría y respaldo |
+| `admin@boxly.com` | Taller principal | Administrador | Todo el sistema |
+| `recepcion@boxly.com` | Taller principal | Recepción | Clientes, vehículos, turnos y órdenes |
+| `mecanico@boxly.com` | Taller principal | Mecánico (Mario) | Solo sus órdenes y vehículos |
+| `mecanico2@boxly.com` | Taller principal | Mecánico (Lucía) | Solo sus órdenes y vehículos |
+| `cliente@boxly.com` | Taller principal | Cliente (Juan Perez) | Portal: tiene la orden `OT-DEMO-10` lista para pagar |
+| `cliente2@boxly.com` | Taller principal | Cliente (Laura Gomez) | Portal: orden con pago rechazado y reintentado, y una cancelada |
+| `admin2@boxly.com` | Taller Norte | Administrador | Solo ve los datos del Taller Norte |
+| `recepcion2@boxly.com` | Taller Norte | Recepción | Clientes, vehículos, turnos y órdenes del Taller Norte |
+| `mecanico3@boxly.com` | Taller Norte | Mecánico (Memo) | Solo sus órdenes del Taller Norte |
+| `cliente3@boxly.com` | Taller Norte | Cliente (Pedro Sosa) | Portal del Taller Norte: orden `OT-NTE-2` lista |
 
 Contraseña de todos: `Demo1234`.
+
+**Multi-taller y privacidad:** cada usuario pertenece a un taller y solo ve los datos de ese taller; el superadmin opera la plataforma y no accede a datos de clientes salvo que el taller le otorgue un acceso de soporte temporal. El contrato completo está en [`docs/Plataforma.md`](docs/Plataforma.md).
 
 Otros scripts: `python -m scripts.create_admin` (admin inicial) y `python -m scripts.seed_catalogo` (solo marcas y modelos). El único seed de datos es `python -m scripts.seed_demo`.
 

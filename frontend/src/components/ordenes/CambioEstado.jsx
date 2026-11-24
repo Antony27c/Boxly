@@ -7,8 +7,10 @@ import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
+import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
 import { DESCRIPCION_ESTADOS, ordenesService, proximosEstados } from '@/services/ordenes'
 import '@/styles/ordenes.css'
+import useTotalLineas from './useTotalLineas'
 
 // Comentarios listos para tocar según la etapa a la que se pasa la orden.
 const SUGERENCIAS = {
@@ -77,14 +79,27 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
     return opciones.find((estado) => estado !== 'Cancelado') ?? opciones[0] ?? ''
   })
   const [descripcion, setDescripcion] = useState('')
-  const [monto, setMonto] = useState(() => String(Number(orden.costo_estimado) || ''))
+  // El monto se precarga con el total de las líneas cotizadas o, si no hay,
+  // con el presupuesto estimado; null = todavía no se tocó el campo.
+  const totalLineas = useTotalLineas(orden.id, Boolean(puedeCobrar) && !orden.cobro_estado && !orden.pagada)
+  const [montoTipeado, setMonto] = useState(null)
+  const precargado = Number(totalLineas) || Number(orden.costo_estimado) || 0
+  const monto = montoTipeado ?? (precargado > 0 ? formatearMontoAR(precargado) : '')
   const [errorMonto, setErrorMonto] = useState('')
   const [fotos, setFotos] = useState([])
   const [error, setError] = useState('')
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
 
-  const pideMonto = nuevo === 'Listo' && !orden.cobro_estado && !orden.pagada
+  // El monto a cobrar solo lo cargan recepción y administración: el mecánico
+  // no pone precios ni emite cobros (S3, el backend le responde 403). Con
+  // líneas a cotizar el cobro lo rechaza el backend (409): tampoco se pide.
+  const pideMonto =
+    puedeCobrar &&
+    nuevo === 'Listo' &&
+    !orden.cobro_estado &&
+    !orden.pagada &&
+    !(Number(orden.lineas_a_cotizar ?? 0) > 0)
 
   async function enviar(evento) {
     evento.preventDefault()
@@ -93,7 +108,13 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
       setError('Contá qué se hizo en esta etapa (mínimo 5 caracteres).')
       return
     }
-    if (pideMonto && String(monto).trim() !== '' && !(Number(monto) > 0)) {
+    const hayMonto = pideMonto && String(monto).trim() !== ''
+    const numero = hayMonto ? parsearMontoAR(monto) : null
+    if (hayMonto && numero === null) {
+      setErrorMonto(MENSAJE_MONTO_INVALIDO)
+      return
+    }
+    if (hayMonto && !(numero > 0)) {
       setErrorMonto('El monto tiene que ser mayor a 0, o dejalo vacío para emitirlo después.')
       return
     }
@@ -109,9 +130,9 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
     }
 
     let errorCobro = ''
-    if (pideMonto && Number(monto) > 0) {
+    if (hayMonto && numero > 0) {
       try {
-        await ordenesService.emitirCobro(orden.id, monto, token)
+        await ordenesService.emitirCobro(orden.id, numero, token)
       } catch (problema) {
         errorCobro = problema.message
       }
@@ -225,7 +246,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
       {pideMonto && (
         <Field
           label={puedeCobrar ? 'Monto a cobrar (opcional)' : 'Monto a cobrar (opcional, lo aprueba recepción)'}
-          inputMode="numeric"
+          inputMode="decimal"
           value={monto}
           onChange={(e) => {
             setMonto(e.target.value)
@@ -233,7 +254,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
           }}
           error={errorMonto}
           disabled={ocupado}
-          placeholder="Ej.: 185000"
+          placeholder="Ej.: 185.000 o 185.000,50"
           ayuda={
             puedeCobrar
               ? 'Si lo completás, el cobro le llega al cliente y puede pagarlo online.'

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import FormularioUsuario from '@/components/admin/FormularioUsuario'
 import TarjetaUsuario from '@/components/admin/TarjetaUsuario'
 import Alert from '@/components/ui/Alert'
@@ -15,10 +15,14 @@ import Vacio from '@/components/ui/Vacio'
 import { useAuth } from '@/context/AuthContext'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
-import { ROLES, usuariosService } from '@/services/usuarios'
+import { cuentasService } from '@/services/cuentas'
+import { personalExcedido } from '@/components/suscripcion/estados'
+import { esErrorDeLimite, suscripcionService } from '@/services/suscripcion'
+import { ROLES_TALLER, usuariosService } from '@/services/usuarios'
 
 export default function Usuarios() {
-  const { token } = useAuth()
+  const { token, usuario: lector } = useAuth()
+  const esSuperadmin = lector?.rol === 'superadmin'
   const [parametros, setParametros] = useSearchParams()
   const [busqueda, setBusqueda] = useState('')
   const [rolFiltro, setRolFiltro] = useState('')
@@ -27,8 +31,17 @@ export default function Usuarios() {
   const [aEliminar, setAEliminar] = useState(null)
   const [errorEliminar, setErrorEliminar] = useState('')
   const [eliminando, setEliminando] = useState(false)
+  const [aRestablecer, setARestablecer] = useState(null)
+  const [errorRestablecer, setErrorRestablecer] = useState('')
+  const [restableciendo, setRestableciendo] = useState(false)
+  const [passwordTemporal, setPasswordTemporal] = useState(null)
+  const [copiado, setCopiado] = useState(false)
+  const [aCerrarSesiones, setACerrarSesiones] = useState(null)
+  const [errorSesiones, setErrorSesiones] = useState('')
+  const [cerrandoSesiones, setCerrandoSesiones] = useState(false)
   const [aviso, setAviso] = useState('')
   const [errorAccion, setErrorAccion] = useState('')
+  const [avisoLimite, setAvisoLimite] = useState('')
 
   // Con búsqueda o filtro de rol se trabaja con la lista completa (los
   // filtros son del lado del cliente); si no, se pagina en el servidor.
@@ -49,6 +62,27 @@ export default function Usuarios() {
     [modoCompleto, limite, offset, setTotal],
   )
   const { datos: usuarios, cargando, error, recargar } = useRecurso(cargarUsuarios)
+
+  // Tope de personal del plan (docs/Suscripciones.md, S8): si la suscripción no
+  // responde (por ejemplo el superadmin, que no tiene taller) no se muestra nada
+  // y el servidor sigue siendo la última palabra con su 409.
+  const cargarLimite = useCallback((t) => suscripcionService.obtener(t), [])
+  const { datos: suscripcion, recargar: recargarLimite } = useRecurso(cargarLimite)
+
+  // Administradores activos del taller: con uno solo, su cuenta no se puede
+  // desactivar, eliminar ni pasar a otro rol (P1). Si no se puede saber, no se
+  // bloquea nada y el servidor sigue siendo la última palabra con su 409.
+  const cargarAdminsActivos = useCallback(
+    (t) => usuariosService.contarAdministradoresActivos(t),
+    [],
+  )
+  const { datos: adminsActivos, recargar: recargarAdminsActivos } =
+    useRecurso(cargarAdminsActivos)
+  const esUltimoAdmin = (usuario) =>
+    Boolean(usuario?.activo) &&
+    usuario.rol === 'administrador' &&
+    typeof adminsActivos === 'number' &&
+    adminsActivos <= 1
 
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase()
@@ -73,6 +107,25 @@ export default function Usuarios() {
     ? `${activos} ${activos === 1 ? 'usuario activo' : 'usuarios activos'}.`
     : `${total} ${total === 1 ? 'usuario' : 'usuarios'} en total.`
 
+  const tope =
+    suscripcion && suscripcion.personal_activo != null
+      ? {
+          activo: suscripcion.personal_activo,
+          maximo: suscripcion.max_personal ?? null,
+          plan: suscripcion.plan?.nombre,
+        }
+      : null
+  const limiteAlcanzado = tope?.maximo != null && tope.activo >= tope.maximo
+  // Por encima del cupo (por ejemplo, después de bajar de plan): aviso en alerta.
+  const sobran = tope ? personalExcedido(tope.activo, tope.maximo) : 0
+  const textoLimite = tope
+    ? tope.maximo == null
+      ? `Personal: ${tope.activo} · plan sin límite`
+      : `Personal: ${tope.activo} de ${tope.maximo}${
+          tope.plan ? ` en tu plan ${tope.plan}` : ''
+        }`
+    : ''
+
   // ?nuevo=1 (por ejemplo desde la checklist de primeros pasos) abre el
   // formulario de alta una vez; el efecto de abajo limpia el parámetro.
   const quiereNuevo = parametros.get('nuevo') === '1'
@@ -90,31 +143,61 @@ export default function Usuarios() {
   function abrirNuevo() {
     setEnEdicion(null)
     setErrorAccion('')
+    setAvisoLimite('')
     setFormularioAbierto(true)
   }
 
   async function guardar(datosUsuario) {
-    if (enEdicion) {
-      await usuariosService.actualizar(enEdicion.id, datosUsuario, token)
-      setAviso('Usuario actualizado.')
-    } else {
-      await usuariosService.crear(datosUsuario, token)
-      setAviso('Usuario dado de alta.')
+    try {
+      if (enEdicion) {
+        await usuariosService.actualizar(enEdicion.id, datosUsuario, token)
+        setAviso('Usuario actualizado.')
+      } else {
+        await usuariosService.crear(datosUsuario, token)
+        setAviso('Usuario dado de alta.')
+      }
+    } catch (problema) {
+      // Tope de personal del plan: se muestra a nivel página con el link a los
+      // planes; el resto de los errores siguen yendo al formulario.
+      if (esErrorDeLimite(problema)) {
+        setAvisoLimite(problema.message)
+        setFormularioAbierto(false)
+        setEnEdicion(null)
+        await recargarLimite()
+        return
+      }
+      throw problema
     }
     setFormularioAbierto(false)
     setEnEdicion(null)
     await recargar()
+    await recargarLimite()
+    await recargarAdminsActivos()
   }
 
   async function alternarEstado(usuario) {
     setErrorAccion('')
     setAviso('')
+    setAvisoLimite('')
+    // Reactivar suma personal activo: con el plan lleno no se puede (el servidor
+    // también lo rechaza con 409 por si el contador local quedó viejo).
+    if (!usuario.activo && limiteAlcanzado) {
+      setAvisoLimite('Llegaste al límite de tu plan')
+      return
+    }
     try {
       await usuariosService.cambiarEstado(usuario.id, !usuario.activo, token)
       setAviso(usuario.activo ? 'Usuario desactivado.' : 'Usuario activado.')
       await recargar()
+      await recargarLimite()
+      await recargarAdminsActivos()
     } catch (problema) {
-      setErrorAccion(problema.message)
+      if (esErrorDeLimite(problema)) {
+        setAvisoLimite(problema.message)
+        await recargarLimite()
+      } else {
+        setErrorAccion(problema.message)
+      }
     }
   }
 
@@ -126,6 +209,8 @@ export default function Usuarios() {
       setAEliminar(null)
       setAviso('Usuario eliminado.')
       await recargar()
+      await recargarLimite()
+      await recargarAdminsActivos()
     } catch (problema) {
       setErrorEliminar(problema.message)
     } finally {
@@ -133,17 +218,120 @@ export default function Usuarios() {
     }
   }
 
+  // Solo superadmin: el servidor devuelve la contraseña temporal una sola vez;
+  // queda en pantalla hasta cerrar el modal y no se puede volver a ver.
+  async function confirmarRestablecer() {
+    setRestableciendo(true)
+    setErrorRestablecer('')
+    try {
+      const datos = await cuentasService.restablecerPassword(aRestablecer.id, token)
+      setPasswordTemporal({ usuario: aRestablecer, password: datos?.password_temporal ?? '' })
+      setCopiado(false)
+      setARestablecer(null)
+    } catch (problema) {
+      setErrorRestablecer(problema.message)
+    } finally {
+      setRestableciendo(false)
+    }
+  }
+
+  async function copiarPassword() {
+    const texto = passwordTemporal?.password
+    if (!texto) return
+    try {
+      await navigator.clipboard.writeText(texto)
+      setCopiado(true)
+      return
+    } catch {
+      // Sin Clipboard API (contexto no seguro o jsdom): campo temporal.
+    }
+    try {
+      const campo = document.createElement('textarea')
+      campo.value = texto
+      campo.style.position = 'fixed'
+      campo.style.opacity = '0'
+      document.body.appendChild(campo)
+      campo.select()
+      document.execCommand('copy')
+      campo.remove()
+      setCopiado(true)
+    } catch {
+      setCopiado(false)
+    }
+  }
+
+  async function confirmarCerrarSesiones() {
+    setCerrandoSesiones(true)
+    setErrorSesiones('')
+    try {
+      const datos = await cuentasService.cerrarSesiones(aCerrarSesiones.id, token)
+      setACerrarSesiones(null)
+      setAviso(datos?.detail ?? `Se cerraron las sesiones de ${aCerrarSesiones.email}.`)
+    } catch (problema) {
+      setErrorSesiones(problema.message)
+    } finally {
+      setCerrandoSesiones(false)
+    }
+  }
+
+  // Con el plan lleno el alta de personal queda bloqueada hasta pasar de plan;
+  // las cuentas de cliente no cuentan para el tope y esta pantalla no las crea.
+  const accionesAlta = limiteAlcanzado ? (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <Button disabled>Nuevo usuario</Button>
+      <span className="text-sm text-amber-texto">
+        Llegaste al límite de tu plan ·{' '}
+        <Link to="/suscripcion" className="font-semibold underline">
+          Ver planes
+        </Link>
+      </span>
+    </div>
+  ) : (
+    <Button onClick={abrirNuevo}>Nuevo usuario</Button>
+  )
+
   return (
     <div className="animate-bay-in">
       <EncabezadoPagina
         titulo="Usuarios"
         descripcion={`Usuarios del sistema y permisos de acceso. ${resumen}`}
-        acciones={<Button onClick={abrirNuevo}>Nuevo usuario</Button>}
+        acciones={accionesAlta}
       />
+
+      {tope && (
+        <p className="mt-3 text-sm">
+          <span
+            className={
+              sobran > 0
+                ? 'font-semibold text-danger'
+                : limiteAlcanzado
+                  ? 'font-semibold text-amber-texto'
+                  : 'text-muted'
+            }
+          >
+            {textoLimite}
+          </span>
+        </p>
+      )}
+
+      {sobran > 0 && (
+        <div className="mt-4">
+          <Alert tipo="warning">
+            Tenés {tope.activo} personas activas en el personal y tu plan
+            {tope.plan ? ` ${tope.plan}` : ''} permite hasta {tope.maximo}. Desactivá a quien ya
+            no trabaje en el taller o pasá a un plan más grande; mientras tanto no podés sumar
+            personal.{' '}
+            <Link to="/suscripcion" className="font-semibold underline">
+              Ver planes
+            </Link>
+          </Alert>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-4 sm:max-w-2xl sm:grid-cols-2">
         <Field
           label="Buscar por nombre o correo"
+          data-lectura
           type="search"
           placeholder="Ej.: Sofía"
           value={busqueda}
@@ -152,8 +340,9 @@ export default function Usuarios() {
         <Select
           label="Rol"
           value={rolFiltro}
+          data-lectura
           onChange={(e) => setRolFiltro(e.target.value)}
-          opciones={[{ valor: '', texto: 'Todos los roles' }, ...ROLES]}
+          opciones={[{ valor: '', texto: 'Todos los roles' }, ...ROLES_TALLER]}
         />
       </div>
 
@@ -165,6 +354,16 @@ export default function Usuarios() {
       {errorAccion && (
         <div className="mt-4">
           <Alert>{errorAccion}</Alert>
+        </div>
+      )}
+      {avisoLimite && (
+        <div className="mt-4">
+          <Alert tipo="warning">
+            {avisoLimite}{' '}
+            <Link to="/suscripcion" className="font-semibold underline">
+              Ver planes
+            </Link>
+          </Alert>
         </div>
       )}
 
@@ -186,7 +385,7 @@ export default function Usuarios() {
                 ? 'Probá con otro nombre, correo o rol.'
                 : 'Desde acá creás los accesos del taller: recepción para el mostrador, mecánicos y administradores.'
             }
-            accion={<Button onClick={abrirNuevo}>Nuevo usuario</Button>}
+            accion={accionesAlta}
           />
         </div>
       ) : (
@@ -195,22 +394,41 @@ export default function Usuarios() {
             cargando ? 'opacity-60' : ''
           }`}
         >
-          {filtrados.map((usuario) => (
-            <TarjetaUsuario
-              key={usuario.id}
-              usuario={usuario}
-              onEditar={() => {
-                setEnEdicion(usuario)
-                setErrorAccion('')
-                setFormularioAbierto(true)
-              }}
-              onAlternarEstado={() => alternarEstado(usuario)}
-              onEliminar={() => {
-                setErrorEliminar('')
-                setAEliminar(usuario)
-              }}
-            />
-          ))}
+          {filtrados.map((usuario) => {
+            const esPropio = usuario.id === lector?.id
+            // El administrador gestiona todo el personal de su taller, también a
+            // otros administradores (P1, docs/Plataforma.md). Solo una cuenta
+            // superadmin queda sin acciones: es de Boxly, no del taller.
+            const soloSuperadmin = !esSuperadmin && usuario.rol === 'superadmin'
+            return (
+              <TarjetaUsuario
+                key={usuario.id}
+                usuario={usuario}
+                esPropio={esPropio}
+                soloSuperadmin={soloSuperadmin}
+                esSuperadmin={esSuperadmin}
+                ultimoAdmin={esUltimoAdmin(usuario)}
+                onEditar={() => {
+                  setEnEdicion(usuario)
+                  setErrorAccion('')
+                  setFormularioAbierto(true)
+                }}
+                onAlternarEstado={() => alternarEstado(usuario)}
+                onEliminar={() => {
+                  setErrorEliminar('')
+                  setAEliminar(usuario)
+                }}
+                onRestablecer={() => {
+                  setErrorRestablecer('')
+                  setARestablecer(usuario)
+                }}
+                onCerrarSesiones={() => {
+                  setErrorSesiones('')
+                  setACerrarSesiones(usuario)
+                }}
+              />
+            )
+          })}
         </ul>
       )}
 
@@ -234,6 +452,7 @@ export default function Usuarios() {
       >
         <FormularioUsuario
           usuario={enEdicion}
+          ultimoAdmin={esUltimoAdmin(enEdicion)}
           onGuardar={guardar}
           onCancelar={() => setFormularioAbierto(false)}
         />
@@ -247,6 +466,58 @@ export default function Usuarios() {
         procesando={eliminando}
         onConfirmar={confirmarEliminar}
         onCerrar={() => setAEliminar(null)}
+      />
+
+      <Confirmacion
+        abierto={Boolean(aRestablecer)}
+        titulo="Restablecer contraseña"
+        mensaje={`Se genera una contraseña temporal para ${aRestablecer?.nombre ?? ''} ${aRestablecer?.apellido ?? ''} y se cierran sus sesiones abiertas. La vas a ver una sola vez.`}
+        textoConfirmar="Restablecer"
+        peligrosa={false}
+        error={errorRestablecer}
+        procesando={restableciendo}
+        onConfirmar={confirmarRestablecer}
+        onCerrar={() => setARestablecer(null)}
+      />
+
+      <Modal
+        abierto={Boolean(passwordTemporal)}
+        titulo="Contraseña temporal"
+        descripcion={`Nueva contraseña de ${passwordTemporal?.usuario?.nombre ?? ''} ${passwordTemporal?.usuario?.apellido ?? ''}.`}
+        onCerrar={() => setPasswordTemporal(null)}
+        ancho="max-w-md"
+      >
+        <p className="text-sm text-muted">
+          Anotala o copiala ahora: es la única vez que se muestra.
+        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <code className="min-w-0 flex-1 select-all rounded-box border border-graphite-600 bg-graphite-900 px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.2em] text-ink">
+            {passwordTemporal?.password}
+          </code>
+          <Button onClick={copiarPassword} icono={copiado ? 'check' : undefined}>
+            {copiado ? 'Copiado' : 'Copiar'}
+          </Button>
+        </div>
+        <p className="mt-4 text-sm text-muted">
+          Pasásela a la persona por un medio seguro; no se vuelve a mostrar.
+        </p>
+        <div className="mt-6 flex justify-end">
+          <Button variante="secundario" onClick={() => setPasswordTemporal(null)}>
+            Listo
+          </Button>
+        </div>
+      </Modal>
+
+      <Confirmacion
+        abierto={Boolean(aCerrarSesiones)}
+        titulo="Cerrar sesiones"
+        mensaje={`Se cierran todas las sesiones abiertas de ${aCerrarSesiones?.nombre ?? ''} ${aCerrarSesiones?.apellido ?? ''}: va a tener que iniciar sesión de nuevo en cada dispositivo.`}
+        textoConfirmar="Cerrar sesiones"
+        peligrosa={false}
+        error={errorSesiones}
+        procesando={cerrandoSesiones}
+        onConfirmar={confirmarCerrarSesiones}
+        onCerrar={() => setACerrarSesiones(null)}
       />
     </div>
   )

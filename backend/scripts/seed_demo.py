@@ -5,19 +5,25 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from app.core.security import hash_password
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, fijar_taller
 from app.models.cliente import Cliente
+from app.models.configuracion_taller import ConfiguracionTaller
 from app.models.detalle_orden import DetalleOrden
 from app.models.horario_mecanico import HorarioMecanico
 from app.models.orden import Historial_estado, Orden
 from app.models.pago import Pago
 from app.models.repuesto import Repuesto
+from app.models.taller import TALLER_PRINCIPAL_ID, Taller
 from app.models.turno import Turno
 from app.models.usuario import RolUsuario, Usuario
 from app.models.vehiculo import Vehiculo
 from scripts.seed_catalogo import seed_catalogo
 
 PASSWORD = "Demo1234"
+
+# El superadmin es de la plataforma (taller_id NULL): se crea sin contexto de
+# taller porque con contexto de taller la búsqueda no lo vería.
+SUPERADMIN = ("Super", "Admin", "superadmin@boxly.com")
 
 USUARIOS = [
     ("Admin", "Boxly", "admin@boxly.com", RolUsuario.administrador, None),
@@ -131,7 +137,10 @@ ORDENES = [
             ("listo", 80, "Service y frenos terminados."),
             ("entregado", 96, "Retirado. Pagó en el taller."),
         ],
-        detalles=[("REP-004", 2), ("REP-001", 1), ("REP-002", 2), (None, "Mano de obra service completo", 1, 110000)],
+        detalles=[
+            ("REP-004", 2), ("REP-001", 1), ("REP-002", 2),
+            (None, "Mano de obra service completo", 1, 110000),
+        ],
         pagos=[],
     ),
     dict(
@@ -219,6 +228,81 @@ HORARIOS = [
     (LUCIA, 5, "08:00", "12:00"),
 ]
 
+# ---------------------------------------------------------------------------
+# Taller Norte (taller 2): demo multi-taller. Mismos datos de prueba en chico;
+# la unicidad de dni/patente/codigo es por taller, así que nada colisiona.
+# ---------------------------------------------------------------------------
+
+NORTE_USUARIOS = [
+    ("Nora", "Norte", "admin2@boxly.com", RolUsuario.administrador, None),
+    ("Rui", "Norte", "recepcion2@boxly.com", RolUsuario.recepcion, None),
+    ("Memo", "Norte", "mecanico3@boxly.com", RolUsuario.mecanico, None),
+    ("Pedro", "Sosa", "cliente3@boxly.com", RolUsuario.cliente, "30998877"),
+]
+
+NORTE_CLIENTES = [
+    ("Pedro", "Sosa", "30998877", "3415550000", "pedro.sosa@example.com", "San Martin 450"),
+]
+
+NORTE_VEHICULOS = [
+    ("30998877", "NT500AB", "Chevrolet", "Onix", 2020, "Azul"),
+]
+
+NORTE_REPUESTOS = [
+    ("NTE-001", "Pastillas de freno", 26000, 6, 3),
+    ("NTE-002", "Filtro de aceite", 4800, 15, 4),
+    ("NTE-003", "Bateria 12V", 88000, 3, 2),
+]
+
+NORTE_MEMO = "mecanico3@boxly.com"
+NORTE_RECEPCION = "recepcion2@boxly.com"
+
+NORTE_ORDENES = [
+    dict(
+        codigo="OT-NTE-1", patente="NT500AB", mecanico=NORTE_MEMO, dias=20,
+        descripcion="Service de 30.000 km",
+        diagnostico="Service completo, sin novedades.",
+        recorrido=[
+            ("ingresado", 1, "Ingresó para el service."),
+            ("en_diagnostico", 3, "Niveles y frenos en buen estado."),
+            ("listo", 15, "Service terminado."),
+            ("entregado", 22, "Retirado y pagado."),
+        ],
+        detalles=[("NTE-002", 1), (None, "Mano de obra service", 1, 38000)],
+        pagos=["aprobado"],
+    ),
+    dict(
+        codigo="OT-NTE-2", patente="NT500AB", mecanico=NORTE_MEMO, dias=8,
+        descripcion="Frenos que chirrian",
+        diagnostico="Pastillas delanteras gastadas.",
+        recorrido=[
+            ("ingresado", 1, "Ingresó por ruido al frenar."),
+            ("en_diagnostico", 2, "Pastillas al límite, discos OK."),
+            ("listo", 10, "Pastillas cambiadas."),
+        ],
+        detalles=[("NTE-001", 2), (None, "Mano de obra frenos", 1, 45000)],
+        pagos=[],
+    ),
+    dict(
+        codigo="OT-NTE-3", patente="NT500AB", mecanico=None, dias=3,
+        descripcion="Revisión de tren delantero",
+        diagnostico=None,
+        recorrido=[("ingresado", 1, "Ingresó para revisión.")],
+        detalles=[],
+        pagos=[],
+    ),
+]
+
+NORTE_TURNOS = [
+    ("NT500AB", 5, 9, "confirmado", "Service de 60.000 km", NORTE_MEMO),
+]
+
+# Memo atiende lunes, miércoles y viernes.
+NORTE_HORARIOS = [
+    (NORTE_MEMO, 0, "08:00", "12:00"), (NORTE_MEMO, 0, "14:00", "18:00"),
+    (NORTE_MEMO, 2, "08:00", "16:00"), (NORTE_MEMO, 4, "09:00", "17:00"),
+]
+
 
 def obtener_o_crear(db, modelo, filtro, datos):
     existente = db.scalar(select(modelo).where(*filtro))
@@ -297,10 +381,28 @@ def crear_orden(db, datos, *, ahora, vehiculos, usuarios, repuestos, recepcion):
 def main() -> int:
     db = SessionLocal()
     try:
+        # El superadmin existe una sola vez para toda la plataforma.
+        nombre, apellido, email = SUPERADMIN
+        obtener_o_crear(
+            db, Usuario, [Usuario.email == email],
+            dict(
+                nombre=nombre, apellido=apellido, email=email,
+                password_hash=hash_password(PASSWORD), rol=RolUsuario.superadmin,
+            ),
+        )
+        db.flush()
+
+        # Taller principal (id=1): los datos que la demo ya tenía. Se siembra
+        # con el taller en contexto para que el taller_id se complete solo y la
+        # búsqueda de existentes quede limitada a este taller.
+        fijar_taller(db, TALLER_PRINCIPAL_ID)
         clientes = {
             dni: obtener_o_crear(
                 db, Cliente, [Cliente.dni == dni],
-                dict(nombre=nombre, apellido=apellido, dni=dni, telefono=telefono, email=email, direccion=direccion),
+                dict(
+                    nombre=nombre, apellido=apellido, dni=dni, telefono=telefono,
+                    email=email, direccion=direccion,
+                ),
             )
             for nombre, apellido, dni, telefono, email, direccion in CLIENTES
         }
@@ -319,14 +421,20 @@ def main() -> int:
         vehiculos = {
             patente: obtener_o_crear(
                 db, Vehiculo, [Vehiculo.patente == patente],
-                dict(cliente_id=clientes[dni].id, patente=patente, marca=marca, modelo=modelo, anio=anio, color=color),
+                dict(
+                    cliente_id=clientes[dni].id, patente=patente, marca=marca, modelo=modelo,
+                    anio=anio, color=color,
+                ),
             )
             for dni, patente, marca, modelo, anio, color in VEHICULOS
         }
         repuestos = {
             codigo: obtener_o_crear(
                 db, Repuesto, [Repuesto.codigo == codigo],
-                dict(codigo=codigo, nombre=nombre, precio=precio, stock=stock, stock_minimo=minimo, activo=True),
+                dict(
+                    codigo=codigo, nombre=nombre, precio=precio, stock=stock,
+                    stock_minimo=minimo, activo=True,
+                ),
             )
             for codigo, nombre, precio, stock, minimo in REPUESTOS
         }
@@ -374,15 +482,110 @@ def main() -> int:
         creadas = 0
         for datos in ORDENES:
             if db.scalar(select(Orden).where(Orden.codigo == datos["codigo"])) is None:
-                crear_orden(db, datos, ahora=ahora, vehiculos=vehiculos, usuarios=usuarios, repuestos=repuestos, recepcion=recepcion)
+                crear_orden(
+                    db, datos, ahora=ahora, vehiculos=vehiculos, usuarios=usuarios,
+                    repuestos=repuestos, recepcion=recepcion,
+                )
                 creadas += 1
+
+        # Materializa el taller_id=1 de todo lo pendiente antes de cambiar de taller.
+        db.flush()
+
+        # --- Taller Norte (taller 2): demo multi-taller ----------------------
+        taller_norte = obtener_o_crear(
+            db, Taller, [Taller.nombre == "Taller Norte"],
+            dict(nombre="Taller Norte", estado="activo"),
+        )
+        fijar_taller(db, taller_norte.id)
+        clientes_n = {
+            dni: obtener_o_crear(
+                db, Cliente, [Cliente.dni == dni],
+                dict(
+                    nombre=nombre, apellido=apellido, dni=dni, telefono=telefono,
+                    email=email, direccion=direccion,
+                ),
+            )
+            for nombre, apellido, dni, telefono, email, direccion in NORTE_CLIENTES
+        }
+        usuarios_n = {
+            email: obtener_o_crear(
+                db, Usuario, [Usuario.email == email],
+                dict(
+                    nombre=nombre, apellido=apellido, email=email,
+                    password_hash=hash_password(PASSWORD), rol=rol,
+                    cliente_id=clientes_n[dni].id if dni else None,
+                ),
+            )
+            for nombre, apellido, email, rol, dni in NORTE_USUARIOS
+        }
+        recepcion_n = usuarios_n[NORTE_RECEPCION]
+        vehiculos_n = {
+            patente: obtener_o_crear(
+                db, Vehiculo, [Vehiculo.patente == patente],
+                dict(
+                    cliente_id=clientes_n[dni].id, patente=patente, marca=marca,
+                    modelo=modelo, anio=anio, color=color,
+                ),
+            )
+            for dni, patente, marca, modelo, anio, color in NORTE_VEHICULOS
+        }
+        repuestos_n = {
+            codigo: obtener_o_crear(
+                db, Repuesto, [Repuesto.codigo == codigo],
+                dict(
+                    codigo=codigo, nombre=nombre, precio=precio, stock=stock,
+                    stock_minimo=minimo, activo=True,
+                ),
+            )
+            for codigo, nombre, precio, stock, minimo in NORTE_REPUESTOS
+        }
+        obtener_o_crear(
+            db, ConfiguracionTaller, [ConfiguracionTaller.taller_id == taller_norte.id],
+            dict(taller_id=taller_norte.id, nombre="Taller Norte",
+                 direccion="Av. Norte 1000", telefono="3415559999"),
+        )
+
+        for patente, dias, hora, estado, motivo, mecanico in NORTE_TURNOS:
+            vehiculo = vehiculos_n[patente]
+            obtener_o_crear(
+                db, Turno, [Turno.vehiculo_id == vehiculo.id, Turno.motivo == motivo],
+                dict(
+                    cliente_id=vehiculo.cliente_id, vehiculo_id=vehiculo.id, registrado_por_id=recepcion_n.id,
+                    mecanico_id=usuarios_n[mecanico].id,
+                    fecha_hora=(ahora + timedelta(days=dias)).replace(hour=hora),
+                    estado=estado, motivo=motivo,
+                ),
+            )
+
+        for mecanico, dia, desde, hasta in NORTE_HORARIOS:
+            mecanico_id = usuarios_n[mecanico].id
+            obtener_o_crear(
+                db, HorarioMecanico,
+                [HorarioMecanico.mecanico_id == mecanico_id, HorarioMecanico.dia_semana == dia,
+                 HorarioMecanico.hora_desde == desde],
+                dict(mecanico_id=mecanico_id, dia_semana=dia, hora_desde=desde, hora_hasta=hasta),
+            )
+
+        creadas_n = 0
+        for datos in NORTE_ORDENES:
+            if db.scalar(select(Orden).where(Orden.codigo == datos["codigo"])) is None:
+                crear_orden(db, datos, ahora=ahora, vehiculos=vehiculos_n, usuarios=usuarios_n,
+                            repuestos=repuestos_n, recepcion=recepcion_n)
+                creadas_n += 1
+
+        db.flush()
+        fijar_taller(db, None)
 
         db.commit()
         marcas, modelos = seed_catalogo()
-        print(f"Datos de demo listos ({creadas} órdenes nuevas, {marcas} marcas y {modelos} modelos nuevos en el catálogo).")
+        print(f"Datos de demo listos ({creadas} órdenes nuevas del taller principal, "
+              f"{creadas_n} del Taller Norte, {marcas} marcas y {modelos} modelos nuevos en el catálogo).")
         print(f"Clave de todos los usuarios: {PASSWORD}")
-        print("  Personal:  admin@boxly.com, recepcion@boxly.com, mecanico@boxly.com, mecanico2@boxly.com")
+        print("  Personal:  superadmin@boxly.com, admin@boxly.com, recepcion@boxly.com,")
+        print("             mecanico@boxly.com, mecanico2@boxly.com")
         print("  Clientes:  cliente@boxly.com (Juan Perez), cliente2@boxly.com (Laura Gomez)")
+        print("  Taller Norte: admin2@boxly.com, recepcion2@boxly.com, mecanico3@boxly.com,")
+        print("             cliente3@boxly.com (Pedro Sosa)")
         return 0
     finally:
         db.close()

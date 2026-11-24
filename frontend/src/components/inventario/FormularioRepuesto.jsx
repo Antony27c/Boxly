@@ -3,6 +3,7 @@ import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Textarea from '@/components/ui/Textarea'
+import { formatearMontoAR } from '@/lib/montos'
 import { validarRepuesto } from '@/utils/validation'
 
 const VACIO = {
@@ -21,7 +22,13 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
 
   const [datos, setDatos] = useState(() =>
     Object.fromEntries(
-      Object.keys(VACIO).map((campo) => [campo, String(repuesto?.[campo] ?? VACIO[campo])]),
+      Object.keys(VACIO).map((campo) => [
+        campo,
+        // El precio se precarga como se tipea: "8.500,50".
+        campo === 'precio' && repuesto?.precio != null
+          ? formatearMontoAR(repuesto.precio)
+          : String(repuesto?.[campo] ?? VACIO[campo]),
+      ]),
     ),
   )
   const [errores, setErrores] = useState({})
@@ -94,7 +101,7 @@ export default function FormularioRepuesto({ repuesto, onGuardar, onCancelar }) 
           onChange={(e) => cambiar('precio', e.target.value)}
           error={errores.precio}
           disabled={guardando}
-          placeholder="Ej.: 8500"
+          placeholder="Ej.: 8.500 o 8.500,50"
         />
         <Field
           label="Stock actual"

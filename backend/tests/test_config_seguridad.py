@@ -10,13 +10,15 @@ from app.core.config import DEV_JWT_SECRET, Settings, get_settings
 from app.main import create_app
 
 SECRET_VALIDO = "x" * 48
+# En producción las URLs públicas tienen que ser https (las recibe Mercado Pago).
+FRONTEND_PROD = "https://boxly.test"
 
 
 @pytest.fixture(autouse=True)
 def _sin_env_local(monkeypatch):
     """Aísla los tests del backend/.env local y de variables del entorno del desarrollador."""
     monkeypatch.setitem(Settings.model_config, "env_file", None)
-    for clave in ("DEBUG", "ENVIRONMENT", "JWT_SECRET_KEY"):
+    for clave in ("DEBUG", "ENVIRONMENT", "JWT_SECRET_KEY", "FRONTEND_URL", "BACKEND_PUBLIC_URL"):
         monkeypatch.delenv(clave, raising=False)
     get_settings.cache_clear()
     yield
@@ -53,7 +55,7 @@ def test_prod_con_debug_activo_no_arranca():
 
 
 def test_prod_con_secret_valido_arranca():
-    s = Settings(environment="prod", jwt_secret_key=SECRET_VALIDO)
+    s = Settings(environment="prod", jwt_secret_key=SECRET_VALIDO, frontend_url=FRONTEND_PROD)
     assert s.es_produccion
     assert s.jwt_secret_key == SECRET_VALIDO
 
@@ -72,6 +74,7 @@ def test_docs_deshabilitados_en_prod(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "prod")
     monkeypatch.setenv("JWT_SECRET_KEY", SECRET_VALIDO)
     monkeypatch.setenv("DEBUG", "false")
+    monkeypatch.setenv("FRONTEND_URL", FRONTEND_PROD)
     get_settings.cache_clear()
     try:
         app = create_app()

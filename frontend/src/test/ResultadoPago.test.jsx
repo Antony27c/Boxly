@@ -10,10 +10,15 @@ const pagos = vi.hoisted(() => ({
   crear: vi.fn(),
   simular: vi.fn(),
 }))
+const tallerHook = vi.hoisted(() => ({ datos: null }))
 vi.mock('@/services/portal', () => ({ pagosService: pagos }))
 
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ token: 'tok', usuario: null, autenticado: true, cargandoSesion: false }),
+}))
+
+vi.mock('@/hooks/useTaller', () => ({
+  default: () => ({ taller: tallerHook.datos, cargando: false, error: '', recargar: vi.fn() }),
 }))
 
 const PAGO = {
@@ -53,6 +58,7 @@ function montar(url = '/resultado?pago_id=9&payment_id=555') {
 describe('ResultadoPago', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tallerHook.datos = null
     pagos.confirmar.mockResolvedValue(PAGO)
     pagos.obtener.mockResolvedValue(PAGO)
   })
@@ -82,6 +88,21 @@ describe('ResultadoPago', () => {
     expect(await screen.findByRole('heading', { name: 'El pago fue rechazado' })).toBeInTheDocument()
     expect(container.querySelector('[data-ilustracion]')).toHaveAttribute('data-ilustracion', 'cono')
     expect(screen.getByRole('button', { name: 'Reintentar pago' })).toBeInTheDocument()
+  })
+
+  it('con pago_online el pago rechazado ofrece reintentar', async () => {
+    tallerHook.datos = { pago_online: true }
+    pagos.obtener.mockResolvedValue({ ...PAGO, estado: 'rechazado', fecha_pago: null })
+    montar('/resultado?pago_id=9')
+    expect(await screen.findByRole('button', { name: 'Reintentar pago' })).toBeInTheDocument()
+  })
+
+  it('sin pago_online no ofrece reintentar y muestra "Pagás en el taller"', async () => {
+    tallerHook.datos = { pago_online: false }
+    pagos.obtener.mockResolvedValue({ ...PAGO, estado: 'rechazado', fecha_pago: null })
+    montar('/resultado?pago_id=9')
+    expect(await screen.findByText('Pagás en el taller')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar pago' })).not.toBeInTheDocument()
   })
 
   it('el pago pendiente conserva su indicador de espera', async () => {

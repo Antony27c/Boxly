@@ -1,3 +1,5 @@
+import { hoyAR } from '@/lib/fechas'
+import { MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -20,7 +22,8 @@ export function validarLogin({ email, password }) {
   return errores
 }
 
-const PATENTE = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/
+export const PATENTE = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/
+export const TELEFONO = /^[\d\s()+-]{6,20}$/
 
 export function validarCliente({ nombre, apellido, dni, telefono, email }) {
   const errores = {}
@@ -36,7 +39,7 @@ export function validarCliente({ nombre, apellido, dni, telefono, email }) {
 
   const tel = telefono.trim()
   if (!tel) errores.telefono = 'Ingresá un teléfono de contacto.'
-  else if (!/^[\d\s()+-]{6,20}$/.test(tel)) errores.telefono = 'El teléfono no tiene un formato válido.'
+  else if (!TELEFONO.test(tel)) errores.telefono = 'El teléfono no tiene un formato válido.'
 
   const correo = email.trim()
   if (correo && !EMAIL.test(correo)) errores.email = 'El correo no tiene un formato válido.'
@@ -76,8 +79,7 @@ export function validarOrden({ vehiculo_id, fecha, descripcion, total }) {
   else if (detalle.length < 5) errores.descripcion = 'La descripción es demasiado corta.'
 
   if (String(total).trim() === '') errores.total = 'Ingresá el total (0 si todavía no se presupuestó).'
-  else if (Number.isNaN(Number(total)) || Number(total) < 0)
-    errores.total = 'El total debe ser un número mayor o igual a 0.'
+  else if (parsearMontoAR(total) === null) errores.total = MENSAJE_MONTO_INVALIDO
 
   return errores
 }
@@ -91,7 +93,7 @@ export function validarTurno({ cliente_id, vehiculo_id, fecha, hora, servicio })
   if (!fecha) {
     errores.fecha = 'Elegí la fecha del turno.'
   } else {
-    const hoy = new Date().toISOString().slice(0, 10)
+    const hoy = hoyAR()
     if (fecha < hoy) errores.fecha = 'La fecha no puede ser anterior a hoy.'
     const dia = new Date(`${fecha}T12:00:00`).getDay()
     if (dia === 0) errores.fecha = 'El taller no atiende los domingos.'
@@ -142,10 +144,10 @@ export function validarRepuesto({ codigo, nombre, stock, stock_minimo, precio })
   if (!nom) errores.nombre = 'Ingresá el nombre del repuesto.'
   else if (nom.length < 2 || nom.length > 120) errores.nombre = 'El nombre debe tener entre 2 y 120 caracteres.'
 
-  const textoPrecio = String(precio).trim().replace(',', '.')
-  if (!textoPrecio) errores.precio = 'Ingresá el precio.'
-  else if (!/^\d+(\.\d{1,2})?$/.test(textoPrecio)) errores.precio = 'El precio debe ser un número con hasta 2 decimales.'
-  else if (Number(textoPrecio) >= 10_000_000_000) errores.precio = 'El precio es demasiado alto.'
+  const numeroPrecio = parsearMontoAR(precio)
+  if (!String(precio).trim()) errores.precio = 'Ingresá el precio.'
+  else if (numeroPrecio === null) errores.precio = MENSAJE_MONTO_INVALIDO
+  else if (numeroPrecio >= 10_000_000_000) errores.precio = 'El precio es demasiado alto.'
 
   if (!String(stock).trim()) errores.stock = 'Ingresá el stock actual (0 si no hay).'
   else if (!/^\d+$/.test(String(stock).trim())) errores.stock = 'El stock debe ser un número entero, 0 o más.'

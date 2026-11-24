@@ -2,10 +2,11 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.tipos import FechaHoraUTC
 
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 
 
 class RolUsuario(str, enum.Enum):
+    superadmin = "superadmin"
     administrador = "administrador"
     recepcion = "recepcion"
     mecanico = "mecanico"
@@ -21,6 +23,11 @@ class RolUsuario(str, enum.Enum):
 
 
 ROLES_PERSONAL = (RolUsuario.administrador, RolUsuario.recepcion, RolUsuario.mecanico)
+
+
+def es_admin(usuario: "Usuario") -> bool:
+    """Administrador del taller. El superadmin no opera dentro de los talleres."""
+    return usuario.rol == RolUsuario.administrador
 
 
 class Usuario(Base):
@@ -44,18 +51,24 @@ class Usuario(Base):
         default=RolUsuario.recepcion,
     )
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Taller al que pertenece. NULL solo para el superadmin (operador de la plataforma).
+    taller_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("talleres.id", name="fk_usuarios_taller_id_talleres"),
+        nullable=True,
+        index=True,
+    )
     cliente_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("clientes.id", name="fk_usuarios_cliente_id_clientes"),
         unique=True,
         nullable=True,
     )
     creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        FechaHoraUTC(),
         server_default=func.now(),
         nullable=False,
     )
     actualizado_en: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
+        FechaHoraUTC(),
         onupdate=func.now(),
         nullable=True,
     )

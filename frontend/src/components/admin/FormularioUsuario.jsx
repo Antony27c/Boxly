@@ -3,7 +3,7 @@ import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Select from '@/components/ui/Select'
-import { ROLES } from '@/services/usuarios'
+import { nombreRol, rolesAsignables } from '@/services/usuarios'
 import { validarUsuario } from '@/utils/validation'
 
 const VACIO = {
@@ -14,12 +14,22 @@ const VACIO = {
   password: '',
 }
 
-export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
+/* `ultimoAdmin`: la cuenta en edición es el único administrador activo del
+   taller; el rol queda fijo porque el servidor no deja quitárselo (409, P1). */
+export default function FormularioUsuario({ usuario, ultimoAdmin = false, onGuardar, onCancelar }) {
   const esNuevo = !usuario
   const [datos, setDatos] = useState(() => ({ ...VACIO, ...usuario, password: '' }))
   const [errores, setErrores] = useState({})
   const [errorApi, setErrorApi] = useState('')
   const [guardando, setGuardando] = useState(false)
+
+  // El select ofrece los roles del taller (administrador, recepción y
+  // mecánico). Si el usuario en edición tiene un rol fuera de la lista (por
+  // ejemplo cliente), se agrega para que el select no quede en blanco.
+  const asignables = rolesAsignables()
+  const opcionesRol = asignables.some((opcion) => opcion.valor === datos.rol)
+    ? asignables
+    : [...asignables, { valor: datos.rol, texto: nombreRol(datos.rol) }]
 
   function cambiar(campo, valor) {
     setDatos((previo) => ({ ...previo, [campo]: valor }))
@@ -62,6 +72,7 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
           onChange={(e) => cambiar('nombre', e.target.value)}
           error={errores.nombre}
           disabled={guardando}
+          autoComplete="off"
           placeholder="Ej.: Sofía"
         />
         <Field
@@ -70,11 +81,17 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
           onChange={(e) => cambiar('apellido', e.target.value)}
           error={errores.apellido}
           disabled={guardando}
+          autoComplete="off"
           placeholder="Ej.: Rueda"
         />
         <Field
           label="Correo"
-          type="email"
+          // type="text" + inputMode: así el navegador no ofrece sus sugerencias de email (en Brave cerraba la ventana al escribir). El formato se valida en validarUsuario.
+          type="text"
+          inputMode="email"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
           className="sm:col-span-2"
           value={datos.email}
           onChange={(e) => cambiar('email', e.target.value)}
@@ -88,9 +105,13 @@ export default function FormularioUsuario({ usuario, onGuardar, onCancelar }) {
           value={datos.rol}
           onChange={(e) => cambiar('rol', e.target.value)}
           error={errores.rol}
-          disabled={guardando}
-          ayuda="El rol define qué secciones ve el usuario al iniciar sesión."
-          opciones={ROLES}
+          disabled={guardando || ultimoAdmin}
+          ayuda={
+            ultimoAdmin
+              ? 'Es el único administrador activo del taller: para cambiarle el rol, primero nombrá a otro administrador.'
+              : 'El rol define qué secciones ve el usuario al iniciar sesión.'
+          }
+          opciones={opcionesRol}
         />
         <Field
           label={esNuevo ? 'Contraseña' : 'Nueva contraseña'}
