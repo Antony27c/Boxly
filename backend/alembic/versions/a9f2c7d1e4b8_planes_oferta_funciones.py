@@ -49,8 +49,8 @@ def upgrade() -> None:
     bind.execute(
         sa.text(
             "INSERT INTO planes (codigo, nombre, precio_mensual, max_personal, funciones, activo) "
-            "VALUES ('esencial', 'Esencial', 35000, 3, :f1, 1), "
-            "('profesional', 'Profesional', 169000, NULL, :f2, 1)"
+            "VALUES ('esencial', 'Esencial', 35000, 3, :f1, true), "
+            "('profesional', 'Profesional', 169000, NULL, :f2, true)"
         ),
         {
             "f1": json.dumps(_FUNCIONES_ESENCIAL),
@@ -60,7 +60,7 @@ def upgrade() -> None:
     bind.execute(
         sa.text(
             "UPDATE planes SET nombre = 'Pro', precio_mensual = 79000, "
-            "max_personal = 10, funciones = :f, activo = 1 WHERE codigo = 'pro'"
+            "max_personal = 10, funciones = :f, activo = true WHERE codigo = 'pro'"
         ),
         {"f": json.dumps(_FUNCIONES_PRO)},
     )
@@ -108,17 +108,13 @@ def downgrade() -> None:
         batch.drop_column('funciones')
 
     bind = op.get_bind()
-    # Los talleres vuelven a los códigos viejos antes de borrar los nuevos.
-    bind.execute(sa.text("UPDATE talleres SET plan_codigo = 'basico' WHERE plan_codigo = 'esencial'"))
-    bind.execute(
-        sa.text("UPDATE talleres SET plan_codigo = 'taller_plus' WHERE plan_codigo = 'profesional'")
-    )
     bind.execute(
         sa.text(
             "UPDATE planes SET nombre = 'Pro', precio_mensual = 30000, max_personal = 10 "
             "WHERE codigo = 'pro'"
         )
     )
+    # Planes viejos primero (la FK de talleres apunta a planes.codigo).
     planes = sa.table(
         'planes',
         sa.column('codigo', sa.String),
@@ -135,5 +131,10 @@ def downgrade() -> None:
             {'codigo': 'taller_plus', 'nombre': 'Taller+', 'precio_mensual': 50000, 'max_personal': None,
              'activo': True},
         ],
+    )
+    # Los talleres vuelven a los códigos viejos antes de borrar los nuevos.
+    bind.execute(sa.text("UPDATE talleres SET plan_codigo = 'basico' WHERE plan_codigo = 'esencial'"))
+    bind.execute(
+        sa.text("UPDATE talleres SET plan_codigo = 'taller_plus' WHERE plan_codigo = 'profesional'")
     )
     bind.execute(sa.text("DELETE FROM planes WHERE codigo IN ('esencial', 'profesional')"))

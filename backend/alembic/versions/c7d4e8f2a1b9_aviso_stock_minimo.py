@@ -36,8 +36,7 @@ def upgrade() -> None:
     # Los que ya están bajo el mínimo se consideran avisados: el aviso saldrá
     # recién cuando el stock supere el mínimo y vuelva a cruzarlo.
     op.execute(
-        "UPDATE repuestos SET alerta_stock_enviada = "
-        "CASE WHEN stock <= stock_minimo THEN 1 ELSE 0 END"
+        "UPDATE repuestos SET alerta_stock_enviada = (stock <= stock_minimo)"
     )
 
     op.create_table(
