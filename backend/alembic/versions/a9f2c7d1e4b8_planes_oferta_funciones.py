@@ -130,8 +130,10 @@ def downgrade() -> None:
     op.bulk_insert(
         planes,
         [
-            {'codigo': 'basico', 'nombre': 'Básico', 'precio_mensual': 15000, 'max_personal': 3, 'activo': True},
-            {'codigo': 'taller_plus', 'nombre': 'Taller+', 'precio_mensual': 50000, 'max_personal': None, 'activo': True},
+            {'codigo': 'basico', 'nombre': 'Básico', 'precio_mensual': 15000, 'max_personal': 3,
+             'activo': True},
+            {'codigo': 'taller_plus', 'nombre': 'Taller+', 'precio_mensual': 50000, 'max_personal': None,
+             'activo': True},
         ],
     )
     bind.execute(sa.text("DELETE FROM planes WHERE codigo IN ('esencial', 'profesional')"))

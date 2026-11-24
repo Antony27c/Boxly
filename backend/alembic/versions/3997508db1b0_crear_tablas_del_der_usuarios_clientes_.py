@@ -1,4 +1,5 @@
-"""crear tablas del DER: usuarios, clientes, vehiculos, turnos, ordenes, detalles_orden, repuestos, historial_estado
+"""crear tablas del DER: usuarios, clientes, vehiculos, turnos, ordenes, detalles_orden,
+repuestos, historial_estado
 
 Revision ID: 3997508db1b0
 Revises: 
@@ -7,9 +8,9 @@ Create Date: 2026-09-30 20:27:49.854749
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '3997508db1b0'
@@ -29,7 +30,8 @@ def upgrade() -> None:
     sa.Column('telefono', sa.String(length=30), nullable=True),
     sa.Column('email', sa.String(length=120), nullable=True),
     sa.Column('direccion', sa.String(length=200), nullable=True),
-    sa.Column('creado_en', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('creado_en', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'),
+              nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_clientes_dni'), 'clientes', ['dni'], unique=True)
@@ -51,9 +53,11 @@ def upgrade() -> None:
     sa.Column('apellido', sa.String(length=80), nullable=False),
     sa.Column('email', sa.String(length=120), nullable=False),
     sa.Column('password_hash', sa.String(length=255), nullable=False),
-    sa.Column('rol', sa.Enum('administrador', 'recepcion', 'mecanico', name='rol_usuario', native_enum=False), nullable=False),
+    sa.Column('rol', sa.Enum('administrador', 'recepcion', 'mecanico', name='rol_usuario', native_enum=False),
+              nullable=False),
     sa.Column('activo', sa.Boolean(), nullable=False),
-    sa.Column('creado_en', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('creado_en', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'),
+              nullable=False),
     sa.Column('actualizado_en', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )

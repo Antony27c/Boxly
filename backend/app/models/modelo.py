@@ -1,7 +1,13 @@
-from sqlalchemy import String, Boolean, ForeignKey, UniqueConstraint
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.marca import Marca
+
 
 class Modelo(Base):
     __tablename__="modelos"
