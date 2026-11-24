@@ -31,6 +31,18 @@ ESTADOS_MP = {
 RETORNOS = {"success": "aprobado", "failure": "rechazado", "pending": "pendiente"}
 
 
+def pagos_online_configurados() -> bool:
+    """Mercado Pago con token, o el simulador en desarrollo."""
+    settings = get_settings()
+    return bool(settings.mp_access_token) or (settings.environment == "dev" and settings.debug)
+
+
+def cobra_online(taller_id: int) -> bool:
+    # Cobro online solo en el taller principal: los demás talleres todavía no
+    # tienen credenciales propias de Mercado Pago (docs/Plataforma.md, P3).
+    return taller_id == TALLER_PRINCIPAL_ID and pagos_online_configurados()
+
+
 def puede_pagar(orden: Orden) -> bool:
     return (
         orden.estado in PAGABLES
@@ -136,9 +148,7 @@ def crear_pago(db: Session, usuario: Usuario, orden_id: int) -> PreferenciaPagoR
             detail="La orden todavía no tiene un monto final",
         )
     settings = get_settings()
-    if not settings.mp_access_token and not (
-        settings.environment == "dev" and settings.debug
-    ):
+    if not pagos_online_configurados():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Los pagos online no están configurados",

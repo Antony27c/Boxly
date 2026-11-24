@@ -110,3 +110,46 @@ def test_sin_claves_sigue_usando_smtp(http, monkeypatch):
     _enviar()
     smtp.send_message.assert_awaited_once()
     post.assert_not_awaited()
+
+
+def _cuerpo_estado(smtp, codigo, estado, **pago):
+    asyncio.run(mail.enviar_notificacion_cambio_estado(
+        "c@x.com", "P", "A", "V", "G", "OT-1", estado, "ok", codigo, **pago))
+    return smtp.send_message.call_args[0][0].body
+
+
+def test_pesos_con_formato_argentino():
+    assert mail.pesos(15000) == "$ 15.000,00" and mail.pesos(1234567.5) == "$ 1.234.567,50"
+
+
+def test_listo_con_cobro_y_pago_online_muestra_el_boton(smtp):
+    body = _cuerpo_estado(smtp, "listo", "Listo", monto="$ 15.000,00",
+                          enlace_pago="http://app/portal/orden/7")
+    assert "Cómo pagar" in body and "$ 15.000,00" in body and "Mercado Pago" in body
+    assert 'href="http://app/portal/orden/7"' in body and "Pagar mi orden" in body
+
+
+def test_listo_con_cobro_sin_pago_online_indica_pagar_en_el_local(smtp):
+    body = _cuerpo_estado(smtp, "listo", "Listo", monto="$ 15.000,00")
+    assert "$ 15.000,00" in body and "abonás en el taller" in body
+    assert "Pagar mi orden" not in body and "Mercado Pago" not in body
+
+
+def test_listo_sin_cobro_avisa_que_se_define(smtp):
+    body = _cuerpo_estado(smtp, "listo", "Listo", enlace_pago="http://app/portal/orden/7")
+    assert "definiendo el monto" in body and "Pagar mi orden" not in body
+
+
+def test_orden_pagada_agradece_y_otros_estados_no_hablan_de_pago(smtp):
+    assert "ya está paga" in _cuerpo_estado(smtp, "entregado", "Entregado", pagada=True)
+    assert "Cómo pagar" not in _cuerpo_estado(smtp, "en_diagnostico", "En diagnóstico")
+
+
+def test_correo_de_cobro_lleva_como_pagar(smtp):
+    asyncio.run(mail.enviar_notificacion_cobro(
+        "c@x.com", "P", "A", "V", "G", "OT-1", "Listo", "$ 9.000,00", "http://app/portal/orden/7"))
+    body = smtp.send_message.call_args[0][0].body
+    assert "Pagar mi orden" in body and "http://app/portal/orden/7" in body and "$ 9.000,00" in body
+    asyncio.run(mail.enviar_notificacion_cobro("c@x.com", "P", "A", "V", "G", "OT-1", "Listo", "$ 9.000,00"))
+    body = smtp.send_message.call_args[0][0].body
+    assert "abonás en el taller" in body and "Pagar mi orden" not in body

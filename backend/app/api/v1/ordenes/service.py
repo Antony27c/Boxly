@@ -8,11 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.v1.pagos.service import marcar_aprobado
+from app.api.v1.pagos.service import cobra_online, marcar_aprobado, puede_pagar
 from app.api.v1.repuestos.service import registrar_movimiento_stock
 from app.core import imagenes
-from app.core.config import UPLOADS_DIR
-from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
+from app.core.config import UPLOADS_DIR, get_settings
+from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro, pesos
 from app.core.errores import COBRO_EMITIDO, ORDEN_PAGADA, ErrorConCodigo
 from app.db.session import SessionLocal, fijar_taller
 from app.models.detalle_orden import DetalleOrden
@@ -460,13 +460,26 @@ class OrdenService:
                 orden.codigo,
                 ESTADOS_ORDEN[orden.estado][0],
             )
+            # El cliente paga online desde su portal; sin cobro online el correo
+            # indica pagar en el local.
+            enlace_pago = (
+                f"{get_settings().frontend_url.rstrip('/')}/portal/orden/{orden.id}"
+                if cobra_online(orden.taller_id)
+                else ""
+            )
             if tipo == "cobro":
                 envio = anyio.from_thread.run(
-                    enviar_notificacion_cobro, *datos_comunes, f"$ {orden.costo_final:,.2f}"
+                    enviar_notificacion_cobro, *datos_comunes, pesos(orden.costo_final), enlace_pago
                 )
             else:
                 envio = anyio.from_thread.run(
-                    enviar_notificacion_cambio_estado, *datos_comunes, comentario, orden.estado
+                    enviar_notificacion_cambio_estado,
+                    *datos_comunes,
+                    comentario,
+                    orden.estado,
+                    pesos(orden.costo_final) if puede_pagar(orden) else None,
+                    orden.pagada,
+                    enlace_pago,
                 )
             notificacion = orden_repository.guardar_notificacion(
                 db,

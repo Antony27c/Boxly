@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.core.email import ResultadoEnvio
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
@@ -140,7 +141,24 @@ def test_emitir_cobro_avisa_al_cliente(api, orden_lista, envio_cobro):
     assert r.status_code == 200
     avisos = _avisos(api, orden_lista)
     assert [a["tipo"] for a in avisos] == ["cobro"] and avisos[0]["resultado"] == "enviado"
-    assert envio_cobro.await_args.args[-1] == "$ 15,000.00"
+    assert envio_cobro.await_args.args[7] == "$ 15.000,00"
+
+
+@pytest.mark.parametrize("token, con_enlace", [("APP_USR-x", True), (None, False)])
+def test_correo_de_cobro_enlaza_al_portal_solo_con_pago_online(
+    api, orden_lista, envio_cobro, monkeypatch, token, con_enlace
+):
+    monkeypatch.setattr(get_settings(), "mp_access_token", token)
+    monkeypatch.setattr(get_settings(), "debug", False)
+    api.post(
+        f"/api/v1/ordenes/{orden_lista['orden']}/cobro",
+        headers=orden_lista["admin"], json={"monto": 15000},
+    )
+    enlace = envio_cobro.await_args.args[8]
+    if con_enlace:
+        assert enlace.endswith(f"/portal/orden/{orden_lista['orden']}")
+    else:
+        assert enlace == ""
 
 
 def test_aprobar_cobro_avisa_al_cliente(api, orden_lista, envio_cobro):

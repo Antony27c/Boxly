@@ -85,6 +85,7 @@ ESTADO_TEMPLATE = """
             </div>
             
             {progreso}
+            {pago}
 
             <p>Si tenés alguna consulta, no dudes en contactarnos.</p>
             
@@ -140,6 +141,54 @@ def _barra_progreso(estado_codigo: str) -> str:
         '<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>'
         + "".join(celdas)
         + "</tr></table>"
+    )
+
+
+def pesos(valor) -> str:
+    """Monto en pesos con el formato argentino: $ 15.000,00."""
+    return "$ " + f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+_CAJA = "background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:20px 0;"
+_TITULO_PAGO = '<p style="margin:0 0 6px;"><strong>Cómo pagar</strong></p>'
+
+
+def _como_pagar(enlace: str) -> str:
+    """Online por Mercado Pago si el taller cobra online (hay enlace); si no, en el local."""
+    if not enlace:
+        return (
+            '<p style="margin:0;">Lo abonás en el taller cuando retires tu vehículo: '
+            "efectivo, tarjeta, transferencia u otro medio.</p>"
+        )
+    return (
+        '<p style="margin:0 0 12px;">Podés pagar online con Mercado Pago desde tu cuenta de Boxly:</p>'
+        f'<p style="text-align:center;margin:0 0 12px;"><a href="{escape(enlace, quote=True)}" '
+        'style="background:#2563eb;color:white;padding:12px 28px;border-radius:6px;'
+        'text-decoration:none;font-weight:bold;display:inline-block;">Pagar mi orden</a></p>'
+        '<p style="font-size:13px;color:#666;margin:0;">También podés abonarlo en el taller '
+        "cuando retires tu vehículo.</p>"
+    )
+
+
+def _bloque_pago(estado_codigo: str, monto: str | None, pagada: bool, enlace: str) -> str:
+    """Cómo pagar, solo con la orden lista o entregada (estilos en línea: es para email)."""
+    if estado_codigo not in ("listo", "entregado"):
+        return ""
+    if pagada:
+        return (
+            '<p style="color:#16a34a;font-weight:bold;margin:20px 0;">'
+            "✔ Esta orden ya está paga. ¡Gracias!</p>"
+        )
+    if not monto:
+        return (
+            f'<div style="{_CAJA}">{_TITULO_PAGO}'
+            '<p style="margin:0;">El taller todavía está definiendo el monto a pagar. '
+            "Te avisamos por este medio apenas esté listo.</p></div>"
+        )
+    return (
+        f'<div style="{_CAJA}">{_TITULO_PAGO}'
+        f'<p style="margin:0 0 12px;">Monto a pagar: <strong>{escape(monto)}</strong></p>'
+        f"{_como_pagar(enlace)}</div>"
     )
 
 
@@ -218,8 +267,15 @@ async def enviar_notificacion_cambio_estado(
     estado_nombre: str,
     comentario: str,
     estado_codigo: str = "",
+    monto: str | None = None,
+    pagada: bool = False,
+    enlace_pago: str = "",
 ) -> ResultadoEnvio:
-    """Aviso al cliente de que cambió el estado de su orden."""
+    """Aviso al cliente de que cambió el estado de su orden.
+
+    `monto` es el cobro emitido (None si todavía no hay); `enlace_pago` lleva a
+    la orden en el portal y va vacío si el taller no cobra online.
+    """
     html = ESTADO_TEMPLATE.format(
         cliente_nombre=escape(cliente_nombre),
         vehiculo_patente=escape(vehiculo_patente),
@@ -229,6 +285,7 @@ async def enviar_notificacion_cambio_estado(
         estado_nombre=escape(estado_nombre),
         comentario=escape(comentario),
         progreso=_barra_progreso(estado_codigo),
+        pago=_bloque_pago(estado_codigo, monto, pagada, enlace_pago),
         fecha=_fecha(),
     )
     return await _enviar(
@@ -245,8 +302,9 @@ async def enviar_notificacion_cobro(
     orden_codigo: str,
     estado_nombre: str,
     monto: str,
+    enlace_pago: str = "",
 ) -> ResultadoEnvio:
-    """Aviso al cliente de que se emitió (aprobó) el cobro de su orden."""
+    """Aviso al cliente de que se emitió (aprobó) el cobro de su orden, con cómo pagarlo."""
     html = COBRO_TEMPLATE.format(
         cliente_nombre=escape(cliente_nombre),
         vehiculo_patente=escape(vehiculo_patente),
@@ -255,6 +313,7 @@ async def enviar_notificacion_cobro(
         orden_codigo=escape(orden_codigo),
         estado_nombre=escape(estado_nombre),
         monto=escape(monto),
+        pago=f'<div style="{_CAJA}">{_TITULO_PAGO}{_como_pagar(enlace_pago)}</div>',
         fecha=_fecha(),
     )
     return await _enviar(email, f"Cobro emitido - orden {orden_codigo}", html, orden_codigo)
