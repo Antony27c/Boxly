@@ -12,6 +12,7 @@ import RutaSeguimiento from '@/components/portal/RutaSeguimiento'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import useTaller from '@/hooks/useTaller'
+import { formatearFecha, formatearFechaDia } from '@/lib/fechas'
 import { nombreEstado } from '@/services/ordenes'
 import { pagosService, portalService, puedePagar } from '@/services/portal'
 import { pesos } from '@/utils/formato'
@@ -19,9 +20,10 @@ import { pesos } from '@/utils/formato'
 const TONOS_ESTADO = { listo: 'ok', entregado: 'ok', cancelado: 'peligro', pendiente: 'neutro' }
 const ACENTOS_ESTADO = { listo: 'ok', entregado: 'ok', cancelado: 'danger', pendiente: 'neutro' }
 
-function fecha(iso) {
-  return iso ? new Date(iso).toLocaleDateString('es-AR') : '—'
-}
+const fecha = formatearFecha
+// La entrega estimada es un día elegido por el taller (se guarda como
+// datetime): se muestra el día tal cual, sin conversión de zona.
+const fechaEstimada = formatearFechaDia
 
 function TarjetaOrden({ orden, pagando, onPagar, pagoOnline }) {
   const pagable = puedePagar(orden)
@@ -35,7 +37,7 @@ function TarjetaOrden({ orden, pagando, onPagar, pagoOnline }) {
       >
         <p className="relative mt-1 text-xs text-muted">
           {orden.vehiculo_marca && `${orden.vehiculo_marca} · `}Ingresó el {fecha(orden.fecha_ingreso)}
-          {orden.fecha_estimada_entrega && ` · Entrega estimada ${fecha(orden.fecha_estimada_entrega)}`}
+          {orden.fecha_estimada_entrega && ` · Entrega estimada ${fechaEstimada(orden.fecha_estimada_entrega)}`}
         </p>
         <Chips className="items-center">
           <Patente valor={orden.vehiculo_patente} tamano="sm" />

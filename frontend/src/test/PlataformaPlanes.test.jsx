@@ -10,6 +10,10 @@ const suscripciones = vi.hoisted(() => ({
   cambiarPlan: vi.fn(),
   registrarPago: vi.fn(),
   ajustarVencimiento: vi.fn(),
+  cambiarAcceso: vi.fn(),
+  listarAdicionales: vi.fn(),
+  activarAdicional: vi.fn(),
+  desactivarAdicional: vi.fn(),
 }))
 
 vi.mock('@/services/suscripcionesPlataforma', () => ({
@@ -24,10 +28,41 @@ vi.mock('@/context/AuthContext', () => ({
   }),
 }))
 
+// Datos como los devuelve la API (docs/Oferta.md): códigos esencial/pro/
+// profesional y la lista de funciones de cada plan. Nada de esto se
+// hardcodea en la pantalla: todo sale del fixture.
 const PLANES = [
-  { codigo: 'basico', nombre: 'Básico', precio_mensual: 15000, max_personal: 3, activo: true },
-  { codigo: 'pro', nombre: 'Pro', precio_mensual: 30000, max_personal: 10, activo: true },
-  { codigo: 'taller_plus', nombre: 'Taller+', precio_mensual: 50000, max_personal: null, activo: false },
+  {
+    codigo: 'esencial',
+    nombre: 'Esencial',
+    precio_mensual: 35000,
+    max_personal: 3,
+    activo: true,
+    funciones: ['gestion', 'whatsapp_manual'],
+  },
+  {
+    codigo: 'pro',
+    nombre: 'Pro',
+    precio_mensual: 79000,
+    max_personal: 10,
+    activo: true,
+    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'arca'],
+  },
+  {
+    codigo: 'profesional',
+    nombre: 'Profesional',
+    precio_mensual: 169000,
+    max_personal: null,
+    activo: false,
+    funciones: [
+      'gestion',
+      'whatsapp_manual',
+      'whatsapp_automatico',
+      'arca',
+      'recordatorios_service',
+      'marca_propia',
+    ],
+  },
 ]
 
 function tarjeta(nombre) {
@@ -49,21 +84,25 @@ describe('PlataformaPlanes', () => {
     suscripciones.actualizarPlan.mockResolvedValue(PLANES[1])
   })
 
-  it('lista los planes con precio, límite de personal y estado', async () => {
+  it('lista los planes con precio, límite de personal, estado y funciones', async () => {
     montar()
 
-    expect(await screen.findByText('Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Esencial')).toBeInTheDocument()
     expect(suscripciones.listarPlanes).toHaveBeenCalledWith('tok')
 
-    const basico = tarjeta('Básico')
-    expect(within(basico).getByText(/15\.000/)).toBeInTheDocument()
-    expect(within(basico).getByText('3')).toBeInTheDocument()
-    expect(within(basico).getByText('Activo')).toBeInTheDocument()
+    const esencial = tarjeta('Esencial')
+    expect(within(esencial).getByText(/35\.000/)).toBeInTheDocument()
+    expect(within(esencial).getByText('3')).toBeInTheDocument()
+    expect(within(esencial).getByText('Activo')).toBeInTheDocument()
+    // Las funciones del plan se muestran como chips legibles.
+    expect(within(esencial).getByText('Gestión del taller')).toBeInTheDocument()
+    expect(within(esencial).getByText('Avisos por WhatsApp manual')).toBeInTheDocument()
 
-    const plus = tarjeta('Taller+')
-    expect(within(plus).getByText(/50\.000/)).toBeInTheDocument()
-    expect(within(plus).getByText('Sin límite')).toBeInTheDocument()
-    expect(within(plus).getByText('Inactivo')).toBeInTheDocument()
+    const profesional = tarjeta('Profesional')
+    expect(within(profesional).getByText(/169\.000/)).toBeInTheDocument()
+    expect(within(profesional).getByText('Sin límite')).toBeInTheDocument()
+    expect(within(profesional).getByText('Inactivo')).toBeInTheDocument()
+    expect(within(profesional).getByText('Personalización de marca')).toBeInTheDocument()
 
     // El aviso de que el precio nuevo rige desde el próximo período.
     expect(
@@ -71,25 +110,46 @@ describe('PlataformaPlanes', () => {
     ).toBeInTheDocument()
   })
 
-  it('edita un plan y manda todos los campos al servicio', async () => {
+  it('edita un plan y manda todos los campos, con las funciones en orden del contrato', async () => {
     montar()
-    await screen.findByText('Básico')
+    await screen.findByText('Pro')
 
     fireEvent.click(within(tarjeta('Pro')).getByRole('button', { name: 'Editar plan' }))
 
     const dialogo = await screen.findByRole('dialog')
     fireEvent.change(within(dialogo).getByLabelText('Precio mensual'), {
-      target: { value: '35000' },
+      target: { value: '89000' },
     })
     fireEvent.change(within(dialogo).getByLabelText('Personal máximo'), {
       target: { value: '' },
     })
+
+    // Pro venía con gestion, whatsapp_manual, whatsapp_automatico y arca:
+    // se destilda ARCA y se tildan recordatorios y marca propia (en ese
+    // orden de clicks, al revés del orden del contrato).
+    fireEvent.click(within(dialogo).getByLabelText('Facturación electrónica ARCA'))
+    fireEvent.click(within(dialogo).getByLabelText('Personalización de marca'))
+    fireEvent.click(within(dialogo).getByLabelText('Recordatorios automáticos de service'))
+
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Guardar plan' }))
 
     await waitFor(() =>
       expect(suscripciones.actualizarPlan).toHaveBeenCalledWith(
         'pro',
-        { nombre: 'Pro', precio_mensual: 35000, max_personal: null, activo: true },
+        {
+          nombre: 'Pro',
+          precio_mensual: 89000,
+          max_personal: null,
+          activo: true,
+          // Orden canónico del contrato, no el orden en que se tildó.
+          funciones: [
+            'gestion',
+            'whatsapp_manual',
+            'whatsapp_automatico',
+            'recordatorios_service',
+            'marca_propia',
+          ],
+        },
         'tok',
       ),
     )
@@ -97,9 +157,22 @@ describe('PlataformaPlanes', () => {
     expect(suscripciones.listarPlanes).toHaveBeenCalledTimes(2) // recarga
   })
 
+  it('los checkboxes de funciones reflejan lo que tiene el plan', async () => {
+    montar()
+    await screen.findByText('Esencial')
+
+    fireEvent.click(within(tarjeta('Esencial')).getByRole('button', { name: 'Editar plan' }))
+
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByLabelText('Gestión del taller')).toBeChecked()
+    expect(within(dialogo).getByLabelText('Avisos por WhatsApp manual')).toBeChecked()
+    expect(within(dialogo).getByLabelText('Avisos automáticos por WhatsApp')).not.toBeChecked()
+    expect(within(dialogo).getByLabelText('Facturación electrónica ARCA')).not.toBeChecked()
+  })
+
   it('valida el formulario sin llamar al servicio', async () => {
     montar()
-    await screen.findByText('Básico')
+    await screen.findByText('Pro')
 
     fireEvent.click(within(tarjeta('Pro')).getByRole('button', { name: 'Editar plan' }))
 
@@ -120,7 +193,7 @@ describe('PlataformaPlanes', () => {
   it('si el servidor falla al editar muestra el error dentro del modal', async () => {
     suscripciones.actualizarPlan.mockRejectedValue(new Error('No se pudo guardar el plan.'))
     montar()
-    await screen.findByText('Básico')
+    await screen.findByText('Pro')
 
     fireEvent.click(within(tarjeta('Pro')).getByRole('button', { name: 'Editar plan' }))
     const dialogo = await screen.findByRole('dialog')
@@ -138,7 +211,7 @@ describe('PlataformaPlanes', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
 
-    expect(await screen.findByText('Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Esencial')).toBeInTheDocument()
     expect(suscripciones.listarPlanes).toHaveBeenCalledTimes(2)
   })
 })

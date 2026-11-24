@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import Button from '@/components/ui/Button'
+import { formatearFechaLarga } from '@/lib/fechas'
 
 function saludoSegunHora(hora) {
   if (hora < 13) return 'Buen día'
@@ -8,12 +9,7 @@ function saludoSegunHora(hora) {
 }
 
 function fechaLarga(fecha) {
-  const texto = fecha.toLocaleDateString('es-AR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  const texto = formatearFechaLarga(fecha, { diaSemana: true })
   return texto.charAt(0).toUpperCase() + texto.slice(1)
 }
 

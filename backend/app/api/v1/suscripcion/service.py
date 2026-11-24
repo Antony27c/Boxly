@@ -3,24 +3,37 @@
 ``PagoSuscripcion`` tiene ``taller_id`` pero no usa ``TallerMixin``: el filtro
 automático de app.db.session no lo cubre, así que TODA consulta filtra por el
 taller explícitamente (docs/Suscripciones.md, S1).
-"""
-from datetime import date, timedelta
 
-from dateutil.relativedelta import relativedelta
+Es el único lugar que escribe ``PagoSuscripcion`` (``registrar_pago``): lo usan
+el pago manual del superadmin y los cobros de Mercado Pago (suscripcion_mp).
+"""
+from collections.abc import Callable
+from datetime import date
+from decimal import Decimal
+
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.funciones import FUNCIONES, taller_tiene
-from app.core.suscripcion import estado_suscripcion, fechas_limite
-from app.db.session import CLAVE_TALLER, SIN_FILTRO_TALLER
+from app.core.suscripcion import (
+    dias_para_vencer,
+    estado_suscripcion,
+    fechas_limite,
+    hoy,
+    periodo_siguiente,
+)
+from app.db.session import CLAVE_TALLER, SIN_FILTRO_TALLER, fijar_taller
 from app.models import AdicionalTaller, PagoSuscripcion, Plan, Taller, Usuario
+from app.models.suscripcion import EstadoPagoSuscripcion, MedioPagoSuscripcion
 from app.models.usuario import ROLES_PERSONAL
 from app.schemas.suscripcion import (
     AdicionalResponse,
     PagoManualCreate,
     PagoSuscripcionResponse,
     PlanResponse,
+    PlanUpdate,
     SuscripcionDetalleResponse,
     SuscripcionResponse,
 )
@@ -28,6 +41,28 @@ from app.schemas.suscripcion import (
 _MSG_SIN_PERMISO = "No tenés permisos para esta acción"
 # Un pago aprobado deja al taller en este tipo de acceso (docs/Oferta.md).
 ACCESO_PAGO = "pago"
+# Un pago en estos estados ya no cambia: un aviso repetido o contradictorio de
+# Mercado Pago no deshace lo registrado.
+_ESTADOS_FINALES = (EstadoPagoSuscripcion.aprobado, EstadoPagoSuscripcion.rechazado)
+
+OyenteCambioPlan = Callable[[Taller, Plan], None]
+# Quienes reaccionan a un cambio de plan ya guardado (hoy, el cobro automático
+# de suscripcion_mp, que se anota al importarse). Así este módulo no importa a
+# suscripcion_mp, que sí depende de este.
+_oyentes_cambio_plan: list[OyenteCambioPlan] = []
+
+
+def al_cambiar_plan(oyente: OyenteCambioPlan) -> OyenteCambioPlan:
+    """Anota un oyente del cambio de plan (una sola vez aunque se repita)."""
+    if oyente not in _oyentes_cambio_plan:
+        _oyentes_cambio_plan.append(oyente)
+    return oyente
+
+
+def avisar_cambio_plan(taller: Taller, plan: Plan) -> None:
+    """Avisa el plan nuevo a los oyentes. Ninguno rompe el cambio ya guardado."""
+    for oyente in _oyentes_cambio_plan:
+        oyente(taller, plan)
 
 
 def taller_de_sesion(db: Session) -> Taller:
@@ -70,6 +105,11 @@ def plan_o_404(db: Session, codigo: str, *, solo_activos: bool) -> Plan:
     return plan
 
 
+def plan_del_taller(db: Session, taller: Taller) -> Plan:
+    """Plan actual del taller, aunque esté inactivo (404 si no existe)."""
+    return plan_o_404(db, taller.plan_codigo, solo_activos=False)
+
+
 def estado_del_taller(taller: Taller) -> str:
     """Estado de la suscripción según el vencimiento y el tipo de acceso."""
     return estado_suscripcion(taller.suscripcion_vence_en, tipo_acceso=taller.tipo_acceso)
@@ -77,14 +117,14 @@ def estado_del_taller(taller: Taller) -> str:
 
 def adicionales_vigentes(db: Session, taller_id: int) -> list[AdicionalTaller]:
     """Adicionales activos del taller dentro de su vigencia (null = sin límite)."""
-    hoy = date.today()
+    dia = hoy()
     stmt = (
         select(AdicionalTaller)
         .where(
             AdicionalTaller.taller_id == taller_id,
             AdicionalTaller.activo.is_(True),
-            (AdicionalTaller.desde.is_(None)) | (AdicionalTaller.desde <= hoy),
-            (AdicionalTaller.hasta.is_(None)) | (AdicionalTaller.hasta >= hoy),
+            (AdicionalTaller.desde.is_(None)) | (AdicionalTaller.desde <= dia),
+            (AdicionalTaller.hasta.is_(None)) | (AdicionalTaller.hasta >= dia),
         )
         .order_by(AdicionalTaller.codigo)
     )
@@ -99,16 +139,14 @@ def funciones_efectivas(db: Session, taller: Taller) -> list[str]:
 
 def armar_suscripcion(db: Session, taller: Taller) -> SuscripcionResponse:
     """SuscripcionResponse del taller: la usa el taller y también la plataforma."""
-    plan = db.get(Plan, taller.plan_codigo)
-    if plan is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan no encontrado")
+    plan = plan_del_taller(db, taller)
     vence_en = taller.suscripcion_vence_en
     fin_gracia, fin_acceso = fechas_limite(vence_en, tipo_acceso=taller.tipo_acceso)
     return SuscripcionResponse(
         plan=PlanResponse.model_validate(plan),
         vence_en=vence_en,
         estado=estado_del_taller(taller),
-        dias_para_vencer=(vence_en - date.today()).days if vence_en else 0,
+        dias_para_vencer=dias_para_vencer(vence_en),
         cobro_automatico=taller.cobro_automatico,
         personal_activo=personal_activo(db, taller.id),
         max_personal=plan.max_personal,
@@ -156,19 +194,8 @@ def cambiar_plan(db: Session, taller: Taller, codigo: str) -> SuscripcionRespons
     db.add(taller)
     db.commit()
     db.refresh(taller)
-    sincronizar_cobro_automatico(taller, plan)
+    avisar_cambio_plan(taller, plan)
     return armar_suscripcion(db, taller)
-
-
-def sincronizar_cobro_automatico(taller: Taller, plan: Plan) -> None:
-    """Con cobro automático, la preapproval de Mercado Pago cobra el precio del
-    plan: se actualiza el monto. Import perezoso para no acoplar los módulos; la
-    función devuelve bool y nunca rompe el cambio de plan (docs/Suscripciones.md S2)."""
-    if not taller.cobro_automatico:
-        return
-    from app.api.v1.suscripcion_mp.service import actualizar_monto_preapproval
-
-    actualizar_monto_preapproval(taller, plan)
 
 
 def _nombres_de_registro(db: Session, pagos: list[PagoSuscripcion]) -> dict[int, str]:
@@ -218,7 +245,7 @@ def listar_planes(db: Session) -> list[PlanResponse]:
     return [PlanResponse.model_validate(p) for p in db.scalars(stmt)]
 
 
-def actualizar_plan(db: Session, codigo: str, datos) -> PlanResponse:
+def actualizar_plan(db: Session, codigo: str, datos: PlanUpdate) -> PlanResponse:
     plan = plan_o_404(db, codigo, solo_activos=False)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(plan, campo, valor)
@@ -236,30 +263,97 @@ def suscripcion_con_pagos(db: Session, taller_id: int) -> SuscripcionDetalleResp
     )
 
 
+def _pago_por_mp_id(db: Session, taller_id: int, mp_payment_id: str) -> PagoSuscripcion | None:
+    return db.scalar(
+        select(PagoSuscripcion).where(
+            PagoSuscripcion.mp_payment_id == mp_payment_id,
+            PagoSuscripcion.taller_id == taller_id,
+        )
+    )
+
+
+def _actualizar_estado(
+    taller: Taller, pago: PagoSuscripcion, estado: str, meses: int
+) -> PagoSuscripcion | None:
+    """El mismo cobro avisado otra vez (p. ej. pendiente y después aprobado).
+    Al aprobarse recalcula el período y extiende el vencimiento. None si el
+    pago ya estaba en un estado final."""
+    if pago.estado in _ESTADOS_FINALES:
+        return None
+    pago.estado = estado
+    if estado == EstadoPagoSuscripcion.aprobado:
+        pago.periodo_desde, pago.periodo_hasta = periodo_siguiente(
+            taller.suscripcion_vence_en, meses
+        )
+        aplicar_pago_aprobado(taller, pago.periodo_hasta)
+    return pago
+
+
+def registrar_pago(
+    db: Session,
+    taller: Taller,
+    *,
+    monto: Decimal,
+    medio: MedioPagoSuscripcion,
+    estado: EstadoPagoSuscripcion,
+    meses: int = 1,
+    fecha: date | None = None,
+    referencia: str | None = None,
+    registrado_por_id: int | None = None,
+    mp_payment_id: str | None = None,
+) -> PagoSuscripcion | None:
+    """Registra un pago de la suscripción (sin commitear). Si queda aprobado,
+    extiende el vencimiento y pasa el taller a pago.
+
+    Período: ``periodo_siguiente(vencimiento, meses, fecha)``. Con
+    ``mp_payment_id`` es idempotente: si el cobro ya existe se actualiza su
+    estado (``_actualizar_estado``), y si otro request ganó la carrera con el
+    mismo id (UNIQUE) devuelve None."""
+    if mp_payment_id is not None:
+        existente = _pago_por_mp_id(db, taller.id, mp_payment_id)
+        if existente is not None:
+            return _actualizar_estado(taller, existente, estado, meses)
+    desde, hasta = periodo_siguiente(taller.suscripcion_vence_en, meses, fecha)
+    pago = PagoSuscripcion(
+        taller_id=taller.id,
+        monto=monto,
+        periodo_desde=desde,
+        periodo_hasta=hasta,
+        medio=medio,
+        estado=estado,
+        referencia=referencia,
+        mp_payment_id=mp_payment_id,
+        registrado_por_id=registrado_por_id,
+    )
+    db.add(pago)
+    taller_de_la_sesion = db.info.get(CLAVE_TALLER)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        fijar_taller(db, taller_de_la_sesion)
+        return None
+    if estado == EstadoPagoSuscripcion.aprobado:
+        aplicar_pago_aprobado(taller, hasta)
+    return pago
+
+
 def registrar_pago_manual(
     db: Session, taller: Taller, datos: PagoManualCreate, usuario: Usuario
 ) -> PagoSuscripcion:
-    """Pago manual aprobado: extiende el vencimiento del taller.
-
-    periodo_desde = max(vencimiento + 1, fecha del pago o hoy);
-    periodo_hasta = periodo_desde + meses - 1 día (docs/Suscripciones.md)."""
-    base = datos.fecha or date.today()
-    if taller.suscripcion_vence_en is not None:
-        base = max(base, taller.suscripcion_vence_en + timedelta(days=1))
-    periodo_hasta = base + relativedelta(months=datos.meses) - timedelta(days=1)
-
-    pago = PagoSuscripcion(
-        taller_id=taller.id,
+    """Pago manual aprobado del superadmin: el período arranca en
+    max(vencimiento + 1, fecha del pago o hoy) y dura ``meses``."""
+    pago = registrar_pago(
+        db,
+        taller,
         monto=datos.monto,
-        periodo_desde=base,
-        periodo_hasta=periodo_hasta,
-        medio="manual",
-        estado="aprobado",
+        medio=MedioPagoSuscripcion.manual,
+        estado=EstadoPagoSuscripcion.aprobado,
+        meses=datos.meses,
+        fecha=datos.fecha,
         referencia=datos.referencia,
         registrado_por_id=usuario.id,
     )
-    aplicar_pago_aprobado(taller, periodo_hasta)
-    db.add_all([pago, taller])
     db.commit()
     db.refresh(pago)
     return pago

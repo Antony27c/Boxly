@@ -42,4 +42,25 @@ describe('AvisoSuscripcion con una demo vencida', () => {
     expect(screen.getByText('La suscripción está en solo lectura por falta de pago')).toBeInTheDocument()
     expect(screen.queryByText(/Tu demo terminó/)).not.toBeInTheDocument()
   })
+
+  it('con fin_acceso del backend usa esa fecha como límite para elegir', () => {
+    montar(suscripcion({ fin_acceso: '2026-11-25' }))
+    expect(screen.getByText('Tu demo terminó. Tenés hasta el 25/11 para elegir un plan.')).toBeInTheDocument()
+  })
+})
+
+describe('AvisoSuscripcion en gracia', () => {
+  it('con fin_gracia del backend usa esa fecha en vez de calcularla', () => {
+    montar({ tipo_acceso: 'pago', vence_en: '2026-11-20', estado: 'gracia', fin_gracia: '2026-11-29' })
+    expect(
+      screen.getByText('La suscripción venció; regularizala hasta el 29/11 para evitar cortes'),
+    ).toBeInTheDocument()
+  })
+
+  it('sin fin_gracia la calcula desde el vencimiento (7 días)', () => {
+    montar({ tipo_acceso: 'pago', vence_en: '2026-11-28', estado: 'gracia' })
+    expect(
+      screen.getByText('La suscripción venció; regularizala hasta el 05/12 para evitar cortes'),
+    ).toBeInTheDocument()
+  })
 })

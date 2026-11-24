@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Chip, Chips, Ficha, FichaCabecera, FichaSeccion } from '@/components/ui/Ficha'
+import { TIPOS_ACCESO } from './funciones'
 import { etiquetaSoporte, haceCuanto, numero } from './formatos'
 
 // Misma tabla de estados que SuscripcionTaller (docs/Suscripciones.md), en
@@ -9,6 +10,30 @@ const ESTADOS_SUSCRIPCION = {
   gracia: { texto: 'En gracia', tono: 'ambar' },
   solo_lectura: { texto: 'Solo lectura', tono: 'peligro' },
   suspendida: { texto: 'Suspendida por falta de pago', tono: 'peligro' },
+}
+
+// Días enteros hasta el vencimiento (fecha YYYY-MM-DD), sin zona horaria.
+function diasParaVencer(fecha) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(fecha ?? ''))
+  if (!m) return null
+  const vence = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const hoy = new Date()
+  const hoyMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+  return Math.round((vence - hoyMedianoche) / 86400000)
+}
+
+// Chip de acceso sin cargo (demo o piloto): avisa los días que quedan solo
+// cuando son 3 o menos; vencido lo cubre el chip de estado de suscripción.
+function chipAcceso(taller) {
+  const tipo = TIPOS_ACCESO[taller.tipo_acceso]
+  if (!tipo || (taller.tipo_acceso !== 'demo' && taller.tipo_acceso !== 'piloto'))
+    return null
+  const dias = diasParaVencer(taller.suscripcion_vence_en)
+  let texto = tipo.texto
+  if (dias != null && dias >= 0 && dias <= 3) {
+    texto = dias === 0 ? `${tipo.texto} · vence hoy` : `${tipo.texto} · ${dias} ${dias === 1 ? 'día' : 'días'}`
+  }
+  return { texto, tono: tipo.tono }
 }
 
 // En el resumen `personal` es un entero (personal activo); por las dudas se
@@ -45,6 +70,7 @@ export default function TarjetaTaller({ taller }) {
           tono: 'neutro',
         })
       : null
+  const acceso = chipAcceso(taller)
 
   return (
     <Ficha
@@ -61,6 +87,7 @@ export default function TarjetaTaller({ taller }) {
         }
       >
         <Chips>
+          {acceso && <Chip tono={acceso.tono}>{acceso.texto}</Chip>}
           {taller.plan_codigo && (
             <Chip mono>Plan {String(taller.plan_codigo).replace(/_/g, ' ')}</Chip>
           )}

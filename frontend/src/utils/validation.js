@@ -1,3 +1,4 @@
+import { aISO } from '@/utils/fechas'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -91,7 +92,7 @@ export function validarTurno({ cliente_id, vehiculo_id, fecha, hora, servicio })
   if (!fecha) {
     errores.fecha = 'Elegí la fecha del turno.'
   } else {
-    const hoy = new Date().toISOString().slice(0, 10)
+    const hoy = aISO(new Date())
     if (fecha < hoy) errores.fecha = 'La fecha no puede ser anterior a hoy.'
     const dia = new Date(`${fecha}T12:00:00`).getDay()
     if (dia === 0) errores.fecha = 'El taller no atiende los domingos.'

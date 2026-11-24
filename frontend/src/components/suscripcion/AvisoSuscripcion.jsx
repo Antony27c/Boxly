@@ -1,23 +1,7 @@
 import { Link } from 'react-router-dom'
 import Icono from '@/components/ui/Icono'
+import { textoAviso } from './estados'
 import { avisoDemoVencida } from './finDemo'
-
-function fechaCorta(iso) {
-  if (!iso) return '—'
-  const fecha = new Date(`${iso}T12:00:00`)
-  if (Number.isNaN(fecha.getTime())) return '—'
-  return fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
-}
-
-/* Último día de gracia: el estado "gracia" cubre del día 1 al 7 después del
-   vencimiento, así que el corte llega el vencimiento + 7 días. */
-function limiteGracia(venceEn) {
-  if (!venceEn) return '—'
-  const fecha = new Date(`${venceEn}T12:00:00`)
-  if (Number.isNaN(fecha.getTime())) return '—'
-  fecha.setDate(fecha.getDate() + 7)
-  return fechaCorta(fecha.toISOString().slice(0, 10))
-}
 
 /* Franja fija con el aviso de suscripción (debajo de la de modo soporte si
    está activa). En "gracia" es ámbar y en "solo_lectura" roja; el link a
@@ -30,16 +14,14 @@ export default function AvisoSuscripcion({ suscripcion, esAdmin, desplazada = fa
   const clases = soloLectura
     ? 'border-danger/50 bg-danger/10 text-danger'
     : 'border-amber/50 bg-amber/15 text-amber-deep'
-  const texto = soloLectura
-    ? 'La suscripción está en solo lectura por falta de pago'
-    : `La suscripción venció; regularizala hasta el ${limiteGracia(suscripcion?.vence_en)} para evitar cortes`
+  const texto = textoDemo ?? textoAviso(suscripcion)
 
   return (
     <div
       className={`fixed inset-x-0 ${desplazada ? 'top-10' : 'top-0'} z-40 flex h-10 items-center justify-center gap-2 border-b px-4 text-sm lg:left-64 ${clases}`}
     >
       <Icono nombre="alerta" className="h-4 w-4 shrink-0" />
-      <p className="truncate">{textoDemo ?? texto}</p>
+      <p className="truncate">{texto}</p>
       {esAdmin && (
         <>
           <span aria-hidden="true" className="shrink-0">

@@ -82,6 +82,14 @@ describe('OrdenDetalle', () => {
     repuestos.listar.mockResolvedValue([])
   })
 
+  it('el mecánico no ve el botón de WhatsApp al cliente', async () => {
+    ordenes.obtener.mockResolvedValue({ ...ORDEN, cliente_id: 4 })
+    montar()
+
+    expect((await screen.findAllByRole('button', { name: 'Marcar listo' })).length).toBeGreaterThan(0)
+    expect(screen.queryByText('WhatsApp')).not.toBeInTheDocument()
+  })
+
   it('muestra el botón principal del mecánico en diagnóstico', async () => {
     montar()
 

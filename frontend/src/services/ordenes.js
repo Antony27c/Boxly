@@ -1,4 +1,5 @@
 import { api, urlArchivo } from '@/lib/api'
+import { diaServidor } from '@/lib/fechas'
 
 const RECURSO = '/api/v1/ordenes'
 
@@ -54,6 +55,22 @@ export function proximosEstados(estado) {
 }
 
 export const MOTIVO_A_COTIZAR = 'Cotizá los trabajos pendientes antes de cobrar.'
+
+// Medios del pago registrado en el local (POST /ordenes/{id}/pago-local).
+export const MEDIOS_PAGO_LOCAL = [
+  { valor: 'efectivo', texto: 'Efectivo' },
+  { valor: 'tarjeta', texto: 'Tarjeta' },
+  { valor: 'transferencia', texto: 'Transferencia' },
+  { valor: 'otro', texto: 'Otro' },
+]
+
+/* "Pagada en el taller (efectivo)" o "Pagada online (Mercado Pago)" según el
+   medio del pago aprobado; sin medio conocido, solo "Pagada". */
+export function textoPagada(medio) {
+  if (medio === 'mercadopago') return 'Pagada online (Mercado Pago)'
+  const local = MEDIOS_PAGO_LOCAL.find((opcion) => opcion.valor === medio)
+  return local ? `Pagada en el taller (${local.texto.toLowerCase()})` : 'Pagada'
+}
 
 const ROL_ADMIN = ['admin', 'administrador']
 const ROL_MOSTRADOR = [...ROL_ADMIN, 'recepcion', 'recepcionista']
@@ -133,7 +150,10 @@ export function desdeApi(orden) {
   return {
     ...orden,
     estado: nombreEstado(orden.estado),
-    fecha: orden.fecha_ingreso?.slice(0, 10) ?? '',
+    // El día del ingreso en hora del taller (el datetime del servidor viene
+    // en UTC sin zona: recortar el string correría el día en los ingresos
+    // de la noche).
+    fecha: diaServidor(orden.fecha_ingreso) ?? '',
     descripcion: orden.descripcion_ingreso,
     mecanico: orden.mecanico_nombre ?? '',
     total: Number(orden.costo_final ?? orden.costo_estimado ?? 0),
@@ -262,6 +282,15 @@ export const ordenesService = {
 
   emitirCobro: (id, monto, token) =>
     api.post(`${RECURSO}/${id}/cobro`, { monto: Number(monto) }, token).then(desdeApi),
+
+  registrarPagoLocal: (id, { medio, monto, referencia }, token) =>
+    api
+      .post(
+        `${RECURSO}/${id}/pago-local`,
+        { medio, monto: Number(monto), referencia: referencia?.trim() || null },
+        token,
+      )
+      .then(desdeApi),
 
   aprobarCobro: (id, monto, token) =>
     api

@@ -42,7 +42,7 @@ vi.mock('@/context/AuthContext', () => ({
 }))
 
 const SUSCRIPCION_BASE = {
-  plan: { codigo: 'basico', nombre: 'Básico', max_personal: 3 },
+  plan: { codigo: 'esencial', nombre: 'Esencial', max_personal: 3 },
   personal_activo: 2,
   max_personal: 3,
 }
@@ -98,14 +98,14 @@ describe('Usuarios — límite de personal del plan', () => {
 
   it('muestra el contador con el tope del plan', async () => {
     montar()
-    expect(await screen.findByText('Personal: 2 de 3 en tu plan Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Personal: 2 de 3 en tu plan Esencial')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Nuevo usuario' })).toBeEnabled()
   })
 
   it('con plan sin límite muestra el contador sin tope', async () => {
     limite.obtener.mockResolvedValue({
       ...SUSCRIPCION_BASE,
-      plan: { codigo: 'taller_plus', nombre: 'Taller+', max_personal: null },
+      plan: { codigo: 'profesional', nombre: 'Profesional', max_personal: null },
       personal_activo: 7,
       max_personal: null,
     })
@@ -118,7 +118,7 @@ describe('Usuarios — límite de personal del plan', () => {
     limite.obtener.mockResolvedValue({ ...SUSCRIPCION_BASE, personal_activo: 3 })
     montar()
 
-    expect(await screen.findByText('Personal: 3 de 3 en tu plan Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Personal: 3 de 3 en tu plan Esencial')).toBeInTheDocument()
     expect(screen.getByText(/Llegaste al límite de tu plan/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Nuevo usuario' })).toBeDisabled()
     expect(screen.getByRole('link', { name: 'Ver planes' })).toHaveAttribute(
@@ -190,7 +190,7 @@ describe('Usuarios — límite de personal del plan', () => {
     })
     montar()
 
-    expect(await screen.findByText('Personal: 2 de 3 en tu plan Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Personal: 2 de 3 en tu plan Esencial')).toBeInTheDocument()
 
     // Crear suma uno.
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo usuario' }))
@@ -204,7 +204,7 @@ describe('Usuarios — límite de personal del plan', () => {
       target: { value: 'Clave1234' },
     })
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Guardar usuario' }))
-    expect(await screen.findByText('Personal: 3 de 3 en tu plan Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Personal: 3 de 3 en tu plan Esencial')).toBeInTheDocument()
 
     // Desactivar vuelve a bajar (el usuario de la lista sigue activo en el mock).
     usuarios.listarPaginado.mockResolvedValue({ items: [USUARIO_MECANICO], total: 1 })
@@ -212,6 +212,6 @@ describe('Usuarios — límite de personal del plan', () => {
     fireEvent.click(
       within(tarjetaDe('Nico, Meca')).getByRole('button', { name: 'Desactivar' }),
     )
-    expect(await screen.findByText('Personal: 2 de 3 en tu plan Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Personal: 2 de 3 en tu plan Esencial')).toBeInTheDocument()
   })
 })

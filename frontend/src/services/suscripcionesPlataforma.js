@@ -9,8 +9,8 @@ export const suscripcionesPlataformaService = {
   // Planes: lista TODOS (activos e inactivos) para la página de edición.
   listarPlanes: (token) => api.get(`${RECURSO}/planes`, token),
 
-  // Edita un plan: {nombre?, precio_mensual?, max_personal?, activo?}.
-  // El precio nuevo rige desde el próximo período de cada taller.
+  // Edita un plan: {nombre?, precio_mensual?, max_personal?, activo?,
+  // funciones?}. El precio nuevo rige desde el próximo período de cada taller.
   actualizarPlan: (codigo, datos, token) => api.put(`${RECURSO}/planes/${codigo}`, datos, token),
 
   // Suscripción del taller: SuscripcionResponse + pagos (historial).
@@ -27,4 +27,20 @@ export const suscripcionesPlataformaService = {
   // Ajuste manual del vencimiento (cortesía o corrección): {vence_en: YYYY-MM-DD}.
   ajustarVencimiento: (tallerId, vence_en, token) =>
     api.post(`${RECURSO}/talleres/${tallerId}/vencimiento`, { vence_en }, token),
+
+  /* Tipo de acceso (C2, docs/Oferta.md): convierte demo/piloto en pago o
+     pasa a piloto. Recibe {tipo: pago|piloto|demo, plan?, vence_en?,
+     motivo?} según el destino; queda auditado. */
+  cambiarAcceso: (tallerId, datos, token) =>
+    api.post(`${RECURSO}/talleres/${tallerId}/acceso`, datos, token),
+
+  /* Adicionales del taller (por ahora solo ARCA, docs/Oferta.md §4).
+     Activar: {codigo, desde?, hasta?}; 409 si el plan ya incluye la función. */
+  listarAdicionales: (tallerId, token) => api.get(`${RECURSO}/talleres/${tallerId}/adicionales`, token),
+
+  activarAdicional: (tallerId, datos, token) =>
+    api.post(`${RECURSO}/talleres/${tallerId}/adicionales`, datos, token),
+
+  desactivarAdicional: (tallerId, codigo, token) =>
+    api.del(`${RECURSO}/talleres/${tallerId}/adicionales/${codigo}`, token),
 }

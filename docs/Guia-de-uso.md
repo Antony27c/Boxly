@@ -177,13 +177,52 @@ En **Suscripción** (`/suscripcion`) ves y manejás tu plan:
 
 - **Estado**: al día, en gracia, solo lectura o suspendida, con la fecha de
   vencimiento y el próximo monto.
-- **Planes**: comparación de Básico, Pro y Taller+ (precio por mes y límite de
-  personal). "Pasar a este plan" pide confirmación: el precio nuevo rige desde
-  el próximo período. Si tu personal activo supera el límite del plan elegido,
-  Boxly te avisa y no deja hacer el cambio.
-- **Pagos**: historial de lo pagado (transferencia o Mercado Pago).
-- **Cobro automático**: con un botón activás el débito automático con Mercado
-  Pago; también podés cancelarlo cuando quieras.
+- **Planes**: comparación de Esencial, Pro y Profesional (precio por mes,
+  funciones y límite de personal). "Pasar a este plan" pide confirmación: el
+  precio nuevo rige desde el próximo período. Si tu personal activo supera el
+  límite del plan elegido, Boxly te avisa y no deja hacer el cambio.
+- **Cobro automático**: el abono se paga con el débito automático de Mercado
+  Pago. Con un botón lo activás y también podés cancelarlo cuando quieras. Si
+  todavía no está habilitado, escribinos.
+- **Pagos**: historial de lo pagado.
+
+La cuenta de Mercado Pago con la que pagás el abono es aparte de la que usa tu
+taller para cobrarles a sus clientes: nunca se mezclan cuentas ni fondos.
+
+#### Qué trae cada plan
+
+Los planes no tienen las mismas funciones: Esencial cubre la gestión diaria y
+los superiores suman automatización.
+
+| Plan | Qué trae |
+| --- | --- |
+| **Esencial** | Clientes, vehículos, turnos, órdenes con fotos e historial, inventario con alerta de stock mínimo, registro de cobros, métricas básicas, portal del cliente, avisos por email y WhatsApp manual (Boxly arma el mensaje y el taller lo manda desde su teléfono). |
+| **Pro** | Todo Esencial, más avisos automáticos por WhatsApp de turnos y estados (*próximamente*) y facturas electrónicas ARCA emitidas desde Boxly (*próximamente*), las dos con cupo mensual. |
+| **Profesional** | Todo Pro, con cupos mayores, más recordatorios automáticos de service (*próximamente*) y personalización de marca (*próximamente*). |
+
+**Adicional ARCA** (*próximamente*): en Esencial, la facturación electrónica
+ARCA se va a poder sumar como adicional mensual con cupo. Sirve para emitir la
+factura de una reparación con una acción y tu confirmación; no es para cargar
+facturas de proveedores ni para facturar sin que nadie intervenga.
+
+#### Demo y piloto
+
+- **Demo**: no hay prueba abierta. Desde la página de Boxly pedís una demo y,
+  si Boxly aprueba la solicitud, tu taller usa el **plan Pro durante 14 días**.
+- **Piloto**: un acceso sin cargo que Boxly da a talleres elegidos, con el plan
+  y la fecha de fin que fija en cada caso. No es gratis para siempre.
+
+Cuando termina la demo no hay días de gracia:
+
+1. Al entrar, el administrador ve **"Gracias por probar Boxly"** con una
+   encuesta corta (qué te gustó, qué mejorarías, sugerencias y si pensás
+   contratar). Es opcional, se puede saltear y se responde una sola vez.
+2. Después pasa a Suscripción para elegir un plan.
+3. Durante los **3 días** siguientes al vencimiento el taller queda en **solo
+   lectura**. Pasados esos 3 días sin pago queda **suspendido**: nadie ve nada
+   y el administrador solo entra a Suscripción para pagar.
+
+Si pagás un plan en cualquier momento, el taller vuelve a funcionar al instante.
 
 #### Qué pasa si se vence el pago
 
@@ -194,8 +233,7 @@ En **Suscripción** (`/suscripcion`) ves y manejás tu plan:
 | Días 8 a 30 | **Solo lectura** | El personal y los clientes solo pueden mirar: no se puede registrar nada nuevo. El administrador igual puede entrar a Suscripción para pagar. |
 | 31 días o más | **Suspendida** | El taller queda bloqueado: solo el administrador entra, y solo a Suscripción para regularizar. El resto del personal ve un aviso para hablar con el administrador. |
 
-Si pagás por transferencia, el pago lo registra Boxly y el estado se actualiza
-solo. Si una pantalla te responde que el taller está "en solo lectura" o
+Cuando Mercado Pago aprueba el pago, el estado se actualiza solo. Si una pantalla te responde que el taller está "en solo lectura" o
 "suspendido", es esto: regularizá el pago desde Suscripción o escribinos.
 
 ## 6. Cliente: el portal
@@ -225,6 +263,38 @@ Tenés 7 días de gracia con aviso. Después el taller pasa a **solo lectura**
 (podés mirar todo pero no registrar cambios) y, pasados 30 días, queda
 **suspendido**: solo el administrador puede entrar, y solo a la pantalla de
 Suscripción para pagar. Regularizar el pago te devuelve todo a la normalidad.
+Si tu taller está en demo, el esquema es más corto: lo explicamos en la
+pregunta siguiente.
+
+**¿Qué pasa cuando termina la demo?**
+No hay días de gracia. El administrador ve "Gracias por probar Boxly" con una
+encuesta corta y opcional, y después elige un plan en Suscripción. Durante 3
+días el taller queda en **solo lectura**; pasados esos 3 días sin pago queda
+**suspendido** y solo el administrador entra, a Suscripción, para pagar. Al
+pagar, todo vuelve a funcionar al instante.
+
+**¿Hay prueba gratis?**
+No hay prueba abierta. Desde la página de Boxly pedís una **demo**: si Boxly
+aprueba la solicitud, tu taller usa el plan Pro durante 14 días.
+
+**¿Qué trae cada plan?**
+Los planes no tienen las mismas funciones. **Esencial** cubre la gestión
+diaria: clientes, vehículos, turnos, órdenes, inventario, cobros, métricas
+básicas, portal del cliente y avisos por email y WhatsApp manual. **Pro** suma
+avisos automáticos por WhatsApp y facturas electrónicas ARCA (los dos
+*próximamente*). **Profesional** suma cupos mayores, recordatorios automáticos
+de service y personalización de marca (*próximamente*). El detalle está en la
+sección Suscripción.
+
+**¿Qué es el adicional ARCA?**
+*Próximamente.* Es la facturación electrónica ARCA para emitir la factura de
+una reparación desde Boxly, con tu confirmación. Pro y Profesional la incluyen
+con cupo; en Esencial se va a poder sumar como adicional mensual.
+
+**¿Qué es un piloto?**
+Un acceso sin cargo que Boxly da a talleres elegidos, con el plan y la fecha
+de fin que fija en cada caso. No es gratis para siempre: al terminar, elegís un
+plan y lo pagás desde Suscripción.
 
 **¿Cómo subo o bajo de plan?**
 En **Suscripción** comparás los planes y tocás "Pasar a este plan" en el que
@@ -233,8 +303,9 @@ período. Si tu personal activo supera el límite del plan elegido, Boxly te avi
 cuántos son y no deja hacer el cambio.
 
 **¿Cómo pago la suscripción?**
-Por transferencia (avisale a Boxly y registra el pago) o activando el **cobro
-automático** con Mercado Pago desde la misma pantalla de Suscripción.
+Con el **débito automático de Mercado Pago**: lo activás desde la pantalla de
+Suscripción y Mercado Pago debita el plan cada mes. Si todavía no está
+habilitado, escribinos.
 
 **¿Por qué no puedo cargar precio siendo mecánico?**
 Por diseño: el mecánico no pone precios. El repuesto toma el precio del

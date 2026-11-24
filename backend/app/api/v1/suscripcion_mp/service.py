@@ -9,22 +9,26 @@ automático de taller NO lo alcanza: toda consulta filtra por taller_id a mano.
 """
 import logging
 import uuid
-from calendar import monthrange
-from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.v1.suscripcion import service as suscripcion
 from app.api.v1.suscripcion_mp import cliente_mp
 from app.core.config import get_settings
 from app.core.mercadopago import ID_SEGURO, VENTANA_FIRMA_SEG, firma_valida
 from app.db.session import SIN_FILTRO_TALLER, fijar_taller
-from app.models.suscripcion import PagoSuscripcion, Plan
+from app.models.suscripcion import (
+    EstadoPagoSuscripcion,
+    MedioPagoSuscripcion,
+    PagoSuscripcion,
+    Plan,
+)
 from app.models.taller import Taller
 from app.models.usuario import Usuario
+from app.schemas.suscripcion import CobroAutomaticoResponse, SimularCobroResponse
 
 logger = logging.getLogger(__name__)
 
@@ -36,33 +40,28 @@ _TIPOS_PREAPPROVAL = {"preapproval", "subscription_preapproval"}
 _TIPOS_COBRO = {"authorized_payment", "subscription_authorized_payment"}
 
 
-def _sumar_mes(fecha: date) -> date:
-    """Un mes después de `fecha`; si el día no existe, va al último del mes."""
-    mes = fecha.month + 1
-    anio = fecha.year + (mes - 1) // 12
-    mes = (mes - 1) % 12 + 1
-    return date(anio, mes, min(fecha.day, monthrange(anio, mes)[1]))
-
-
-def _periodo(vence_en: date | None, hoy: date | None = None) -> tuple[date, date]:
-    """periodo_desde = max(vence_en + 1, hoy); periodo_hasta = +1 mes - 1 día."""
-    hoy = hoy or date.today()
-    desde = max(vence_en + timedelta(days=1), hoy) if vence_en else hoy
-    return desde, _sumar_mes(desde) - timedelta(days=1)
+# Estado de Mercado Pago -> estado del pago de la suscripción. Lo que no está
+# acá queda pendiente.
+_ESTADOS_MP = {
+    "approved": EstadoPagoSuscripcion.aprobado,
+    "rejected": EstadoPagoSuscripcion.rechazado,
+    "cancelled": EstadoPagoSuscripcion.rechazado,
+}
+# Estados que acepta el simulador (en inglés, como MP, o en castellano).
+_ESTADOS_SIMULADOR = {
+    "approved": EstadoPagoSuscripcion.aprobado,
+    "rejected": EstadoPagoSuscripcion.rechazado,
+    **{e.value: e for e in (EstadoPagoSuscripcion.aprobado, EstadoPagoSuscripcion.rechazado)},
+}
 
 
 def _taller_del_usuario(db: Session, usuario: Usuario) -> Taller:
-    taller = db.get(Taller, usuario.taller_id)
-    if taller is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Taller no encontrado")
-    return taller
+    return suscripcion.taller_por_id(db, usuario.taller_id)
 
 
-def _plan_del_taller(db: Session, taller: Taller) -> Plan:
-    plan = db.get(Plan, taller.plan_codigo)
-    if plan is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Plan no encontrado")
-    return plan
+def _razon_cobro(plan: Plan, taller: Taller) -> str:
+    """Texto que ve el taller en Mercado Pago."""
+    return f"Boxly · plan {plan.nombre} · {taller.nombre}"
 
 
 def _token_boxly() -> str:
@@ -75,12 +74,12 @@ def _token_boxly() -> str:
 # --- Activar / cancelar (administrador del taller) ----------------------------
 
 
-def activar_cobro(db: Session, usuario: Usuario) -> dict:
+def activar_cobro(db: Session, usuario: Usuario) -> CobroAutomaticoResponse:
     """Crea la preapproval mensual del plan del taller y devuelve su init_point."""
     token = _token_boxly()
     settings = get_settings()
     taller = _taller_del_usuario(db, usuario)
-    plan = _plan_del_taller(db, taller)
+    plan = suscripcion.plan_del_taller(db, taller)
     if taller.cobro_automatico:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "El taller ya tiene el cobro automático activo"
@@ -93,7 +92,7 @@ def activar_cobro(db: Session, usuario: Usuario) -> dict:
     try:
         preapproval = cliente_mp.crear_preapproval(
             token,
-            reason=f"Boxly · plan {plan.nombre} · {taller.nombre}",
+            reason=_razon_cobro(plan, taller),
             monto=plan.precio_mensual,
             back_url=back_url,
             external_reference=f"taller-{taller.id}",
@@ -105,10 +104,9 @@ def activar_cobro(db: Session, usuario: Usuario) -> dict:
     # Solo queda activo cuando MP la autoriza (avisa por webhook).
     taller.cobro_automatico = preapproval.get("status") == "authorized"
     db.commit()
-    return {
-        "init_point": preapproval.get("init_point")
-        or preapproval.get("sandbox_init_point")
-    }
+    return CobroAutomaticoResponse(
+        init_point=preapproval.get("init_point") or preapproval.get("sandbox_init_point")
+    )
 
 
 def cancelar_cobro(db: Session, usuario: Usuario) -> None:
@@ -227,60 +225,25 @@ def _registrar_cobro(
     taller: Taller,
     *,
     monto: Decimal,
-    estado: str,
+    estado: EstadoPagoSuscripcion,
     mp_payment_id: str,
     referencia: str,
-    registrado_por_id: int | None = None,
 ) -> PagoSuscripcion | None:
-    """Crea o actualiza la fila de pagos_suscripcion.
-
-    MP avisa el mismo cobro más de una vez: primero pendiente y después
-    aprobado (o rechazado). Si la fila ya existe y no está en un estado final
-    (aprobado/rechazado), se actualiza el estado; al pasar a aprobado se
-    recalcula el período y se extiende el vencimiento. None cuando el cobro ya
-    estaba en estado final: ahí sí es idempotente (un aviso repetido o uno
-    contradictorio posterior no deshace un pago registrado).
-    """
-    existente = db.scalar(
-        select(PagoSuscripcion).where(
-            PagoSuscripcion.mp_payment_id == mp_payment_id,
-            PagoSuscripcion.taller_id == taller.id,
-        )
-    )
-    if existente is not None:
-        if existente.estado in ("aprobado", "rechazado"):
-            return None
-        existente.estado = estado
-        if estado == "aprobado":
-            desde, hasta = _periodo(taller.suscripcion_vence_en)
-            existente.periodo_desde = desde
-            existente.periodo_hasta = hasta
-            taller.suscripcion_vence_en = hasta
-            taller.tipo_acceso = "pago"  # demo/piloto -> pago
-        return existente
-    desde, hasta = _periodo(taller.suscripcion_vence_en)
-    pago = PagoSuscripcion(
-        taller_id=taller.id,
+    """Cobro de Mercado Pago: MP avisa el mismo cobro más de una vez (primero
+    pendiente y después aprobado o rechazado). La idempotencia por
+    ``mp_payment_id`` y la extensión del vencimiento son las de
+    ``suscripcion.registrar_pago``. None cuando el cobro ya estaba en estado
+    final o lo registró otro request. Un cobro de Mercado Pago (real o
+    simulado) no lo registra una persona: registrado_por queda NULL."""
+    return suscripcion.registrar_pago(
+        db,
+        taller,
         monto=monto,
-        periodo_desde=desde,
-        periodo_hasta=hasta,
-        medio="mercadopago",
+        medio=MedioPagoSuscripcion.mercadopago,
         estado=estado,
         referencia=referencia,
         mp_payment_id=mp_payment_id,
-        registrado_por_id=registrado_por_id,
     )
-    db.add(pago)
-    try:
-        db.flush()
-    except IntegrityError:
-        # Otro request/webhook ganó la carrera con el mismo mp_payment_id.
-        db.rollback()
-        fijar_taller(db, taller.id)
-        return None
-    if estado == "aprobado":
-        taller.suscripcion_vence_en, taller.tipo_acceso = hasta, "pago"  # demo/piloto -> pago
-    return pago
 
 
 def _procesar_cobro(db: Session, token: str, data_id: str) -> None:
@@ -310,13 +273,8 @@ def _procesar_cobro(db: Session, token: str, data_id: str) -> None:
         estado_mp = str(info.get("status") or "").lower()
         if estado_mp == "processed":
             estado_mp = "approved"
-    if estado_mp == "approved":
-        estado = "aprobado"
-    elif estado_mp in ("rejected", "cancelled"):
-        estado = "rechazado"
-    else:
-        estado = "pendiente"
-    plan = _plan_del_taller(db, taller)
+    estado = _ESTADOS_MP.get(estado_mp, EstadoPagoSuscripcion.pendiente)
+    plan = suscripcion.plan_del_taller(db, taller)
     monto = _monto_cobro(info, pago_mp, plan)
     pago = _registrar_cobro(
         db,
@@ -347,41 +305,35 @@ def procesar_notificacion(db: Session, tipo: str | None, data_id: str | None) ->
 # --- Simulador de desarrollo ----------------------------------------------------
 
 
-def simular_cobro(db: Session, usuario: Usuario, estado: str | None) -> dict:
+def simular_cobro(db: Session, usuario: Usuario, estado: str | None) -> SimularCobroResponse:
     """Simula un cobro de suscripción aprobado o rechazado (solo dev + debug)."""
     settings = get_settings()
     if not (settings.environment == "dev" and settings.debug):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Recurso no encontrado")
-    estado = (estado or "").strip().lower()
-    if estado in ("approved", "aprobado"):
-        estado = "aprobado"
-    elif estado in ("rejected", "rechazado"):
-        estado = "rechazado"
-    else:
+    estado_pago = _ESTADOS_SIMULADOR.get((estado or "").strip().lower())
+    if estado_pago is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Estado inválido: usá aprobado o rechazado"
         )
     taller = _taller_del_usuario(db, usuario)
-    plan = _plan_del_taller(db, taller)
+    plan = suscripcion.plan_del_taller(db, taller)
     pago = _registrar_cobro(
         db,
         taller,
         monto=plan.precio_mensual,
-        estado=estado,
+        estado=estado_pago,
         mp_payment_id=f"simulado-{uuid.uuid4().hex[:20]}",
         referencia="simulador",
-        # Un cobro de Mercado Pago (real o simulado) no lo registra una persona:
-        # registrado_por queda NULL, igual que los que llegan por webhook.
     )
     db.commit()
-    return {
-        "id": pago.id if pago else None,
-        "estado": estado,
-        "duplicado": pago is None,
-        "monto": str(plan.precio_mensual),
-        "periodo_desde": pago.periodo_desde.isoformat() if pago else None,
-        "periodo_hasta": pago.periodo_hasta.isoformat() if pago else None,
-    }
+    return SimularCobroResponse(
+        id=pago.id if pago else None,
+        estado=estado_pago,
+        duplicado=pago is None,
+        monto=str(plan.precio_mensual),
+        periodo_desde=pago.periodo_desde.isoformat() if pago else None,
+        periodo_hasta=pago.periodo_hasta.isoformat() if pago else None,
+    )
 
 
 # --- Cambio de plan (lo llama S1) ------------------------------------------------
@@ -404,7 +356,7 @@ def actualizar_monto_preapproval(taller: Taller, plan: Plan) -> bool:
             token,
             taller.mp_preapproval_id,
             monto=plan.precio_mensual,
-            reason=f"Boxly · plan {plan.nombre} · {taller.nombre}",
+            reason=_razon_cobro(plan, taller),
         )
     except cliente_mp.MercadoPagoError as exc:
         logger.warning(
@@ -415,3 +367,11 @@ def actualizar_monto_preapproval(taller: Taller, plan: Plan) -> bool:
         )
         return False
     return True
+
+
+@suscripcion.al_cambiar_plan
+def _sincronizar_monto(taller: Taller, plan: Plan) -> None:
+    """Con cobro automático, la preapproval cobra el precio del plan: tras un
+    cambio de plan se actualiza el monto (docs/Suscripciones.md, S2)."""
+    if taller.cobro_automatico:
+        actualizar_monto_preapproval(taller, plan)

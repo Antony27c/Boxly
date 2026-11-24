@@ -169,3 +169,28 @@ class AccesoTaller(BaseModel):
         if faltan:
             raise ValueError(f"El acceso {self.tipo} pide: {', '.join(faltan)}")
         return self
+
+
+# --- Cobro automático con Mercado Pago (docs/Suscripciones.md, S2) -------------
+
+
+class CobroAutomaticoResponse(BaseModel):
+    """URL de Mercado Pago para autorizar el débito automático."""
+
+    init_point: Optional[str] = None
+
+
+class SimularCobroRequest(BaseModel):
+    """Simulador de dev: ``aprobado``/``approved`` o ``rechazado``/``rejected``."""
+
+    estado: Optional[str] = None
+
+
+class SimularCobroResponse(BaseModel):
+    # NULL cuando el cobro simulado ya estaba registrado (duplicado).
+    id: Optional[int] = None
+    estado: str
+    duplicado: bool
+    monto: str
+    periodo_desde: Optional[str] = None
+    periodo_hasta: Optional[str] = None

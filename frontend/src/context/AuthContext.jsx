@@ -48,7 +48,10 @@ export function AuthProvider({ children }) {
       })
       .catch((error) => {
         if (!vigente) return
-        if (error.status !== 401 && error.status !== 403) return
+        // Solo un 401 es sesión inválida. Un 403 (taller con la suscripción
+        // suspendida o en solo lectura) no tiene que cerrar la sesión: la
+        // pantalla muestra el bloqueo y la persona sigue logueada.
+        if (error.status !== 401) return
         setToken(null)
         setUsuario(null)
         localStorage.removeItem(CLAVE_TOKEN)

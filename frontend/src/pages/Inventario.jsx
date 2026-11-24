@@ -261,6 +261,7 @@ export default function Inventario() {
       <div className="mt-6 flex flex-wrap items-end gap-4">
         <Field
           label="Buscar por nombre o código"
+          data-lectura
           type="search"
           className="w-full sm:max-w-sm"
           placeholder="Ej.: Filtro de aceite"

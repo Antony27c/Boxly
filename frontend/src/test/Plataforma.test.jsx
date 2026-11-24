@@ -14,7 +14,12 @@ const plataforma = vi.hoisted(() => ({
   cerrarSesiones: vi.fn(),
 }))
 
+const suscripciones = vi.hoisted(() => ({ listarPlanes: vi.fn() }))
+
 vi.mock('@/services/plataforma', () => ({ plataformaService: plataforma }))
+vi.mock('@/services/suscripcionesPlataforma', () => ({
+  suscripcionesPlataformaService: suscripciones,
+}))
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     token: 'tok',
@@ -52,6 +57,19 @@ const TALLER_2 = {
   terminos_aceptados_en: null,
 }
 
+// Planes como los devuelve la API para el selector de piloto y pago (C3).
+const PLANES = [
+  { codigo: 'esencial', nombre: 'Esencial', precio_mensual: 35000, max_personal: 3, activo: true },
+  { codigo: 'pro', nombre: 'Pro', precio_mensual: 79000, max_personal: 10, activo: true },
+  {
+    codigo: 'profesional',
+    nombre: 'Profesional',
+    precio_mensual: 169000,
+    max_personal: null,
+    activo: true,
+  },
+]
+
 function tarjeta(nombre) {
   return screen.getByText(nombre).closest('li')
 }
@@ -80,6 +98,7 @@ describe('Plataforma', () => {
       admin_email: 'admin@sur.com',
       password_temporal: 'Xk4p9qLm2vRt',
     })
+    suscripciones.listarPlanes.mockResolvedValue(PLANES)
   })
 
   it('lista los talleres con conteos, estado, último uso y avisos', async () => {
@@ -163,6 +182,9 @@ describe('Plataforma', () => {
         {
           nombre: 'Taller Sur',
           admin: { nombre: 'Ana', apellido: 'Pérez', email: 'admin@sur.com' },
+          // Demo es el valor por defecto del alta (C3): el backend le pone
+          // el plan Pro y los 14 días, el front no manda plan.
+          acceso: { tipo: 'demo' },
         },
         'tok',
       ),
@@ -191,6 +213,147 @@ describe('Plataforma', () => {
     expect(plataforma.listarTalleres).toHaveBeenCalledTimes(2)
   })
 
+  it('el alta como demo no pide los planes a la API', async () => {
+    montar()
+    await screen.findByText('Taller El Rayo')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo taller' }))
+    const dialogo = await screen.findByRole('dialog')
+
+    expect(within(dialogo).getByLabelText('Tipo de acceso')).toHaveValue('demo')
+    // El selector de plan solo se monta para piloto y pago.
+    expect(suscripciones.listarPlanes).not.toHaveBeenCalled()
+  })
+
+  it('el alta como piloto pide plan, fecha de fin y motivo', async () => {
+    montar()
+    await screen.findByText('Taller El Rayo')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo taller' }))
+    const dialogo = await screen.findByRole('dialog')
+
+    fireEvent.change(within(dialogo).getByLabelText('Tipo de acceso'), {
+      target: { value: 'piloto' },
+    })
+
+    // Aparecen el plan (desde la API) y los campos propios del piloto.
+    const plan = await within(dialogo).findByLabelText('Plan')
+    await waitFor(() =>
+      expect(within(plan).getByRole('option', { name: /Pro —/ })).toBeInTheDocument(),
+    )
+    expect(suscripciones.listarPlanes).toHaveBeenCalledWith('tok')
+    fireEvent.change(plan, { target: { value: 'pro' } })
+    fireEvent.change(within(dialogo).getByLabelText('Fin del piloto'), {
+      target: { value: '2027-03-31' },
+    })
+    fireEvent.change(within(dialogo).getByLabelText('Motivo'), {
+      target: { value: 'Piloto con un taller amigo' },
+    })
+
+    fireEvent.change(within(dialogo).getByLabelText('Nombre del taller'), {
+      target: { value: 'Taller Piloto' },
+    })
+    fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Ana' } })
+    fireEvent.change(within(dialogo).getByLabelText('Apellido'), { target: { value: 'Pérez' } })
+    fireEvent.change(within(dialogo).getByLabelText('Correo'), {
+      target: { value: 'admin@piloto.com' },
+    })
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Crear taller' }))
+
+    await waitFor(() =>
+      expect(plataforma.crearTaller).toHaveBeenCalledWith(
+        {
+          nombre: 'Taller Piloto',
+          admin: { nombre: 'Ana', apellido: 'Pérez', email: 'admin@piloto.com' },
+          acceso: {
+            tipo: 'piloto',
+            plan: 'pro',
+            vence_en: '2027-03-31',
+            motivo: 'Piloto con un taller amigo',
+          },
+        },
+        'tok',
+      ),
+    )
+  })
+
+  it('el alta como piloto sin fecha ni motivo no envía y muestra los errores', async () => {
+    montar()
+    await screen.findByText('Taller El Rayo')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo taller' }))
+    const dialogo = await screen.findByRole('dialog')
+
+    fireEvent.change(within(dialogo).getByLabelText('Tipo de acceso'), {
+      target: { value: 'piloto' },
+    })
+    const plan = await within(dialogo).findByLabelText('Plan')
+    await waitFor(() =>
+      expect(within(plan).getByRole('option', { name: /Pro —/ })).toBeInTheDocument(),
+    )
+    fireEvent.change(plan, { target: { value: 'pro' } })
+
+    fireEvent.change(within(dialogo).getByLabelText('Nombre del taller'), {
+      target: { value: 'Taller Piloto' },
+    })
+    fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Ana' } })
+    fireEvent.change(within(dialogo).getByLabelText('Apellido'), { target: { value: 'Pérez' } })
+    fireEvent.change(within(dialogo).getByLabelText('Correo'), {
+      target: { value: 'admin@piloto.com' },
+    })
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Crear taller' }))
+
+    expect(
+      await within(dialogo).findByText('Elegí la fecha de fin del piloto.'),
+    ).toBeInTheDocument()
+    expect(
+      await within(dialogo).findByText(/motivo del piloto/),
+    ).toBeInTheDocument()
+    expect(plataforma.crearTaller).not.toHaveBeenCalled()
+  })
+
+  it('el alta como pago pide solo el plan', async () => {
+    montar()
+    await screen.findByText('Taller El Rayo')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo taller' }))
+    const dialogo = await screen.findByRole('dialog')
+
+    fireEvent.change(within(dialogo).getByLabelText('Tipo de acceso'), {
+      target: { value: 'pago' },
+    })
+    const plan = await within(dialogo).findByLabelText('Plan')
+    await waitFor(() =>
+      expect(within(plan).getByRole('option', { name: /Esencial —/ })).toBeInTheDocument(),
+    )
+    fireEvent.change(plan, { target: { value: 'esencial' } })
+
+    // Pago no pide fecha de fin ni motivo.
+    expect(within(dialogo).queryByLabelText('Fin del piloto')).not.toBeInTheDocument()
+    expect(within(dialogo).queryByLabelText('Motivo')).not.toBeInTheDocument()
+
+    fireEvent.change(within(dialogo).getByLabelText('Nombre del taller'), {
+      target: { value: 'Taller Pago' },
+    })
+    fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Ana' } })
+    fireEvent.change(within(dialogo).getByLabelText('Apellido'), { target: { value: 'Pérez' } })
+    fireEvent.change(within(dialogo).getByLabelText('Correo'), {
+      target: { value: 'admin@pago.com' },
+    })
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Crear taller' }))
+
+    await waitFor(() =>
+      expect(plataforma.crearTaller).toHaveBeenCalledWith(
+        {
+          nombre: 'Taller Pago',
+          admin: { nombre: 'Ana', apellido: 'Pérez', email: 'admin@pago.com' },
+          acceso: { tipo: 'pago', plan: 'esencial' },
+        },
+        'tok',
+      ),
+    )
+  })
+
   it('sin talleres muestra el vacío con el botón de alta', async () => {
     plataforma.listarTalleres.mockResolvedValue({ items: [], total: 0 })
     montar()
@@ -208,6 +371,7 @@ describe('Alta de taller desde una solicitud de demo', () => {
       admin_email: 'admin@puntapunta.com',
       password_temporal: 'Xk4p9qLm2vRt',
     })
+    suscripciones.listarPlanes.mockResolvedValue(PLANES)
   })
 
   it('con nuevo=1 y los datos en la URL el alta abre precargada', async () => {
@@ -221,6 +385,10 @@ describe('Alta de taller desde una solicitud de demo', () => {
     expect(screen.getByLabelText('Nombre')).toHaveValue('María')
     expect(screen.getByLabelText('Apellido')).toHaveValue('José Pérez')
     expect(screen.getByLabelText('Correo')).toHaveValue('admin@puntapunta.com')
+    // La solicitud de demo llega con acceso demo: el plan y los 14 días los
+    // fuerza el backend, no hay que pedir plan ni fecha.
+    expect(screen.getByLabelText('Tipo de acceso')).toHaveValue('demo')
+    expect(suscripciones.listarPlanes).not.toHaveBeenCalled()
   })
 
   it('sin nuevo=1 el alta no se abre sola', async () => {

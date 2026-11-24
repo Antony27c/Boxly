@@ -49,14 +49,14 @@ function montar(ruta = '/hoy') {
 
 function suscripcionCon(estado, extra = {}) {
   return {
-    plan: { codigo: 'basico', nombre: 'Básico', precio_mensual: 15000, max_personal: 3 },
+    plan: { codigo: 'esencial', nombre: 'Esencial', precio_mensual: 35000, max_personal: 3 },
     vence_en: '2026-11-20',
     estado,
     dias_para_vencer: -3,
     cobro_automatico: false,
     personal_activo: 2,
     max_personal: 3,
-    proximo_monto: 15000,
+    proximo_monto: 35000,
     ...extra,
   }
 }
@@ -105,7 +105,7 @@ describe('Aviso de suscripción en AppLayout', () => {
     const { container } = montar('/suscripcion')
 
     expect(screen.getByText('PaginaSuscripcion')).toBeInTheDocument()
-    expect(container.querySelector('fieldset')).not.toBeDisabled()
+    expect(container.querySelector('[data-solo-lectura]')).toBeNull()
   })
 
   it('suspendida: el admin es redirigido a /suscripcion desde cualquier otra ruta', () => {

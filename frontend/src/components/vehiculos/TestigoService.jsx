@@ -1,11 +1,9 @@
+import { formatearFechaLarga } from '@/lib/fechas'
+
 // Testigo "SERVICE" del tablero: se enciende cuando el vehículo tiene un turno
 // por delante. La fecha del turno se repite en texto al lado del testigo.
 function fechaTurno(turno) {
-  const fecha = new Date(`${turno.fecha}T12:00:00`).toLocaleDateString('es-AR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  const fecha = formatearFechaLarga(turno.fecha)
   return turno.hora ? `${fecha}, ${turno.hora} h` : fecha
 }
 

@@ -17,6 +17,7 @@ import { repuestosService } from '@/services/repuestos'
 import { turnosService } from '@/services/turnos'
 import { clientesService } from '@/services/clientes'
 import { vehiculosService } from '@/services/vehiculos'
+import { formatearFechaLarga } from '@/lib/fechas'
 import { aISO } from '@/utils/fechas'
 import { iniciales } from '@/utils/ficha'
 import { pesos } from '@/utils/formato'
@@ -28,11 +29,7 @@ const MAX_ITEMS = 5
 // a la orden (la página de la orden ejecuta la acción).
 // "Martes, 17 de noviembre": solo la primera letra en mayúscula.
 function fechaLarga() {
-  const texto = new Date().toLocaleDateString('es-AR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
+  const texto = formatearFechaLarga(new Date(), { diaSemana: true, anio: false })
   return texto.charAt(0).toUpperCase() + texto.slice(1)
 }
 

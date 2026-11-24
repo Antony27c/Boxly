@@ -8,6 +8,7 @@ import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import useTaller from '@/hooks/useTaller'
+import { formatearFechaHora } from '@/lib/fechas'
 import { pagosService } from '@/services/portal'
 
 const ESTADOS = {
@@ -130,7 +131,7 @@ export default function ResultadoPago() {
             {pago.fecha_pago && (
               <div className="col-span-2">
                 <dt className="text-muted">Fecha</dt>
-                <dd>{new Date(pago.fecha_pago).toLocaleString('es-AR')}</dd>
+                <dd>{formatearFechaHora(pago.fecha_pago)}</dd>
               </div>
             )}
           </dl>

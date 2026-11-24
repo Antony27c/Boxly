@@ -12,6 +12,7 @@ import useRecurso from '@/hooks/useRecurso'
 import { suscripcionesPlataformaService } from '@/services/suscripcionesPlataforma'
 import { pesos } from '@/utils/formato'
 import { numero as numeroLegible } from '@/components/plataforma/formatos'
+import { FUNCIONES, etiquetaFuncion } from '@/components/plataforma/funciones'
 
 /* La página de planes del superadmin (S5, contrato en docs/Suscripciones.md):
    una tarjeta por plan con precio y límite de personal, y edición en un
@@ -46,6 +47,18 @@ function TarjetaPlan({ plan, onEditar }) {
             </dd>
           </div>
         </dl>
+        {(plan.funciones ?? []).length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs text-muted">Funciones</p>
+            <Chips className="mt-1.5">
+              {plan.funciones.map((codigo) => (
+                <Chip key={codigo} tono="neutro">
+                  {etiquetaFuncion(codigo)}
+                </Chip>
+              ))}
+            </Chips>
+          </div>
+        )}
       </FichaSeccion>
       <div className="border-t border-graphite-700 px-5 py-3">
         <Button variante="secundario" className="w-full" onClick={() => onEditar(plan)}>
@@ -63,7 +76,14 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
     plan.max_personal != null ? String(plan.max_personal) : '',
   )
   const [activo, setActivo] = useState(Boolean(plan.activo))
+  const [funciones, setFunciones] = useState(() => [...(plan.funciones ?? [])])
   const [errores, setErrores] = useState({})
+
+  function alternarFuncion(codigo, marcado) {
+    setFunciones((previas) =>
+      marcado ? [...previas, codigo] : previas.filter((c) => c !== codigo),
+    )
+  }
 
   function validar() {
     const encontrados = {}
@@ -89,6 +109,8 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
       // Vacío = sin límite (null), igual que en el contrato.
       max_personal: maxPersonal.trim() === '' ? null : Number(maxPersonal),
       activo,
+      // Lista completa en el orden del contrato, no en el orden de clicks.
+      funciones: Object.keys(FUNCIONES).filter((codigo) => funciones.includes(codigo)),
     })
   }
 
@@ -131,6 +153,29 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
           ayuda="Vacío = sin límite."
         />
       </div>
+
+      <fieldset>
+        <legend className="text-sm font-medium text-ink">Funciones del plan</legend>
+        <p className="mt-1 text-sm text-muted">
+          Lo que incluye el plan; los talleres lo ven en su suscripción.
+        </p>
+        <ul className="mt-2 space-y-1.5">
+          {Object.entries(FUNCIONES).map(([codigo, etiqueta]) => (
+            <li key={codigo}>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={funciones.includes(codigo)}
+                  onChange={(e) => alternarFuncion(codigo, e.target.checked)}
+                  disabled={guardando}
+                  className="accent-amber"
+                />
+                {etiqueta}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </fieldset>
 
       <label className="flex items-center gap-2 text-sm">
         <input

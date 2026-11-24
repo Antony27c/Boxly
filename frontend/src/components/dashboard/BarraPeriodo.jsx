@@ -94,6 +94,7 @@ export default function BarraPeriodo({ rango, onCambio, onExportar }) {
             <Field
               label="Desde"
               type="date"
+              data-lectura
               className="w-40"
               value={borrador.desde}
               max={borrador.hasta}
@@ -102,6 +103,7 @@ export default function BarraPeriodo({ rango, onCambio, onExportar }) {
             <Field
               label="Hasta"
               type="date"
+              data-lectura
               className="w-40"
               value={borrador.hasta}
               min={borrador.desde}
@@ -125,6 +127,7 @@ export default function BarraPeriodo({ rango, onCambio, onExportar }) {
       <form onSubmit={buscarPatente} className="sm:max-w-xs">
         <Field
           label="Buscar por patente"
+          data-lectura
           type="search"
           placeholder="Ej.: AB123CD"
           value={patente}

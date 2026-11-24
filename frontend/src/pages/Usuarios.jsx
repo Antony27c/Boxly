@@ -17,7 +17,7 @@ import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
 import { cuentasService } from '@/services/cuentas'
 import { esErrorDeLimite, limitePersonalService } from '@/services/limitePersonal'
-import { ROLES, requiereSuperadmin, usuariosService } from '@/services/usuarios'
+import { ROLES, usuariosService } from '@/services/usuarios'
 
 export default function Usuarios() {
   const { token, usuario: lector } = useAuth()
@@ -288,6 +288,7 @@ export default function Usuarios() {
       <div className="mt-6 grid gap-4 sm:max-w-2xl sm:grid-cols-2">
         <Field
           label="Buscar por nombre o correo"
+          data-lectura
           type="search"
           placeholder="Ej.: Sofía"
           value={busqueda}
@@ -296,6 +297,7 @@ export default function Usuarios() {
         <Select
           label="Rol"
           value={rolFiltro}
+          data-lectura
           onChange={(e) => setRolFiltro(e.target.value)}
           opciones={[{ valor: '', texto: 'Todos los roles' }, ...ROLES]}
         />
@@ -351,9 +353,10 @@ export default function Usuarios() {
         >
           {filtrados.map((usuario) => {
             const esPropio = usuario.id === lector?.id
-            // Un administrador no gestiona cuentas de admin ni superadmin: la
-            // tarjeta se ve pero sin acciones (el servidor devolvería 403).
-            const soloSuperadmin = !esSuperadmin && requiereSuperadmin(usuario.rol)
+            // El administrador gestiona todo el personal de su taller, también a
+            // otros administradores (P1, docs/Plataforma.md). Solo una cuenta
+            // superadmin queda sin acciones: es de Boxly, no del taller.
+            const soloSuperadmin = !esSuperadmin && usuario.rol === 'superadmin'
             return (
               <TarjetaUsuario
                 key={usuario.id}

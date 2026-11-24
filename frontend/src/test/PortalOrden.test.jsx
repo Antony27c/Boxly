@@ -189,6 +189,30 @@ describe('PortalOrden', () => {
     expect(screen.queryByRole('button', { name: /pagar/i })).not.toBeInTheDocument()
   })
 
+  it('pagada en el taller muestra el medio del pago', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        pagada: true,
+        puede_pagar: false,
+        pago: { estado: 'aprobado', medio: 'efectivo', fecha_pago: '2026-11-23T15:00:00' },
+      }),
+    )
+    montar()
+
+    expect(await screen.findByText(/Pagada en el taller \(efectivo\)/)).toHaveTextContent(
+      'Pagada en el taller (efectivo) · 23/11/2026',
+    )
+  })
+
+  it('pagada online muestra Mercado Pago', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({ pagada: true, puede_pagar: false, pago: { estado: 'aprobado', medio: 'mercadopago' } }),
+    )
+    montar()
+
+    expect(await screen.findByText('Pagada online (Mercado Pago)')).toBeInTheDocument()
+  })
+
   it('sin datos del taller conserva el botón de pagar', async () => {
     tallerHook.datos = null
     portal.miOrden.mockResolvedValue(ordenBase({ puede_pagar: true }))
@@ -251,6 +275,35 @@ describe('PortalOrden', () => {
     // La línea con precio sí muestra sus montos.
     expect(screen.getByText(monto(10000))).toBeInTheDocument()
     expect(screen.getAllByText(monto(20000)).length).toBeGreaterThan(0)
+  })
+
+  it('muestra las fechas del servidor en hora de Argentina', async () => {
+    portal.miOrden.mockResolvedValue(
+      ordenBase({
+        // 01:30 UTC del 24 = 22:30 del 23 en Argentina.
+        fecha_ingreso: '2026-11-24T01:30:00',
+        // La entrega estimada es un día: no corre a la noche anterior.
+        fecha_estimada_entrega: '2026-11-25T00:00:00',
+        historial: [
+          {
+            id: 1,
+            estado_anterior: 'ingresado',
+            estado_nuevo: 'en_diagnostico',
+            fecha: '2026-11-23T21:30:00',
+            comentario: 'Se revisa el tren delantero',
+            usuario_nombre: 'Juan Pérez',
+          },
+        ],
+      }),
+    )
+    montar()
+
+    // Ingresó el 23 (día en Argentina), no el 24 del string UTC.
+    expect(await screen.findByText('23/11/2026')).toBeInTheDocument()
+    // La entrega estimada muestra el día elegido, 25.
+    expect(screen.getByText('25/11/2026')).toBeInTheDocument()
+    // La línea de tiempo muestra la hora argentina: 21:30 UTC → 18:30.
+    expect(screen.getByText('23/11/2026, 18:30')).toBeInTheDocument()
   })
 
   it('al pagar crea el pago y redirige a url_pago', async () => {

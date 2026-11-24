@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { BotonesAccion, ModalAsignarMecanico } from '@/components/ordenes/AccionesOrdenDetalle'
+import { BotonesAccion, ModalAsignarMecanico, WhatsAppOrden } from '@/components/ordenes/AccionesOrdenDetalle'
 import CambioEstado from '@/components/ordenes/CambioEstado'
 import CobroOrden from '@/components/ordenes/CobroOrden'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
@@ -19,6 +19,7 @@ import Patente from '@/components/ui/Patente'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
+import { formatearFechaLarga } from '@/lib/fechas'
 import { ROLES_ADMIN, ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
 import { accionVisible, estadoCobro, ordenesService, proximosEstados } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
@@ -44,13 +45,9 @@ const ACENTOS = {
   Cancelado: 'danger',
 }
 
-function fechaLegible(fecha) {
-  return new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-}
+// "3 de noviembre de 2026": orden.fecha ya viene como día (YYYY-MM-DD) y la
+// entrega estimada se recorta a su día antes de llamar.
+const fechaLegible = formatearFechaLarga
 
 function renderOpcionLink({ a, texto, className, role, onClick }) {
   return (
@@ -200,6 +197,11 @@ export default function OrdenDetalle() {
           <div className="relative mt-4 hidden sm:block">
             <BotonesAccion accion={accion} onElegir={ejecutarAccion} />
           </div>
+          {esMostrador && (
+            <div className="relative mt-3">
+              <WhatsAppOrden orden={orden} />
+            </div>
+          )}
         </FichaCabecera>
 
         <div className="grid sm:grid-cols-2">

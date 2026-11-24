@@ -3,6 +3,7 @@ import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
+import { formatearFechaHora } from '@/lib/fechas'
 import { nombreEstado, ordenesService } from '@/services/ordenes'
 
 const RESULTADOS = {
@@ -11,15 +12,7 @@ const RESULTADOS = {
   omitido: { texto: 'No enviado', tono: 'neutro' },
 }
 
-function fechaHora(fecha) {
-  return new Date(fecha).toLocaleString('es-AR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const fechaHora = formatearFechaHora
 
 export default function AvisosOrden({ ordenId, avisos, puedeEnviar, onEnviado }) {
   const { token } = useAuth()

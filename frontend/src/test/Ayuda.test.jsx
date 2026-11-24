@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Ayuda from '@/pages/Ayuda'
+import { PREGUNTAS } from '@/components/ayuda/preguntas'
 
 const auth = vi.hoisted(() => ({
   token: 'tok',
@@ -202,5 +203,33 @@ describe('Ayuda', () => {
     const idxGeneral = lista.findIndex((b) => /cierro sesión/i.test(b.textContent))
     expect(idxPersonal).toBeGreaterThanOrEqual(0)
     expect(idxGeneral).toBeGreaterThan(idxPersonal)
+  })
+
+  it('no quedan textos de la oferta vieja: ni "30 días" de prueba ni transferencias', () => {
+    // "Últimos 30 días" es un período del Dashboard, no la prueba vieja.
+    const textos = PREGUNTAS.flatMap((p) => [p.pregunta, ...p.respuesta]).map((t) =>
+      t.replace(/últimos 30 días/gi, ''),
+    )
+    for (const texto of textos) {
+      expect(texto).not.toMatch(/30 días/i)
+      expect(texto).not.toMatch(/transferencia/i)
+      expect(texto).not.toMatch(/Básico|Taller\+|taller_plus/)
+    }
+  })
+
+  it('explica la demo de 14 días del plan Pro y el débito automático de Mercado Pago', () => {
+    montar('/ayuda?p=demo')
+    expect(screen.getByText(/plan Pro durante 14 días/i)).toBeInTheDocument()
+    expect(screen.getByText(/3 días siguientes al vencimiento/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /qué es la suscripción/i }))
+    expect(screen.getByText(/débito automático de Mercado Pago/i)).toBeInTheDocument()
+  })
+
+  it('el administrador ve qué trae cada plan, el adicional ARCA y qué es un piloto', () => {
+    montar()
+    for (const nombre of [/qué trae cada plan/i, /adicional ARCA/i, /qué es un piloto/i]) {
+      expect(screen.getByRole('button', { name: nombre })).toBeInTheDocument()
+    }
   })
 })

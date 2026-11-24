@@ -24,6 +24,10 @@ const suscripciones = vi.hoisted(() => ({
   cambiarPlan: vi.fn(),
   registrarPago: vi.fn(),
   ajustarVencimiento: vi.fn(),
+  cambiarAcceso: vi.fn(),
+  listarAdicionales: vi.fn(),
+  activarAdicional: vi.fn(),
+  desactivarAdicional: vi.fn(),
 }))
 
 vi.mock('@/services/plataforma', () => ({ plataformaService: plataforma }))
@@ -107,7 +111,7 @@ const DETALLE_SUSPENDIDO = {
   soporte_vigente_hasta: null,
 }
 
-// La sección Suscripción pide su propio recurso (S5).
+// La sección Suscripción pide su propio recurso (S5 + C3).
 const SUSCRIPCION = {
   plan: { codigo: 'pro', nombre: 'Pro', precio_mensual: 30000, max_personal: 10, activo: true },
   vence_en: '2026-12-15',
@@ -117,6 +121,9 @@ const SUSCRIPCION = {
   personal_activo: 3,
   max_personal: 10,
   proximo_monto: 30000,
+  tipo_acceso: 'pago',
+  adicionales: [],
+  funciones_efectivas: ['gestion', 'whatsapp_manual'],
   pagos: [],
 }
 
@@ -149,6 +156,7 @@ describe('PlataformaTaller', () => {
     plataforma.cerrarSesiones.mockResolvedValue({ detail: 'Se cerraron las sesiones.' })
     suscripciones.obtenerSuscripcion.mockResolvedValue(SUSCRIPCION)
     suscripciones.listarPlanes.mockResolvedValue([SUSCRIPCION.plan])
+    suscripciones.listarAdicionales.mockResolvedValue([])
   })
 
   it('muestra datos del taller, personal y accesos de soporte', async () => {

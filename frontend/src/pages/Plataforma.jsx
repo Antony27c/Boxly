@@ -221,7 +221,7 @@ export default function Plataforma() {
       <Modal
         abierto={altaAbierta}
         titulo="Nuevo taller"
-        descripcion="Se crea el taller con su configuración inicial y su primer administrador."
+        descripcion="Se crea el taller con su configuración inicial, el tipo de acceso y su primer administrador."
         onCerrar={cerrarAlta}
       >
         <FormularioTaller

@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useSoporte } from '@/context/SoporteContext'
+import { ZonaSoloLectura } from '@/context/SoloLecturaContext'
+import { formatearHora } from '@/lib/fechas'
 import useSuscripcion from '@/hooks/useSuscripcion'
 import AvisoSuscripcion from '@/components/suscripcion/AvisoSuscripcion'
 import Logo from '@/components/ui/Logo'
@@ -12,16 +14,10 @@ import BarraInferior from '@/components/ui/BarraInferior'
 import BarraLateral from '@/components/ui/BarraLateral'
 import { ROLES_ADMIN, ROLES_TALLER, etiquetaRol, inicioSegunRol, menuSegunRol } from '@/routes/navegacion'
 
-function horaCorta(iso) {
-  const fecha = new Date(iso)
-  if (Number.isNaN(fecha.getTime())) return ''
-  return fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-}
-
 /* Franja fija de modo soporte: avisa que se está mirando el taller en solo
    lectura y hasta cuándo; "Salir" vuelve al detalle del taller en plataforma. */
 function FranjaSoporte({ taller, hasta, onSalir }) {
-  const vence = hasta ? horaCorta(hasta) : ''
+  const vence = hasta ? formatearHora(hasta) : ''
   return (
     <div className="fixed inset-x-0 top-0 z-50 flex h-10 items-center justify-center gap-2 border-b border-amber/50 bg-amber/15 px-4 text-sm text-amber-deep lg:left-64">
       <Icono nombre="alerta" className="h-4 w-4 shrink-0" />
@@ -65,7 +61,7 @@ export default function AppLayout() {
     estadoSuscripcion === 'gracia' || estadoSuscripcion === 'solo_lectura'
       ? suscripcion
       : null
-  // Solo lectura por suscripción: mismo fieldset que el modo soporte, salvo en
+  // Solo lectura por suscripción: misma zona que el modo soporte, salvo en
   // /suscripcion y /terminos (el backend las exime y son la vía de pago).
   const soloLecturaUI =
     estadoSuscripcion === 'solo_lectura' && !enPantallaSuscripcion
@@ -167,11 +163,11 @@ export default function AppLayout() {
 
       <main className="mx-auto max-w-6xl px-5 pb-24 pt-8 sm:pb-8 lg:ml-64 lg:mr-0 lg:max-w-none lg:px-10 lg:pt-10">
         <div className="mx-auto max-w-6xl">
-          {/* En modo soporte o en solo lectura por suscripción el contenido
-              queda deshabilitado: el fieldset apaga botones y campos, pero los
-              links de navegación (que son <a>) siguen andando. Con la
+          {/* En modo soporte o en solo lectura por suscripción se apagan las
+              acciones que escriben; búsqueda, filtros, pestañas, paginación y
+              links siguen andando (ver SoloLecturaContext). Con la
               suscripción suspendida el resto del personal ve una pantalla. */}
-          <fieldset disabled={deshabilitado} className="m-0 w-full min-w-0 border-0 p-0">
+          <ZonaSoloLectura activo={deshabilitado} className="w-full min-w-0">
             {suspendida && !esAdmin ? (
               <div className="flex flex-col items-center gap-3 py-16 text-center">
                 <Icono nombre="alerta" className="h-10 w-10 text-danger" />
@@ -185,7 +181,7 @@ export default function AppLayout() {
             ) : (
               <Outlet />
             )}
-          </fieldset>
+          </ZonaSoloLectura>
         </div>
       </main>
 

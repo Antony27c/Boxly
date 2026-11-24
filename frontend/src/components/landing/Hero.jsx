@@ -48,6 +48,9 @@ export default function Hero() {
               Ver los planes
             </a>
           </div>
+          <p className="mt-3 text-sm text-muted">
+            Pedí una demo: 14 días del plan Pro, previa aprobación.
+          </p>
 
           <ul className="mt-10 space-y-3.5">
             {BENEFICIOS.map((beneficio) => (

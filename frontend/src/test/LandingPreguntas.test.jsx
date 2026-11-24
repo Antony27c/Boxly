@@ -9,7 +9,7 @@ describe('Preguntas frecuentes', () => {
     render(<Preguntas />)
     const botones = screen.getAllByRole('button')
     expect(botones.length).toBeGreaterThanOrEqual(8)
-    expect(botones.length).toBeLessThanOrEqual(10)
+    expect(botones.length).toBeLessThanOrEqual(12)
 
     for (const boton of botones) {
       expect(boton).toHaveAttribute('aria-expanded', 'false')

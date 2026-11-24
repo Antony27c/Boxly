@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CobroOrden from '@/components/ordenes/CobroOrden'
+import { ordenesService } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 // pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
@@ -16,8 +17,8 @@ vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ token: 'tok' }) }))
 
 const base = { id: 42, estado: 'Listo', pagada: false, cobro_estado: null, costo_estimado: 150000 }
 
-function mostrar(orden, esMostrador = true) {
-  return render(<CobroOrden orden={{ ...base, ...orden }} esMostrador={esMostrador} onListo={vi.fn()} onCancelar={vi.fn()} />)
+function mostrar(orden, esMostrador = true, onListo = vi.fn()) {
+  return render(<CobroOrden orden={{ ...base, ...orden }} esMostrador={esMostrador} onListo={onListo} onCancelar={vi.fn()} />)
 }
 
 describe('Cobro como ticket de caja', () => {
@@ -103,5 +104,72 @@ describe('Cobro como ticket de caja', () => {
     expect(container.querySelector('.ticket-caja')).toBeInTheDocument()
     expect(screen.queryByText(/Garantía:/)).not.toBeInTheDocument()
     expect(screen.queryByText(/CUIT:/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Registrar pago en el local', () => {
+  const emitido = { cobro_estado: 'aprobado', costo_final: '185000.00' }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('recepción y el admin lo ven con el cobro emitido; el mecánico no', () => {
+    const { unmount } = mostrar(emitido)
+    expect(screen.getByRole('button', { name: 'Registrar pago en el local' })).toBeInTheDocument()
+    unmount()
+    mostrar(emitido, false)
+    expect(screen.queryByRole('button', { name: 'Registrar pago en el local' })).not.toBeInTheDocument()
+  })
+
+  it('sin cobro emitido no se ofrece', () => {
+    mostrar({})
+    expect(screen.queryByRole('button', { name: 'Registrar pago en el local' })).not.toBeInTheDocument()
+  })
+
+  it('abre el modal con el monto precargado y registra el medio y la referencia', async () => {
+    const registrar = vi.spyOn(ordenesService, 'registrarPagoLocal').mockResolvedValue({})
+    const onListo = vi.fn()
+    mostrar(emitido, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
+    const dialogo = screen.getByRole('dialog', { name: 'Registrar pago en el local' })
+    expect(screen.getByLabelText('Monto')).toHaveValue('185000')
+    expect(screen.getByLabelText('Medio de pago')).toHaveValue('efectivo')
+
+    fireEvent.change(screen.getByLabelText('Medio de pago'), { target: { value: 'tarjeta' } })
+    fireEvent.change(screen.getByLabelText('Referencia (opcional)'), { target: { value: 'Op. 123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalledWith('Pago registrado. La orden quedó pagada.'))
+    expect(registrar).toHaveBeenCalledWith(42, { medio: 'tarjeta', monto: '185000', referencia: 'Op. 123' }, 'tok')
+    expect(dialogo).not.toBeInTheDocument()
+  })
+
+  it('muestra el error del backend (monto distinto) sin cerrar el modal', async () => {
+    vi.spyOn(ordenesService, 'registrarPagoLocal').mockRejectedValue(
+      new Error('El monto tiene que ser el del cobro emitido: $ 185,000.00'),
+    )
+    const onListo = vi.fn()
+    mostrar(emitido, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
+    fireEvent.change(screen.getByLabelText('Monto'), { target: { value: '1000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    expect(await screen.findByText('El monto tiene que ser el del cobro emitido: $ 185,000.00')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Registrar pago en el local' })).toBeInTheDocument()
+    expect(onListo).not.toHaveBeenCalled()
+  })
+
+  it('pagada en el local muestra el medio y la fecha', () => {
+    mostrar({ ...emitido, pagada: true, pago_medio: 'efectivo', pago_fecha: '2026-11-23T21:30:00' })
+    expect(screen.getByText('Pagada en el taller (efectivo) · 23/11/2026, 18:30')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Registrar pago en el local' })).not.toBeInTheDocument()
+  })
+
+  it('pagada online lo dice', () => {
+    mostrar({ ...emitido, pagada: true, pago_medio: 'mercadopago', pago_fecha: null })
+    expect(screen.getByText('Pagada online (Mercado Pago)')).toBeInTheDocument()
   })
 })

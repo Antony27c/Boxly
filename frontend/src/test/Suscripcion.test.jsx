@@ -43,9 +43,37 @@ function respuestaJson(datos, { status = 200, headers = {} } = {}) {
 }
 
 const PLANES = [
-  { codigo: 'basico', nombre: 'Básico', precio_mensual: 15000, max_personal: 3, activo: true },
-  { codigo: 'pro', nombre: 'Pro', precio_mensual: 30000, max_personal: 10, activo: true },
-  { codigo: 'taller_plus', nombre: 'Taller+', precio_mensual: 50000, max_personal: null, activo: true },
+  {
+    codigo: 'esencial',
+    nombre: 'Esencial',
+    precio_mensual: 15000,
+    max_personal: 3,
+    activo: true,
+    funciones: ['gestion', 'whatsapp_manual'],
+  },
+  {
+    codigo: 'pro',
+    nombre: 'Pro',
+    precio_mensual: 30000,
+    max_personal: 10,
+    activo: true,
+    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'arca'],
+  },
+  {
+    codigo: 'profesional',
+    nombre: 'Profesional',
+    precio_mensual: 50000,
+    max_personal: null,
+    activo: true,
+    funciones: [
+      'gestion',
+      'whatsapp_manual',
+      'whatsapp_automatico',
+      'arca',
+      'recordatorios_service',
+      'marca_propia',
+    ],
+  },
 ]
 
 function suscripcionCon(estado, extra = {}) {
@@ -102,11 +130,30 @@ describe('Suscripcion', () => {
 
     expect(await screen.findByText('Al día hasta el 23/12')).toBeInTheDocument()
     expect(screen.getByText('Al día')).toBeInTheDocument()
-    expect(await screen.findByText('Básico')).toBeInTheDocument()
+    expect(await screen.findByText('Esencial')).toBeInTheDocument()
     expect(screen.getAllByText('Plan actual')).toHaveLength(1)
     // Solo los planes que no son el actual ofrecen el cambio.
     expect(screen.getAllByRole('button', { name: 'Pasar a este plan' })).toHaveLength(2)
     expect(screen.getByText(/Personal sin límite/)).toBeInTheDocument()
+  })
+
+  it('muestra las funciones del plan actual y las de cada plan, con "Próximamente"', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', { funciones_efectivas: ['gestion', 'whatsapp_manual', 'arca'] }),
+    )
+    montar()
+
+    const incluye = (await screen.findByText('Incluye tu plan')).parentElement
+    // El adicional ARCA entra por funciones_efectivas, aunque el plan no lo traiga.
+    expect(within(incluye).getByText('Facturación electrónica ARCA')).toBeInTheDocument()
+    expect(within(incluye).getAllByText('Próximamente')).toHaveLength(1)
+
+    const tarjeta = (await screen.findByRole('heading', { level: 3, name: 'Profesional' })).closest(
+      'div.flex-col',
+    )
+    expect(within(tarjeta).getByText('Personalización de marca')).toBeInTheDocument()
+    expect(within(tarjeta).getByText('Gestión del taller')).toBeInTheDocument()
+    expect(within(tarjeta).getAllByText('Próximamente')).toHaveLength(4)
   })
 
   it('en gracia muestra la frase con el límite para pagar sin cortes', async () => {
@@ -119,6 +166,29 @@ describe('Suscripcion', () => {
       await screen.findByText(/Venció hace 3 días: tenés hasta el \d{2}\/\d{2} para pagar sin cortes/),
     ).toBeInTheDocument()
     expect(screen.getByText('En gracia')).toBeInTheDocument()
+  })
+
+  it('en gracia usa el fin_gracia del backend cuando viene', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('gracia', {
+        vence_en: '2026-11-20',
+        dias_para_vencer: -3,
+        fin_gracia: '2026-11-30',
+      }),
+    )
+    montar()
+
+    expect(
+      await screen.findByText('Venció hace 3 días: tenés hasta el 30/11 para pagar sin cortes'),
+    ).toBeInTheDocument()
+  })
+
+  it('suspendida muestra el chip corto y la frase del estado', async () => {
+    servicio.obtener.mockResolvedValue(suscripcionCon('suspendida', { dias_para_vencer: -35 }))
+    montar()
+
+    expect(await screen.findByText('Suscripción suspendida: venció hace 35 días')).toBeInTheDocument()
+    expect(screen.getByText('Suspendida')).toBeInTheDocument()
   })
 
   it('cambiar de plan pide confirmación y explica que el precio rige desde el próximo período', async () => {
@@ -142,7 +212,7 @@ describe('Suscripcion', () => {
     montar()
 
     const botones = await screen.findAllByRole('button', { name: 'Pasar a este plan' })
-    fireEvent.click(botones[1]) // Taller+
+    fireEvent.click(botones[1]) // Profesional
     const dialogo = await screen.findByRole('dialog')
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cambiar plan' }))
 
@@ -159,13 +229,13 @@ describe('Suscripcion', () => {
     montar()
 
     const botones = await screen.findAllByRole('button', { name: 'Pasar a este plan' })
-    fireEvent.click(botones[0]) // Básico
+    fireEvent.click(botones[0]) // Esencial
     const dialogo = await screen.findByRole('dialog')
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cambiar plan' }))
 
     expect(
       await within(dialogo).findByText(
-        /Tenés 4 personas activas en el personal y el plan Básico permite hasta 3\. Desactivá/,
+        /Tenés 4 personas activas en el personal y el plan Esencial permite hasta 3\. Desactivá/,
       ),
     ).toBeInTheDocument()
   })
@@ -188,8 +258,12 @@ describe('Suscripcion', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Activar cobro automático' }))
 
-    expect(await screen.findByText(/todavía no está disponible/)).toBeInTheDocument()
-    expect(screen.getByText(/pagá por transferencia y avisale a Boxly/)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'El débito automático todavía no está habilitado. Escribinos y te ayudamos.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/transferencia/i)).not.toBeInTheDocument()
   })
 
   it('con cobro automático activo permite cancelarlo con confirmación', async () => {
@@ -213,6 +287,8 @@ describe('Suscripcion', () => {
     expect(within(tabla).getAllByText('Mercado Pago').length).toBeGreaterThan(0)
     expect(within(tabla).getByText('Aprobado')).toBeInTheDocument()
     expect(within(tabla).getByText(/20\/11 → 19\/12/)).toBeInTheDocument()
+    // creado_en llega en UTC sin zona: se muestra en hora de Argentina (10:00 UTC → 07:00).
+    expect(within(tabla).getByText('20/11/2026, 07:00')).toBeInTheDocument()
   })
 
   it('un pago manual sin nombre lo registró Boxly y un cobro sin nombre es automático', async () => {

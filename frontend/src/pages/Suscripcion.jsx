@@ -5,33 +5,28 @@ import Button from '@/components/ui/Button'
 import Confirmacion from '@/components/ui/Confirmacion'
 import Icono from '@/components/ui/Icono'
 import Loader from '@/components/ui/Loader'
+import {
+  estadoPago,
+  estadoSuscripcion,
+  fraseEstado,
+  medioPago,
+} from '@/components/suscripcion/estados'
 import { fraseDemoVencida } from '@/components/suscripcion/finDemo'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
 import useSuscripcion from '@/hooks/useSuscripcion'
+import { formatearFecha, formatearFechaHora } from '@/lib/fechas'
+import { esProximamente, etiquetaFuncion, funcionesDePlan, ordenar } from '@/lib/funcionesPlan'
 import { suscripcionService } from '@/services/suscripcion'
 import { pesos } from '@/utils/formato'
 
 const CLASE_TARJETA = 'rounded-box border border-graphite-600 bg-graphite-800 p-5'
 
-function fechaCorta(iso) {
-  if (!iso) return '—'
-  const [anio, mes, dia] = String(iso).slice(0, 10).split('-')
-  return anio ? `${dia}/${mes}` : '—'
-}
-
-function fechaHora(iso) {
-  if (!iso) return '—'
-  const fecha = new Date(iso)
-  if (Number.isNaN(fecha.getTime())) return '—'
-  return fecha.toLocaleString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+// "23/12": el día y el mes de una fecha del servidor (lib/fechas.js), sin el año.
+function fechaCorta(valor) {
+  const fecha = formatearFecha(valor)
+  return fecha === '—' ? fecha : fecha.slice(0, 5)
 }
 
 function estadoVisual(suscripcion) {
@@ -41,41 +36,8 @@ function estadoVisual(suscripcion) {
     const suspendida = suscripcion.estado === 'suspendida'
     return { tono: 'peligro', chip: suspendida ? 'Suspendida' : 'Demo terminada', frase: fraseDemo }
   }
-  const dias = Math.abs(suscripcion?.dias_para_vencer ?? 0)
-  switch (suscripcion?.estado) {
-    case 'al_dia':
-      return {
-        tono: 'ok',
-        chip: 'Al día',
-        frase: `Al día hasta el ${fechaCorta(suscripcion.vence_en)}`,
-      }
-    case 'gracia': {
-      const limite = new Date(`${suscripcion.vence_en}T12:00:00`)
-      limite.setDate(limite.getDate() + 7)
-      const limiteTxt = `${String(limite.getDate()).padStart(2, '0')}/${String(
-        limite.getMonth() + 1,
-      ).padStart(2, '0')}`
-      return {
-        tono: 'ambar',
-        chip: 'En gracia',
-        frase: `Venció hace ${dias} días: tenés hasta el ${limiteTxt} para pagar sin cortes`,
-      }
-    }
-    case 'solo_lectura':
-      return {
-        tono: 'peligro',
-        chip: 'Solo lectura',
-        frase: `Solo lectura por falta de pago: venció hace ${dias} días`,
-      }
-    case 'suspendida':
-      return {
-        tono: 'peligro',
-        chip: 'Suspendida',
-        frase: `Suscripción suspendida: venció hace ${dias} días`,
-      }
-    default:
-      return { tono: 'neutro', chip: suscripcion?.estado ?? '—', frase: '' }
-  }
+  const estado = estadoSuscripcion(suscripcion?.estado)
+  return { tono: estado.tono, chip: estado.corto, frase: fraseEstado(suscripcion) }
 }
 
 function textoPersonal(plan, activo, maximo) {
@@ -84,19 +46,34 @@ function textoPersonal(plan, activo, maximo) {
   return `Hasta ${maximo} del personal`
 }
 
-const ESTADO_PAGO = { aprobado: 'Aprobado', pendiente: 'Pendiente', rechazado: 'Rechazado' }
+/* Lista de funciones de un plan, con "Próximamente" en las que todavía no existen
+   (docs/Oferta.md). */
+function ListaFunciones({ funciones, className = '' }) {
+  if (funciones.length === 0) return null
+  return (
+    <ul className={`space-y-1.5 text-sm text-muted ${className}`}>
+      {funciones.map((codigo) => (
+        <li key={codigo} className="flex flex-wrap items-center gap-2">
+          <Icono nombre="check" className="h-4 w-4 shrink-0 text-amber-texto" />
+          <span>{etiquetaFuncion(codigo)}</span>
+          {esProximamente(codigo) && <Badge>Próximamente</Badge>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// Las del taller: las del plan más los adicionales (funciones_efectivas), o las del plan.
+function funcionesDelTaller(suscripcion) {
+  if (Array.isArray(suscripcion?.funciones_efectivas)) return ordenar(suscripcion.funciones_efectivas)
+  return funcionesDePlan(suscripcion?.plan)
+}
 
 /* Los pagos manuales los carga Boxly (el superadmin no es del taller y el
    servidor no manda su nombre); null en un cobro de Mercado Pago es automático. */
 function quienRegistro(pago) {
   if (pago.registrado_por) return pago.registrado_por
   return pago.medio === 'manual' ? 'Boxly' : 'Automático'
-}
-
-function tonoPago(estado) {
-  if (estado === 'aprobado') return 'ok'
-  if (estado === 'pendiente') return 'ambar'
-  return 'peligro'
 }
 
 /* El 409 del servidor ("Tu personal activo supera el límite de ese plan") no dice
@@ -156,7 +133,7 @@ export default function Suscripcion() {
     } catch (problema) {
       if (problema.status === 503) {
         setAvisoCobro(
-          'El cobro automático todavía no está disponible: pagá por transferencia y avisale a Boxly para que lo registre.',
+          'El débito automático todavía no está habilitado. Escribinos y te ayudamos.',
         )
       } else {
         setErrorCobro(problema.message)
@@ -244,11 +221,15 @@ export default function Suscripcion() {
             </dd>
           </div>
         </dl>
+        <div className="mt-4 border-t border-graphite-700 pt-4">
+          <h3 className="text-sm font-medium text-ink">Incluye tu plan</h3>
+          <ListaFunciones funciones={funcionesDelTaller(suscripcion)} className="mt-2" />
+        </div>
         {suscripcion.estado === 'suspendida' && (
           <div className="mt-4">
             <Alert>
               El taller está suspendido: solo podés usar esta pantalla hasta regularizar el
-              pago. Si pagaste por transferencia, esperá a que Boxly lo registre.
+              pago con el débito automático de Mercado Pago.
             </Alert>
           </div>
         )}
@@ -280,6 +261,7 @@ export default function Suscripcion() {
                 <p className="mt-1 text-sm text-muted">
                   {plan.max_personal ? `Hasta ${plan.max_personal} del personal` : 'Personal sin límite'}
                 </p>
+                <ListaFunciones funciones={funcionesDePlan(plan)} className="mt-3 flex-1" />
                 {!actual && (
                   <Button
                     variante="secundario"
@@ -306,8 +288,7 @@ export default function Suscripcion() {
         {suscripcion.cobro_automatico ? (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-muted">
-              Está activo: Mercado Pago debita el plan cada mes y no tenés que hacer la
-              transferencia.
+              Está activo: Mercado Pago debita el plan cada mes, sin que tengas que hacer nada.
             </p>
             <Button variante="secundario" onClick={() => setConfirmarBaja(true)}>
               Cancelar cobro automático
@@ -316,8 +297,8 @@ export default function Suscripcion() {
         ) : (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-muted">
-              Activá el cobro automático y Mercado Pago debita el plan cada mes: te olvidás de
-              las transferencias y evitás cortes.
+              Activá el débito automático y Mercado Pago cobra el plan cada mes: te olvidás del
+              vencimiento y evitás cortes.
             </p>
             <Button cargando={activando} onClick={activarCobro}>
               Activar cobro automático
@@ -365,17 +346,17 @@ export default function Suscripcion() {
                 {listaPagos.map((pago) => (
                   <tr key={pago.id}>
                     <td className="whitespace-nowrap px-4 py-2.5 text-muted">
-                      {fechaHora(pago.creado_en)}
+                      {formatearFechaHora(pago.creado_en)}
                     </td>
                     <td className="px-4 py-2.5 font-medium text-ink">{pesos(pago.monto)}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-muted">
                       {fechaCorta(pago.periodo_desde)} → {fechaCorta(pago.periodo_hasta)}
                     </td>
                     <td className="px-4 py-2.5 text-muted">
-                      {pago.medio === 'mercadopago' ? 'Mercado Pago' : 'Transferencia'}
+                      {medioPago(pago.medio)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <Badge tono={tonoPago(pago.estado)}>{ESTADO_PAGO[pago.estado] ?? pago.estado}</Badge>
+                      <Badge tono={estadoPago(pago.estado).tono}>{estadoPago(pago.estado).texto}</Badge>
                     </td>
                     <td className="px-4 py-2.5 text-muted">{quienRegistro(pago)}</td>
                   </tr>
@@ -402,7 +383,7 @@ export default function Suscripcion() {
       <Confirmacion
         abierto={confirmarBaja}
         titulo="Cancelar cobro automático"
-        mensaje="Mercado Pago deja de debitar la suscripción y vas a tener que pagar por transferencia."
+        mensaje="Mercado Pago deja de debitar la suscripción. Para seguir usando Boxly después del vencimiento, vas a tener que volver a activarlo."
         procesando={cancelando}
         textoConfirmar="Sí, cancelar"
         onConfirmar={confirmarCancelarCobro}

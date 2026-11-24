@@ -8,6 +8,7 @@ import Paginacion from '@/components/ui/Paginacion'
 import Select from '@/components/ui/Select'
 import Vacio from '@/components/ui/Vacio'
 import { api } from '@/lib/api'
+import { formatearFechaHora } from '@/lib/fechas'
 import { useAuth } from '@/context/AuthContext'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
@@ -66,17 +67,7 @@ function tonoEstado(estado) {
   return 'neutro'
 }
 
-function fechaHora(iso) {
-  const fecha = new Date(iso)
-  if (Number.isNaN(fecha.getTime())) return '—'
-  return fecha.toLocaleString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const fechaHora = formatearFechaHora
 
 // Quién hizo la acción: el email (o "Sin sesión") y su rol legible.
 function Quien({ registro }) {
@@ -192,6 +183,7 @@ export default function Auditoria({ ambito = 'taller' }) {
             label="Taller"
             className="w-full sm:max-w-52"
             value={tallerId}
+            data-lectura
             onChange={(e) => {
               setTallerId(e.target.value)
               reiniciar()
@@ -203,6 +195,7 @@ export default function Auditoria({ ambito = 'taller' }) {
           label="Entidad"
           className="w-full sm:max-w-48"
           value={entidad}
+          data-lectura
           onChange={(e) => {
             setEntidad(e.target.value)
             reiniciar()
@@ -213,6 +206,7 @@ export default function Auditoria({ ambito = 'taller' }) {
           label="Método"
           className="w-full sm:max-w-36"
           value={metodo}
+          data-lectura
           onChange={(e) => {
             setMetodo(e.target.value)
             reiniciar()
@@ -225,6 +219,7 @@ export default function Auditoria({ ambito = 'taller' }) {
         <Field
           label="Desde"
           type="date"
+          data-lectura
           className="w-full sm:max-w-40"
           value={desde}
           onChange={(e) => {
@@ -235,6 +230,7 @@ export default function Auditoria({ ambito = 'taller' }) {
         <Field
           label="Hasta"
           type="date"
+          data-lectura
           className="w-full sm:max-w-40"
           value={hasta}
           onChange={(e) => {

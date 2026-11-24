@@ -5,6 +5,11 @@ from fastapi import APIRouter, Body, Depends, Header, Query, status
 from app.api.v1.suscripcion_mp import service
 from app.core.dependencies import DbSession, require_roles
 from app.models.usuario import RolUsuario, Usuario
+from app.schemas.suscripcion import (
+    CobroAutomaticoResponse,
+    SimularCobroRequest,
+    SimularCobroResponse,
+)
 from app.schemas.usuario import MessageResponse
 
 # Tarea S2 (contrato en docs/Suscripciones.md): cobro automático de la
@@ -16,10 +21,11 @@ AdminUser = Annotated[Usuario, Depends(require_roles(RolUsuario.administrador))]
 
 @router.post(
     "/cobro-automatico",
+    response_model=CobroAutomaticoResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Activar el cobro automático de la suscripción",
 )
-def activar_cobro(db: DbSession, usuario: AdminUser) -> dict:
+def activar_cobro(db: DbSession, usuario: AdminUser) -> CobroAutomaticoResponse:
     return service.activar_cobro(db, usuario)
 
 
@@ -62,12 +68,12 @@ def webhook(
 
 @router.post(
     "/simular-cobro",
+    response_model=SimularCobroResponse,
     summary="Simular un cobro de suscripción (solo dev + debug)",
 )
 def simular_cobro(
     db: DbSession,
     usuario: AdminUser,
-    datos: Annotated[dict | None, Body()] = None,
-) -> dict:
-    estado = (datos or {}).get("estado")
-    return service.simular_cobro(db, usuario, estado)
+    datos: Annotated[SimularCobroRequest | None, Body()] = None,
+) -> SimularCobroResponse:
+    return service.simular_cobro(db, usuario, datos.estado if datos else None)

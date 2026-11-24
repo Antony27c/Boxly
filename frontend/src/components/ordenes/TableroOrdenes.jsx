@@ -220,6 +220,7 @@ export default function TableroOrdenes({
         <div className="flex items-end gap-2">
           <Field
             label="Buscar por patente, cliente, trabajo o mecánico"
+            data-lectura
             type="search"
             icono="buscar"
             placeholder="Patente, cliente o trabajo"
@@ -231,6 +232,7 @@ export default function TableroOrdenes({
             variante="secundario"
             className="max-sm:px-3.5 sm:mb-0.5"
             onClick={alternarCerradas}
+            data-lectura
           >
             {enCerradas ? 'Ver tablero' : 'Ver cerradas'}
           </Button>

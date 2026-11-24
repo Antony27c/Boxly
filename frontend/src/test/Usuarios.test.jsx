@@ -130,7 +130,7 @@ describe('Usuarios', () => {
     // Plan sin límite por defecto: estos tests no ejercitan el tope (eso va en
     // LimitePersonal.test.jsx).
     limite.obtener.mockResolvedValue({
-      plan: { codigo: 'taller_plus', nombre: 'Taller+', max_personal: null },
+      plan: { codigo: 'profesional', nombre: 'Profesional', max_personal: null },
       personal_activo: 4,
       max_personal: null,
     })
@@ -140,19 +140,23 @@ describe('Usuarios', () => {
     })
   })
 
-  it('un administrador no ve acciones sobre tarjetas de administradores o superadmins', async () => {
+  it('un administrador gestiona a otros administradores, no a una cuenta superadmin', async () => {
     usuarios.listarPaginado.mockResolvedValue({
       items: [USUARIO_ADMIN, USUARIO_SUPER, USUARIO_MECANICO],
       total: 3,
     })
     montar()
 
+    // P1: el administrador gestiona todo el personal de su taller, también a
+    // otros administradores.
     await screen.findByRole('heading', { name: 'Min, Ada' })
-    for (const titulo of ['Min, Ada', 'Super, Sara']) {
-      const tarjeta = tarjetaDe(titulo)
-      expect(within(tarjeta).getByText('Solo superadmin')).toBeInTheDocument()
-      expect(within(tarjeta).queryByRole('button')).not.toBeInTheDocument()
-    }
+    const admin = tarjetaDe('Min, Ada')
+    expect(within(admin).queryByText('Solo superadmin')).not.toBeInTheDocument()
+    expect(within(admin).getByRole('button', { name: 'Editar' })).toBeInTheDocument()
+
+    const superadmin = tarjetaDe('Super, Sara')
+    expect(within(superadmin).getByText('Solo superadmin')).toBeInTheDocument()
+    expect(within(superadmin).queryByRole('button')).not.toBeInTheDocument()
 
     // La cuenta de mecánico sí se gestiona, pero sin las acciones de superadmin.
     const mecanico = tarjetaDe('Nico, Meca')

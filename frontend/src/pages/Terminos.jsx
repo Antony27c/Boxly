@@ -6,6 +6,7 @@ import EncabezadoPagina from '@/components/ui/EncabezadoPagina'
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import { formatearFechaHora } from '@/lib/fechas'
 import { ROLES_ADMIN, inicioSegunRol } from '@/routes/navegacion'
 import { terminosService } from '@/services/terminos'
 
@@ -112,16 +113,7 @@ function DocumentoTerminos({ texto }) {
   )
 }
 
-function fechaHora(iso) {
-  const fecha = new Date(iso)
-  const dia = fecha.toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-  const hora = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-  return `${dia} ${hora}`
-}
+const fechaHora = formatearFechaHora
 
 export default function Terminos() {
   const { token, usuario } = useAuth()

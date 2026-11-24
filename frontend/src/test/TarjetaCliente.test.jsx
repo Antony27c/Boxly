@@ -1,7 +1,15 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TarjetaCliente from '@/components/clientes/TarjetaCliente'
+
+const sesion = vi.hoisted(() => ({ rol: 'administrador' }))
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({ token: 'tok', usuario: { id: 1, rol: sesion.rol } }),
+}))
+vi.mock('@/services/taller', () => ({
+  tallerService: { obtener: vi.fn().mockResolvedValue({ nombre: 'Taller Don Pepe' }) },
+}))
 
 const CLIENTE = {
   id: 5,
@@ -31,6 +39,10 @@ function renderTarjeta(props = {}) {
 }
 
 describe('TarjetaCliente', () => {
+  beforeEach(() => {
+    sesion.rol = 'administrador'
+  })
+
   it('destaca el nombre como titulo y muestra DNI, contacto, vehiculos y verificacion', () => {
     renderTarjeta()
     expect(screen.getByRole('heading', { name: 'García, Ana' })).toBeInTheDocument()
@@ -66,5 +78,30 @@ describe('TarjetaCliente', () => {
     expect(screen.getByText('Cliente')).toBeInTheDocument()
     expect(screen.queryByText('Verificación pendiente')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /0 vehículos/ })).toBeInTheDocument()
+  })
+
+  it('ofrece WhatsApp con un saludo del taller', async () => {
+    renderTarjeta()
+    const link = await screen.findByRole('link', { name: /WhatsApp/ })
+    await waitFor(() => expect(link.getAttribute('href')).toContain(encodeURIComponent('Taller Don Pepe')))
+    expect(link).toHaveAttribute(
+      'href',
+      `https://wa.me/5491144440000?text=${encodeURIComponent('¡Hola, Ana! Te escribimos de Taller Don Pepe.')}`,
+    )
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('sin teléfono el WhatsApp queda deshabilitado y explica por qué', () => {
+    renderTarjeta({ cliente: { ...CLIENTE, telefono: '' } })
+    const boton = screen.getByRole('button', { name: 'WhatsApp' })
+    expect(boton).toBeDisabled()
+    expect(boton).toHaveAccessibleDescription('El cliente no tiene un teléfono cargado.')
+  })
+
+  it('el mecánico no ve el WhatsApp', () => {
+    sesion.rol = 'mecanico'
+    renderTarjeta()
+    expect(screen.queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument()
   })
 })

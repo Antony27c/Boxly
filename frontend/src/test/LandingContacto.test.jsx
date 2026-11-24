@@ -32,7 +32,7 @@ describe('Landing: formulario de demo', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Pedí una demo' })).toBeInTheDocument()
     expect(screen.getByText('Te contactamos')).toBeInTheDocument()
     expect(screen.getByText('Armamos tu taller')).toBeInTheDocument()
-    expect(screen.getByText('Tenés 30 días de prueba')).toBeInTheDocument()
+    expect(screen.getByText('Usás el plan Pro 14 días')).toBeInTheDocument()
   })
 
   it('valida en el cliente con errores accesibles y no envía', async () => {
@@ -114,24 +114,31 @@ describe('Landing: formulario de demo', () => {
     expect(screen.getByLabelText('Mensaje (opcional)')).toHaveValue('Me interesa el plan Profesional.')
   })
 
-  it('usa el nombre real de los planes conocidos', () => {
-    window.location.hash = '#contacto?plan=taller_plus'
+  it('usa el nombre real de los planes conocidos y capitaliza los desconocidos', () => {
+    window.location.hash = '#contacto?plan=esencial'
+    const { unmount } = render(<Contacto />)
+    expect(screen.getByLabelText('Mensaje (opcional)')).toHaveValue('Me interesa el plan Esencial.')
+    unmount()
+
+    window.location.hash = '#contacto?plan=plan_especial'
     render(<Contacto />)
-    expect(screen.getByLabelText('Mensaje (opcional)')).toHaveValue('Me interesa el plan Taller+.')
+    expect(screen.getByLabelText('Mensaje (opcional)')).toHaveValue(
+      'Me interesa el plan Plan especial.',
+    )
   })
 
   it('cambia el plan si cambia el hash, sin pisar lo que escribió la persona', () => {
-    window.location.hash = '#contacto?plan=basico'
+    window.location.hash = '#contacto?plan=esencial'
     render(<Contacto />)
     const mensaje = screen.getByLabelText('Mensaje (opcional)')
-    expect(mensaje).toHaveValue('Me interesa el plan Básico.')
+    expect(mensaje).toHaveValue('Me interesa el plan Esencial.')
 
     window.location.hash = '#contacto?plan=pro'
     fireEvent(window, new HashChangeEvent('hashchange'))
     expect(mensaje).toHaveValue('Me interesa el plan Pro.')
 
     fireEvent.change(mensaje, { target: { value: 'Somos dos mecánicos.' } })
-    window.location.hash = '#contacto?plan=basico'
+    window.location.hash = '#contacto?plan=esencial'
     fireEvent(window, new HashChangeEvent('hashchange'))
     expect(mensaje).toHaveValue('Somos dos mecánicos.')
   })

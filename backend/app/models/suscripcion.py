@@ -3,6 +3,7 @@ y docs/Oferta.md, tanda C)."""
 import json
 from datetime import date, datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Optional
 
 from sqlalchemy import (
@@ -36,6 +37,25 @@ PLAN_POR_DEFECTO = "esencial"
 # (docs/Oferta.md). El alta con tipo de acceso llega en C2.
 PLAN_DEMO = "pro"
 DIAS_DEMO = 14
+
+
+class EstadoPagoSuscripcion(StrEnum):
+    """Estado de un pago de la suscripción (pagos_suscripcion.estado)."""
+
+    aprobado = "aprobado"
+    pendiente = "pendiente"
+    rechazado = "rechazado"
+
+
+class MedioPagoSuscripcion(StrEnum):
+    """Medio de un pago de la suscripción (pagos_suscripcion.medio)."""
+
+    manual = "manual"
+    mercadopago = "mercadopago"
+
+
+def _valores_sql(enum: type[StrEnum]) -> str:
+    return ", ".join(f"'{v}'" for v in enum)
 
 
 class Plan(Base):
@@ -111,9 +131,12 @@ class PagoSuscripcion(Base):
 
     __tablename__ = "pagos_suscripcion"
     __table_args__ = (
-        CheckConstraint("medio IN ('manual', 'mercadopago')", name="ck_pagos_suscripcion_medio"),
         CheckConstraint(
-            "estado IN ('aprobado', 'pendiente', 'rechazado')", name="ck_pagos_suscripcion_estado"
+            f"medio IN ({_valores_sql(MedioPagoSuscripcion)})", name="ck_pagos_suscripcion_medio"
+        ),
+        CheckConstraint(
+            f"estado IN ({_valores_sql(EstadoPagoSuscripcion)})",
+            name="ck_pagos_suscripcion_estado",
         ),
     )
 
@@ -127,7 +150,9 @@ class PagoSuscripcion(Base):
     periodo_desde: Mapped[date] = mapped_column(Date, nullable=False)
     periodo_hasta: Mapped[date] = mapped_column(Date, nullable=False)
     medio: Mapped[str] = mapped_column(String(20), nullable=False)
-    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="aprobado")
+    estado: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=EstadoPagoSuscripcion.aprobado.value
+    )
     referencia: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     mp_payment_id: Mapped[Optional[str]] = mapped_column(String(60), nullable=True, unique=True)
     registrado_por_id: Mapped[Optional[int]] = mapped_column(

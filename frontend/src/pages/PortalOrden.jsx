@@ -11,7 +11,8 @@ import RutaSeguimiento from '@/components/portal/RutaSeguimiento'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import useTaller from '@/hooks/useTaller'
-import { lineaACotizar, nombreEstado } from '@/services/ordenes'
+import { formatearFecha, formatearFechaDia } from '@/lib/fechas'
+import { lineaACotizar, nombreEstado, textoPagada } from '@/services/ordenes'
 import { pagosService, portalService } from '@/services/portal'
 import { pesos } from '@/utils/formato'
 
@@ -20,8 +21,15 @@ const ACENTOS_ESTADO = { listo: 'ok', entregado: 'ok', cancelado: 'danger', pend
 const FICHA_QUIETA =
   'hover:!border-graphite-700 hover:!shadow-[0_1px_2px_rgba(16,18,22,0.06)] motion-safe:hover:!translate-y-0'
 
+// fecha_ingreso y fecha_entrega son instantes; fecha_estimada_entrega es un
+// día elegido por el taller (se guarda como datetime): se muestra el día tal
+// cual sin conversión de zona.
 function fecha(iso) {
-  return iso ? new Date(iso).toLocaleDateString('es-AR') : '—'
+  return formatearFecha(iso)
+}
+
+function fechaEstimada(iso) {
+  return formatearFechaDia(iso)
 }
 
 // Con líneas a cotizar se muestra lo ya cotizado (`total` del backend): ni el
@@ -136,7 +144,9 @@ export default function PortalOrden() {
         </div>
         <div>
           <p className="text-muted">{orden.fecha_entrega ? 'Entregado' : 'Entrega estimada'}</p>
-          <p className="mt-0.5">{fecha(orden.fecha_entrega ?? orden.fecha_estimada_entrega)}</p>
+          <p className="mt-0.5">
+            {orden.fecha_entrega ? fecha(orden.fecha_entrega) : fechaEstimada(orden.fecha_estimada_entrega)}
+          </p>
         </div>
         <div>
           <p className="text-muted">Mecánico a cargo</p>
@@ -209,7 +219,15 @@ export default function PortalOrden() {
             )}
           </div>
           {orden.pagada ? (
-            <Badge tono="ok">Pagada</Badge>
+            <div className="text-right">
+              <Badge tono="ok">Pagada</Badge>
+              {orden.pago?.estado === 'aprobado' && (
+                <p className="mt-1 text-xs text-muted">
+                  {textoPagada(orden.pago.medio)}
+                  {orden.pago.fecha_pago && ` · ${fecha(orden.pago.fecha_pago)}`}
+                </p>
+              )}
+            </div>
           ) : orden.puede_pagar && !pagoOnline ? (
             <span className="text-xs text-muted">Pagás en el taller</span>
           ) : orden.puede_pagar ? (

@@ -12,6 +12,7 @@ import Modal from '@/components/ui/Modal'
 import Patente from '@/components/ui/Patente'
 import Select from '@/components/ui/Select'
 import FormularioTurno from '@/components/turnos/FormularioTurno'
+import WhatsAppTurno from '@/components/turnos/WhatsAppTurno'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
@@ -274,6 +275,7 @@ export default function Turnos() {
           label="Estado"
           className="w-full sm:w-52"
           value={estadoFiltro}
+          data-lectura
           onChange={(e) => setEstadoFiltro(e.target.value)}
           opciones={[
             { valor: '', texto: 'Todos los estados' },
@@ -382,6 +384,7 @@ export default function Turnos() {
                               Recibir auto
                             </Button>
                           )}
+                          <WhatsAppTurno turno={turno} cliente={cliente} vehiculo={vehiculo} className={BOTON_PIE} />
                           <span className="ml-auto flex gap-1">
                             <Button
                               variante="fantasma"

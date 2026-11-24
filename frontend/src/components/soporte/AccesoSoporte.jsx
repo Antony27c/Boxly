@@ -9,6 +9,7 @@ import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
+import { formatearFechaHora } from '@/lib/fechas'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
 import { soporteService } from '@/services/soporte'
@@ -21,17 +22,7 @@ const HORAS = [
   { valor: '72', texto: '72 horas' },
 ]
 
-function fechaHora(iso) {
-  const fecha = new Date(iso)
-  if (Number.isNaN(fecha.getTime())) return '—'
-  return fecha.toLocaleString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const fechaHora = formatearFechaHora
 
 function tonoEstado(estado) {
   if (estado >= 500) return 'peligro'

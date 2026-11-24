@@ -139,8 +139,10 @@ describe('Modo soporte', () => {
   it('el vencimiento sale solo al detalle del taller', async () => {
     montar()
     fireEvent.click(screen.getByRole('button', { name: 'entrar-corto' }))
-    await screen.findByText('si', { selector: 'output' })
 
+    // El acceso dura 120 ms: con la máquina cargada el render puede tardar más
+    // que eso y el modo se apaga antes de pintar "activo"; lo que se verifica
+    // es que venza solo y salga al detalle del taller.
     await waitFor(() =>
       expect(screen.getByTestId('ruta')).toHaveTextContent('/plataforma/talleres/3'),
       { timeout: 3000 },

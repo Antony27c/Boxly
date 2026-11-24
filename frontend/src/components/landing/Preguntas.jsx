@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 
 // Sección "preguntas" de la landing (tarea L3, docs/Landing.md). Respuestas basadas en
-// docs/Suscripciones.md, docs/Plataforma.md y docs/Guia-de-uso.md.
+// docs/Oferta.md, docs/Suscripciones.md, docs/Plataforma.md y docs/Guia-de-uso.md.
 // Acordeón accesible: cada pregunta es un <button aria-expanded> que controla su
 // <div role="region">. Flechas arriba/abajo, Inicio y Fin se mueven entre preguntas.
 // Los datos, el respaldo y el soporte se explican en la sección Seguridad: acá se remite.
@@ -16,10 +16,32 @@ function EnlaceSeguridad() {
 
 const PREGUNTAS = [
   {
-    pregunta: '¿Cómo funciona la prueba gratis?',
+    pregunta: '¿Cómo es la demo?',
     respuesta: [
-      'Son 30 días con todas las funciones, desde que damos de alta tu taller. Para empezar no tenés que pagar nada.',
-      'Antes de que termine, elegís el plan según el tamaño de tu equipo y pagás el primer mes.',
+      'Pedís la demo con el formulario de contacto. Leemos cada solicitud y, si la aprobamos, damos de alta tu taller con el plan Pro durante 14 días, sin cargo.',
+      'No es una prueba abierta: la demo arranca cuando te pasamos el acceso.',
+    ],
+  },
+  {
+    pregunta: '¿Qué pasa cuando termina la demo?',
+    respuesta: [
+      'Te pedimos que respondas una encuesta corta sobre cómo te fue. Es opcional y la podés saltear.',
+      'Después tenés 3 días con el taller en solo lectura para elegir un plan y pagarlo. Si no pagás en ese plazo, el taller queda suspendido hasta que elijas un plan. Tus datos no se borran.',
+    ],
+  },
+  {
+    pregunta: '¿Qué diferencia hay entre los planes?',
+    respuesta: [
+      'Esencial trae la gestión diaria: clientes, vehículos, turnos, órdenes con fotos, inventario, cobros, métricas básicas, portal del cliente, avisos por email y mensajes de WhatsApp armados para que los mandes desde tu teléfono.',
+      'Pro suma los avisos automáticos por WhatsApp y la facturación electrónica ARCA. Profesional suma recordatorios automáticos de service y personalización de marca. Esas funciones están en desarrollo: en la sección Planes las marcamos como "Próximamente".',
+      'Además, cada plan tiene un límite de personas del equipo.',
+    ],
+  },
+  {
+    pregunta: '¿Puedo facturar con ARCA desde Boxly?',
+    respuesta: [
+      'Todavía no: está en desarrollo. Cuando esté, vas a poder emitir la factura electrónica de una reparación con una acción y tu confirmación.',
+      'Viene incluida, con un cupo mensual, en los planes Pro y Profesional. En Esencial se va a poder sumar como adicional.',
     ],
   },
   {
@@ -73,7 +95,7 @@ const PREGUNTAS = [
   {
     pregunta: '¿Cómo pago la suscripción?',
     respuesta: [
-      'Todos los meses, en pesos, por transferencia o con débito automático de Mercado Pago. El débito automático lo activás o lo cancelás con un botón desde la pantalla de suscripción.',
+      'Todos los meses, en pesos, con débito automático de Mercado Pago. Lo activás o lo cancelás con un botón desde la pantalla de suscripción.',
     ],
   },
   {

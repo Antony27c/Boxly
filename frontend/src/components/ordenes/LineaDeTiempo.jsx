@@ -1,3 +1,4 @@
+import { fechaServidor, formatearFechaHora } from '@/lib/fechas'
 import { DESCRIPCION_ESTADOS } from '@/services/ordenes'
 
 const COLORES = {
@@ -10,18 +11,12 @@ const COLORES = {
   Cancelado: 'bg-danger',
 }
 
-function fechaHora(fecha) {
-  return new Date(fecha).toLocaleString('es-AR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const fechaHora = formatearFechaHora
 
 function armarEtapas(historial = [], imagenes = []) {
-  const ordenado = [...historial].sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+  const ordenado = [...historial].sort(
+    (a, b) => (fechaServidor(a.fecha)?.getTime() ?? 0) - (fechaServidor(b.fecha)?.getTime() ?? 0),
+  )
   const etapas = []
   for (const item of ordenado) {
     const esCambio = !etapas.length || item.estado_nuevo !== item.estado_anterior

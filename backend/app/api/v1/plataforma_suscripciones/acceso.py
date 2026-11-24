@@ -16,6 +16,7 @@ from typing import Callable, Optional
 from sqlalchemy.orm import Session
 
 from app.api.v1.suscripcion import service as suscripcion
+from app.core.suscripcion import hoy
 from app.models import Auditoria, Plan, Taller, Usuario
 from app.models.suscripcion import DIAS_DEMO, PLAN_DEMO
 from app.schemas.suscripcion import AccesoTaller, SuscripcionResponse
@@ -52,7 +53,7 @@ REGLAS: dict[str, Callable[[AccesoTaller, date], tuple[str, Optional[date]]]] = 
 def resolver(db: Session, acceso: AccesoTaller) -> AccesoResuelto:
     """Plan y vencimiento del acceso. El plan tiene que existir y estar activo
     (404 si no): se valida antes de crear o tocar nada."""
-    plan_codigo, vence_en = REGLAS[acceso.tipo](acceso, date.today())
+    plan_codigo, vence_en = REGLAS[acceso.tipo](acceso, hoy())
     plan = suscripcion.plan_o_404(db, plan_codigo, solo_activos=True)
     return AccesoResuelto(tipo=acceso.tipo, plan=plan, vence_en=vence_en)
 
@@ -119,5 +120,5 @@ def convertir(
     db.commit()
     db.refresh(taller)
     if cambia_plan:
-        suscripcion.sincronizar_cobro_automatico(taller, plan)
+        suscripcion.avisar_cambio_plan(taller, plan)
     return suscripcion.armar_suscripcion(db, taller)

@@ -8,6 +8,7 @@ import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import useTaller from '@/hooks/useTaller'
+import { formatearFechaHora } from '@/lib/fechas'
 import { tallerService } from '@/services/taller'
 
 // Misma tarjeta que usan las secciones de Configuración.
@@ -129,17 +130,9 @@ function validarTaller(form) {
   return errores
 }
 
-function fechaHora(iso) {
-  const fecha = new Date(iso)
-  if (Number.isNaN(fecha.getTime())) return ''
-  return fecha.toLocaleString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+// Antes devolvía '' para valores inválidos; el único uso está dentro de un
+// condicional, así que el "—" del helper compartido no cambia nada visible.
+const fechaHora = formatearFechaHora
 
 export default function ConfigTaller() {
   const { token } = useAuth()

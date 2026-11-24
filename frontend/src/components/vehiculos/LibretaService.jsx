@@ -2,15 +2,8 @@ import { Link } from 'react-router-dom'
 import Odometro from '@/components/graficos/Odometro'
 import SelloService from '@/components/vehiculos/SelloService'
 import TestigoService from '@/components/vehiculos/TestigoService'
+import { formatearFechaLarga } from '@/lib/fechas'
 import { pesos } from '@/utils/formato'
-
-function formatearFecha(fecha) {
-  return new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-}
 
 // Libreta de service del vehículo: arriba el testigo de próximo turno y los km
 // (si se conocen); abajo cada orden como un renglón con su sello estampado.
@@ -38,7 +31,7 @@ export default function LibretaService({ ordenes = [], proximoTurno = null, kilo
               >
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm text-muted">
-                    {orden.fecha ? formatearFecha(orden.fecha) : 'Sin fecha'}
+                    {orden.fecha ? formatearFechaLarga(orden.fecha) : 'Sin fecha'}
                   </span>
                   <span className="mt-1 block break-words">{orden.descripcion || 'Sin detalle'}</span>
                   {orden.total > 0 && (

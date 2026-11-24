@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setSoportePerdidoHandler, setTallerSoporte } from '@/lib/api'
+import { fechaServidor } from '@/lib/fechas'
 import { useToast } from '@/context/ToastContext'
 
 /* Modo soporte del superadmin (P6, contrato en docs/Plataforma.md): con un
@@ -21,8 +22,10 @@ const SoporteContext = createContext({
 
 function aIso(valor) {
   if (valor == null || valor === '') return null
-  const fecha = valor instanceof Date ? valor : new Date(valor)
-  return Number.isNaN(fecha.getTime()) ? null : fecha.toISOString()
+  // Los datetime del servidor vienen sin zona (son UTC): fechaServidor los
+  // interpreta bien; un Date ya armado se respeta tal cual.
+  const fecha = valor instanceof Date ? valor : fechaServidor(valor)
+  return fecha ? fecha.toISOString() : null
 }
 
 /* El vencimiento (`hasta`) puede venir en varias formas según quién llame a

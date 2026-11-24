@@ -13,6 +13,7 @@ export default function Paginacion({
 }) {
   return (
     <nav
+      data-lectura
       aria-label="Paginación"
       className={`flex flex-wrap items-center justify-between gap-3 ${className}`}
     >

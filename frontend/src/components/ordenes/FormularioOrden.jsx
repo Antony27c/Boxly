@@ -8,9 +8,10 @@ import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
 import { ROLES_MECANICO, tieneAcceso } from '@/routes/navegacion'
 import { DESCRIPCION_ESTADOS } from '@/services/ordenes'
+import { aISO } from '@/utils/fechas'
 import { validarOrden } from '@/utils/validation'
 
-const HOY = new Date().toISOString().slice(0, 10)
+const HOY = aISO(new Date())
 
 function nombreCliente(cliente) {
   return cliente ? `${cliente.apellido}, ${cliente.nombre}` : ''

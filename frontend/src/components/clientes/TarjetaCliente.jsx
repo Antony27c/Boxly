@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import WhatsAppCliente from '@/components/clientes/WhatsAppCliente'
 import Button from '@/components/ui/Button'
 import { BOTON_PIE, Chip, Chips, Ficha, FichaCabecera, FichaPie } from '@/components/ui/Ficha'
 
@@ -47,6 +48,7 @@ export default function TarjetaCliente({ cliente, vehiculos = 0, invitando = fal
             Reenviar correo de verificación
           </Button>
         )}
+        <WhatsAppCliente cliente={cliente} className={BOTON_PIE} />
         <span className="ml-auto flex gap-1">
           <Button variante="fantasma" className={BOTON_PIE} onClick={onEditar}>
             Editar

@@ -18,6 +18,7 @@ import { ROLES_ADMIN, ROLES_MOSTRADOR } from '@/routes/navegacion'
 import { clientesService } from '@/services/clientes'
 import { DIAS_SEMANA, mecanicosService } from '@/services/mecanicos'
 import { nombreEstado } from '@/services/ordenes'
+import { formatearFecha } from '@/lib/fechas'
 import { ETIQUETAS_ESTADO } from '@/utils/etiquetas'
 import { aISO, etiquetaDia, lunesDe, sumarDias } from '@/utils/fechas'
 
@@ -47,9 +48,7 @@ function horasTotales(horarios) {
   return Math.round((total / 60) * 10) / 10
 }
 
-function fechaCorta(iso) {
-  return iso ? new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '—'
-}
+const fechaCorta = formatearFecha
 
 export default function Horarios() {
   const { token, usuario } = useAuth()
