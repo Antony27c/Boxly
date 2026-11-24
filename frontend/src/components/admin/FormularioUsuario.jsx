@@ -72,6 +72,7 @@ export default function FormularioUsuario({ usuario, ultimoAdmin = false, onGuar
           onChange={(e) => cambiar('nombre', e.target.value)}
           error={errores.nombre}
           disabled={guardando}
+          autoComplete="off"
           placeholder="Ej.: Sofía"
         />
         <Field
@@ -80,11 +81,17 @@ export default function FormularioUsuario({ usuario, ultimoAdmin = false, onGuar
           onChange={(e) => cambiar('apellido', e.target.value)}
           error={errores.apellido}
           disabled={guardando}
+          autoComplete="off"
           placeholder="Ej.: Rueda"
         />
         <Field
           label="Correo"
-          type="email"
+          // type="text" + inputMode: así el navegador no ofrece sus sugerencias de email (en Brave cerraba la ventana al escribir). El formato se valida en validarUsuario.
+          type="text"
+          inputMode="email"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
           className="sm:col-span-2"
           value={datos.email}
           onChange={(e) => cambiar('email', e.target.value)}
