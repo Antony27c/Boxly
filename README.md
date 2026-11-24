@@ -226,6 +226,8 @@ Todas se definen en `backend/.env` (partir de `.env.example`). Las sensibles **n
 | `SMTP_FROM_NAME` | `Boxly Taller Mecánico` | Nombre del remitente. |
 | `SMTP_FROM_EMAIL` | — | Dirección del remitente; si está vacía usa `SMTP_USER`. |
 | `SMTP_TLS` | `true` | Conexión cifrada. |
+| `RESEND_API_KEY` | — | Opcional. Si está, los correos salen por la API HTTPS de Resend y se ignora el SMTP. El remitente tiene que ser de un dominio verificado en Resend. |
+| `BREVO_API_KEY` | — | Opcional. Igual que Resend, con la API de Brevo; el remitente tiene que estar verificado en Brevo. |
 
 Se usan para: invitación al portal del cliente, aviso de activación de cuenta, notificación de cambio de estado de la orden y aviso de cobro.
 
@@ -250,7 +252,7 @@ Se usan para: invitación al portal del cliente, aviso de activación de cuenta,
 
 ### Email con Gmail
 
-Los correos salen por SMTP de Gmail. Gmail no acepta la contraseña normal: hay que generar una **App Password** (requiere verificación en 2 pasos) y ponerla en `SMTP_PASSWORD`. Si falta configuración, los avisos quedan registrados como `omitido`/`fallido` en la tabla `notificaciones` sin romper la operación.
+Los correos salen por SMTP de Gmail. Gmail no acepta la contraseña normal: hay que generar una **App Password** (requiere verificación en 2 pasos) y ponerla en `SMTP_PASSWORD`. Si el servidor bloquea el SMTP saliente, con `RESEND_API_KEY` o `BREVO_API_KEY` los correos salen por HTTPS (`python -m scripts.probar_email destinatario@ejemplo.com` manda uno de prueba). Si falta configuración, los avisos quedan registrados como `omitido`/`fallido` en la tabla `notificaciones` sin romper la operación.
 
 ## API
 

@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     smtp_from_email: str = ""
     smtp_tls: bool = True
 
+    # Envío por API HTTPS (alternativa al SMTP, para hostings que bloquean el SMTP saliente).
+    # Si hay una clave, se usa ese proveedor; si no, SMTP.
+    resend_api_key: str = ""
+    brevo_api_key: str = ""
+
     # SOLO DEMO: la contraseña inicial de cada cliente es su DNI/CUIT y no hace falta el correo
     # de verificación. Es insegura (el DNI no es secreto): apagarla antes de uso real.
     cliente_password_dni: bool = False

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape
 
+import httpx
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 
 from app.core.config import get_settings
@@ -41,6 +42,7 @@ def _get_fastmail() -> FastMail:
                 MAIL_SSL_TLS=False,
                 USE_CREDENTIALS=True,
                 VALIDATE_CERTS=True,
+                TIMEOUT=15,  # puerto bloqueado: que falle rápido en vez de colgar 60 s
             )
         )
     return _fastmail
@@ -141,15 +143,61 @@ def _barra_progreso(estado_codigo: str) -> str:
     )
 
 
+def _proveedor() -> str:
+    """Resend o Brevo (HTTPS) si hay clave; si no, SMTP."""
+    settings = get_settings()
+    if settings.resend_api_key:
+        return "resend"
+    if settings.brevo_api_key:
+        return "brevo"
+    return "smtp"
+
+
+async def _post_json(url: str, headers: dict, payload: dict) -> tuple[int, str]:
+    async with httpx.AsyncClient(timeout=15) as cliente:
+        respuesta = await cliente.post(url, headers=headers, json=payload)
+    return respuesta.status_code, respuesta.text
+
+
+async def _enviar_http(proveedor: str, email: str, asunto: str, html: str) -> None:
+    settings = get_settings()
+    nombre = settings.smtp_from_name
+    if proveedor == "resend":
+        url = "https://api.resend.com/emails"
+        headers = {"Authorization": f"Bearer {settings.resend_api_key}"}
+        remitente = _remitente() or "onboarding@resend.dev"
+        payload = {"from": f"{nombre} <{remitente}>", "to": [email], "subject": asunto, "html": html}
+    else:
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {"api-key": settings.brevo_api_key}
+        payload = {
+            "sender": {"name": nombre, "email": _remitente()},
+            "to": [{"email": email}],
+            "subject": asunto,
+            "htmlContent": html,
+        }
+    estado, cuerpo = await _post_json(url, headers, payload)
+    if estado >= 300:
+        raise RuntimeError(f"{proveedor} respondió {estado}: {cuerpo[:300]}")
+
+
 async def _enviar(email: str, asunto: str, html: str, orden_codigo: str) -> ResultadoEnvio:
     """Manda el correo. Nunca lanza: devuelve cómo salió."""
     settings = get_settings()
-    if not settings.smtp_user or not settings.smtp_password or not _remitente():
-        logger.warning("SMTP sin configurar: no se envía el aviso de la orden %s", orden_codigo)
+    proveedor = _proveedor()
+    if proveedor == "smtp":
+        configurado = bool(settings.smtp_user and settings.smtp_password and _remitente())
+    else:
+        configurado = bool(_remitente()) or proveedor == "resend"
+    if not configurado:
+        logger.warning("Correo sin configurar: no se envía el aviso de la orden %s", orden_codigo)
         return ResultadoEnvio("omitido", asunto, "El servidor de correo no está configurado")
-    message = MessageSchema(subject=asunto, recipients=[email], body=html, subtype=MessageType.html)
     try:
-        await _get_fastmail().send_message(message)
+        if proveedor == "smtp":
+            message = MessageSchema(subject=asunto, recipients=[email], body=html, subtype=MessageType.html)
+            await _get_fastmail().send_message(message)
+        else:
+            await _enviar_http(proveedor, email, asunto, html)
     except Exception as problema:
         logger.exception("No se pudo enviar el aviso de la orden %s a %s", orden_codigo, email)
         return ResultadoEnvio("fallido", asunto, f"{type(problema).__name__}: {problema}"[:500])

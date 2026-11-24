@@ -58,3 +58,55 @@ def test_cancelada_no_muestra_barra_y_cobro_no_la_lleva(smtp):
     assert "fue cancelada" in body and "Avance de tu orden" not in body
     asyncio.run(mail.enviar_notificacion_cobro("c@x.com", "P", "A", "V", "G", "OT-1", "Listo", "$ 1.00"))
     assert "Avance de tu orden" not in smtp.send_message.call_args[0][0].body
+
+
+@pytest.fixture
+def http(monkeypatch):
+    s = get_settings()
+    monkeypatch.setattr(s, "smtp_from_email", "taller@x.com")
+    monkeypatch.setattr(s, "smtp_user", "")
+    monkeypatch.setattr(s, "smtp_password", "")
+    monkeypatch.setattr(s, "resend_api_key", "")
+    monkeypatch.setattr(s, "brevo_api_key", "")
+    fake = AsyncMock(return_value=(200, "{}"))
+    monkeypatch.setattr(mail, "_post_json", fake)
+    smtp = AsyncMock()
+    monkeypatch.setattr(mail, "_get_fastmail", lambda: smtp)
+    return s, fake, smtp
+
+
+def test_resend_manda_por_https_y_no_por_smtp(http):
+    s, post, smtp = http
+    s.resend_api_key = "re_123"
+    _enviar()
+    url, headers, payload = post.await_args.args
+    assert url == "https://api.resend.com/emails" and headers == {"Authorization": "Bearer re_123"}
+    assert payload["to"] == ["c@x.com"] and payload["from"].endswith("<taller@x.com>")
+    smtp.send_message.assert_not_called()
+
+
+def test_brevo_manda_por_https(http):
+    s, post, smtp = http
+    s.brevo_api_key = "xkeysib-1"
+    _enviar()
+    url, headers, payload = post.await_args.args
+    assert url == "https://api.brevo.com/v3/smtp/email" and headers == {"api-key": "xkeysib-1"}
+    assert payload["sender"]["email"] == "taller@x.com" and payload["to"] == [{"email": "c@x.com"}]
+    smtp.send_message.assert_not_called()
+
+
+def test_error_del_proveedor_queda_como_fallido(http):
+    s, post, _ = http
+    s.resend_api_key = "re_123"
+    post.return_value = (403, '{"message":"dominio no verificado"}')
+    r = asyncio.run(mail._enviar("c@x.com", "Asunto", "<p>x</p>", "OT-1"))
+    assert r.resultado == "fallido" and "403" in r.error and "dominio no verificado" in r.error
+
+
+def test_sin_claves_sigue_usando_smtp(http, monkeypatch):
+    s, post, smtp = http
+    monkeypatch.setattr(s, "smtp_user", "taller@x.com")
+    monkeypatch.setattr(s, "smtp_password", "pw")
+    _enviar()
+    smtp.send_message.assert_awaited_once()
+    post.assert_not_awaited()
