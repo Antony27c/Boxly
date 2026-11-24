@@ -55,6 +55,12 @@ function TarjetaPlan({ plan, onEditar }) {
                 : numeroLegible(plan.cupo_facturas_arca)}
             </dd>
           </div>
+          <div className="col-span-2 min-w-0">
+            <dt className="text-xs text-muted">Descuento por pago anual</dt>
+            <dd className="mt-0.5 font-semibold tabular-nums text-ink">
+              {plan.descuento_anual_pct == null ? 'Sin pago anual' : `${plan.descuento_anual_pct}%`}
+            </dd>
+          </div>
         </dl>
         {(plan.funciones ?? []).length > 0 && (
           <div className="mt-3">
@@ -88,6 +94,9 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
   const [cupoArca, setCupoArca] = useState(
     plan.cupo_facturas_arca != null ? String(plan.cupo_facturas_arca) : '',
   )
+  const [descuentoAnual, setDescuentoAnual] = useState(
+    plan.descuento_anual_pct != null ? String(plan.descuento_anual_pct) : '',
+  )
   const [activo, setActivo] = useState(Boolean(plan.activo))
   const [funciones, setFunciones] = useState(() => [...(plan.funciones ?? [])])
   const [errores, setErrores] = useState({})
@@ -114,6 +123,12 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
       if (!Number.isInteger(cupo) || cupo < 0)
         encontrados.cupoArca = 'El cupo tiene que ser un número entero, sin decimales.'
     }
+    if (descuentoAnual.trim() !== '') {
+      const pct = Number(descuentoAnual)
+      if (!Number.isInteger(pct) || pct < 0 || pct > 100)
+        encontrados.descuentoAnual =
+          'El descuento tiene que ser un número entero entre 0 y 100, sin decimales ni el signo %.'
+    }
     setErrores(encontrados)
     return Object.keys(encontrados).length === 0
   }
@@ -128,6 +143,8 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
       max_personal: maxPersonal.trim() === '' ? null : Number(maxPersonal),
       // Vacío = cupo todavía sin definir (null): la landing no muestra número.
       cupo_facturas_arca: cupoArca.trim() === '' ? null : Number(cupoArca),
+      // Vacío = el plan no ofrece pago anual (null): la landing no muestra el selector.
+      descuento_anual_pct: descuentoAnual.trim() === '' ? null : Number(descuentoAnual),
       activo,
       // Lista completa en el orden del contrato, no en el orden de clicks.
       funciones: Object.keys(FUNCIONES).filter((codigo) => funciones.includes(codigo)),
@@ -181,6 +198,19 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
           error={errores.cupoArca}
           disabled={guardando}
           ayuda="Vacío = todavía sin definir; la landing no muestra número."
+        />
+        <Field
+          label="Descuento por pago anual (%)"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          max="100"
+          step="1"
+          value={descuentoAnual}
+          onChange={(e) => setDescuentoAnual(e.target.value)}
+          error={errores.descuentoAnual}
+          disabled={guardando}
+          ayuda="Entero de 0 a 100. Vacío = el plan no ofrece pago anual."
         />
       </div>
 

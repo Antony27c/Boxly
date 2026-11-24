@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GraciasDemo from '@/pages/GraciasDemo'
@@ -28,7 +28,10 @@ const servicioSuscripcion = vi.hoisted(() => ({
   activarCobro: vi.fn(),
   cancelarCobro: vi.fn(),
 }))
-vi.mock('@/services/suscripcion', () => ({ suscripcionService: servicioSuscripcion }))
+vi.mock('@/services/suscripcion', async (importOriginal) => ({
+  ...(await importOriginal()),
+  suscripcionService: servicioSuscripcion,
+}))
 
 function usuarioCon(rol, token = 'tok') {
   return { token, usuario: { id: 5, nombre: 'Ana', apellido: 'Pérez', rol }, autenticado: true }
@@ -45,6 +48,17 @@ const DEMO_VENCIDA = {
   max_personal: 10,
   proximo_monto: 79000,
 }
+
+const PLANES = [
+  { codigo: 'esencial', nombre: 'Esencial', precio_mensual: 39000, max_personal: 3, funciones: ['gestion', 'whatsapp_manual'] },
+  {
+    codigo: 'pro',
+    nombre: 'Pro',
+    precio_mensual: 79000,
+    max_personal: 10,
+    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'telegram_automatico', 'arca'],
+  },
+]
 
 function Ubicacion() {
   const { pathname } = useLocation()
@@ -90,6 +104,39 @@ describe('GraciasDemo', () => {
     expect(screen.getByText('Tu demo terminó el 20/11.')).toBeInTheDocument()
     expect(screen.getByText(/Tenés hasta el 23\/11 para elegir un plan/)).toBeInTheDocument()
     expect(screen.getByText(/después el acceso se suspende/)).toBeInTheDocument()
+  })
+
+  it('ofrece seguir con Pro destacado y Esencial como opción secundaria', async () => {
+    servicioSuscripcion.planes.mockResolvedValue(PLANES)
+    montarGracias()
+
+    const seguir = await screen.findByRole('button', { name: 'Seguí con Pro' })
+    expect(seguir.closest('[aria-current="true"]')).toHaveTextContent('Mantené todo lo que usaste estos 14 días')
+    expect(screen.getByRole('button', { name: 'Elegir Esencial' })).toBeInTheDocument()
+  })
+
+  it('"Seguí con Pro" activa el débito automático sin cambiar el plan', async () => {
+    servicioSuscripcion.planes.mockResolvedValue(PLANES)
+    servicioSuscripcion.activarCobro.mockResolvedValue({ init_point: '#mp-demo' })
+    montarGracias()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Seguí con Pro' }))
+    await waitFor(() => expect(servicioSuscripcion.activarCobro).toHaveBeenCalledWith('tok'))
+    expect(servicioSuscripcion.cambiarPlan).not.toHaveBeenCalled()
+    await waitFor(() => expect(window.location.hash).toBe('#mp-demo'))
+  })
+
+  it('elegir Esencial avisa qué deja de tener antes de confirmar', async () => {
+    servicioSuscripcion.planes.mockResolvedValue(PLANES)
+    montarGracias()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Elegir Esencial' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText('Con Esencial dejás de tener:')).toBeInTheDocument()
+    expect(dialogo).toHaveTextContent('Avisos automáticos por WhatsApp')
+    expect(dialogo).toHaveTextContent('Avisos automáticos por Telegram')
+    expect(dialogo).toHaveTextContent('Facturación electrónica ARCA')
+    expect(servicioSuscripcion.cambiarPlan).not.toHaveBeenCalled()
   })
 
   it('envía solo lo respondido y va a /suscripcion', async () => {

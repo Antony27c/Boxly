@@ -163,3 +163,4 @@ ejemplo, una vez por semana o después de incidentes de red).
 
 - **Suscripciones MP sin reconciliación:** no hay forma de consultar desde la API el estado real de la preapproval en MP ni de pausarla o reactivarla (solo activar, cancelar y el webhook); sumarlo cambia el contrato de `docs/Suscripciones.md`.
 - **Webhooks de MP con parámetros IPN legacy:** los routers todavía aceptan `topic` e `id` en la query; IPN está deprecado y se pueden quitar cuando se confirme que ninguna cuenta productiva los usa (sin firma válida igual dan 401).
+- **Pago anual:** el descuento se muestra, pero el cobro anual no está implementado (`planes.descuento_anual_pct` es solo informativo; Mercado Pago cobra mes a mes).

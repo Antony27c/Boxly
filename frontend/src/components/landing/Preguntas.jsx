@@ -33,15 +33,15 @@ const PREGUNTAS = [
     pregunta: '¿Qué diferencia hay entre los planes?',
     respuesta: [
       'Esencial trae la gestión diaria: clientes, vehículos, turnos, órdenes con fotos, inventario con avisos de stock mínimo, cobros con registro del pago en el local, métricas básicas, portal del cliente, avisos por email y mensajes de WhatsApp armados para que los mandes desde tu teléfono.',
-      'Pro suma los avisos automáticos por WhatsApp y la facturación electrónica ARCA. Profesional suma recordatorios automáticos de service y personalización de marca. Esas funciones están en desarrollo: en la sección Planes las marcamos como "Próximamente".',
+      'Pro suma los avisos automáticos por WhatsApp y Telegram, y la facturación electrónica ARCA con un cupo mensual de facturas. Profesional suma más facturas ARCA por mes, recordatorios automáticos de service y personalización de marca.',
       'Además, cada plan tiene un límite de personas del equipo.',
     ],
   },
   {
     pregunta: '¿Puedo facturar con ARCA desde Boxly?',
     respuesta: [
-      'Todavía no: está en desarrollo. Cuando esté, vas a poder emitir la factura electrónica de una reparación con una acción y tu confirmación.',
-      'Va a venir incluida en los planes Pro y Profesional. En Esencial se va a poder sumar como adicional.',
+      'Sí: emitís la factura electrónica de una reparación con una acción y tu confirmación.',
+      'Viene incluida en los planes Pro y Profesional, con distinto cupo mensual de facturas. En Esencial es un pack aparte que se paga por separado, solo si lo necesitás.',
     ],
   },
   {

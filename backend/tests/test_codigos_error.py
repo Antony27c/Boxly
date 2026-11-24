@@ -42,8 +42,9 @@ MSG_LECTURA = "El taller está en solo lectura por falta de pago de la suscripci
 MSG_TALLER = "El taller está suspendido. Comunicate con Boxly."
 MSG_SOPORTE = "El modo soporte es de solo lectura"
 MSG_SIN_ACCESO = "El taller no te dio acceso de soporte"
+# Esencial permite 2 personas (decisión del dueño, tarea V3; antes eran 3).
 MSG_LIMITE = (
-    "Tu plan permite hasta 3 usuarios del personal. "
+    "Tu plan permite hasta 2 usuarios del personal. "
     "Pasá a un plan mayor para sumar más."
 )
 MSG_PLAN = "Tu personal activo supera el límite de ese plan"

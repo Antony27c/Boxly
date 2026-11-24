@@ -19,11 +19,19 @@ Decisiones del dueño del 2026-11-23. **Este documento reemplaza** las partes de
 | Cobro del abono | **Mercado Pago**, con débito automático (ya hecho en S2). **Sin transferencias.** La cuenta de Mercado Pago del abono es separada de la de los cobros a clientes de cada taller: nunca se mezclan cuentas ni fondos. |
 | Mercado Pago de los talleres | Se mantiene para los cobros de los talleres a sus clientes. La forma de conectar la cuenta de cada taller queda pendiente. |
 
+## 1b. Empujar a Pro y Profesional (decisión del dueño, 2026-11-23)
+
+- Las tarjetas de la landing muestran la lista completa de funciones en los tres planes, con lo no incluido en gris.
+- Pro aparece como "Recomendado".
+- Debajo de cada precio va el precio por día.
+- Selector de pago anual: aparece solo si el superadmin carga `descuento_anual_pct` en algún plan. El cobro anual todavía no está implementado.
+- Al terminar la demo, "Seguí con Pro" aparece destacado, y se muestra lo que se pierde al bajar a Esencial.
+
 ## 2. Pendiente (no inventar ni prometer)
 
 - **Precios:** quedan como referencia de trabajo $35.000 (Esencial), $79.000 (Pro) y $169.000 (Profesional) por mes. No son los precios comerciales definitivos.
 - **Cupos:** de WhatsApp, de ARCA y de órdenes. No se confirmaron los topes viejos de 100, 300 y 1.000.
-- **Límites de personal:** 3, 10 y sin límite, aceptados en forma tentativa y con el sin límite en revisión. Se mantienen en el sistema como valores editables.
+- **Límites de personal:** 2 (Esencial, bajado de 3 por decisión del dueño el 2026-11-23 para empujar a Pro), 10 y sin límite, aceptados en forma tentativa y con el sin límite en revisión. Se mantienen en el sistema como valores editables.
 - **Comercial y fiscal:** precio del adicional ARCA, excedentes, política de ajustes, pago anual, proveedor ARCA, condición fiscal de Boxly y comprobantes propios de Boxly.
 - **Mercado Pago:** comisión y plazo de acreditación.
 - **Detalles de la personalización de marca:** dominio propio, número de WhatsApp propio, costos.
@@ -59,7 +67,7 @@ Decisiones del dueño del 2026-11-23. **Este documento reemplaza** las partes de
 
 **Cupo de facturas ARCA por plan:** es un campo `cupo_facturas_arca` en `planes`, entero o null, que edita el superadmin. Mientras sea null, la landing no muestra ningún número (los cupos siguen pendientes).
 
-**Cómo muestra la landing una función que todavía no existe:** sin tilde de "incluido", con otro ícono y texto atenuado, y la marca "Próximamente". Así no parece que ya funciona.
+**Cómo se muestran las funciones de cada plan:** todas como parte del plan, con el mismo tilde de incluido y sin la etiqueta "Próximamente". Lo decidió el dueño el 2026-11-23. Las que todavía no existen (WhatsApp y Telegram automáticos, ARCA, recordatorios y marca propia) están listadas en `docs/Disponibilidad.md` y hay que construirlas.
 
 El helper `taller_tiene(db, taller, funcion) -> bool` mira el plan y los adicionales del taller. Las funciones que todavía no existen tienen su código, pero nada las usa hasta que se construyan.
 

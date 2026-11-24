@@ -510,8 +510,8 @@ export const PREGUNTAS = [
     respuesta: [
       'Los planes no tienen las mismas funciones: Esencial cubre la gestión diaria y los superiores suman automatización. Además, cada plan define cuánto personal entra.',
       'Esencial: clientes, vehículos, turnos, órdenes con fotos, historial de órdenes del vehículo, inventario con avisos de stock mínimo, cobros con registro del pago en el local, métricas básicas, portal del cliente, avisos por email y WhatsApp manual (Boxly arma el mensaje y el taller lo manda desde su teléfono).',
-      'Pro: todo Esencial, más avisos automáticos por WhatsApp de turnos y estados (próximamente) y facturas electrónicas ARCA emitidas desde Boxly (próximamente).',
-      'Profesional: todo Pro, más recordatorios automáticos de service (próximamente) y personalización de marca (próximamente).',
+      'Pro: todo Esencial, más avisos automáticos por WhatsApp y Telegram de turnos y estados, y facturación electrónica ARCA incluida, con un cupo mensual de facturas.',
+      'Profesional: todo Pro, más facturas ARCA por mes, recordatorios automáticos de service y personalización de marca.',
       'Los precios de cada plan los ves en Suscripción.',
     ],
     enlace: { a: '/suscripcion', texto: 'Suscripción' },
@@ -522,9 +522,8 @@ export const PREGUNTAS = [
     roles: ['admin'],
     pregunta: '¿Qué es el adicional ARCA?',
     respuesta: [
-      'Próximamente: la facturación electrónica ARCA todavía no está disponible.',
-      'Va a servir para emitir la factura de una reparación desde Boxly, con una acción y tu confirmación. No es para cargar facturas de proveedores ni para emitir facturas sin que nadie intervenga.',
-      'Pro y Profesional la van a incluir. En Esencial se va a poder sumar como adicional mensual; el precio todavía no está definido.',
+      'La facturación electrónica ARCA sirve para emitir la factura de una reparación desde Boxly, con una acción y tu confirmación. No es para cargar facturas de proveedores ni para emitir facturas sin que nadie intervenga.',
+      'Pro y Profesional la incluyen, con distinto cupo mensual de facturas. En Esencial es un pack aparte que se paga por separado, solo si lo necesitás; el precio todavía no está definido.',
     ],
   },
   {

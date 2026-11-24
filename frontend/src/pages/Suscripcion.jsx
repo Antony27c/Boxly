@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react'
+import ElegirPlan, { ListaFunciones } from '@/components/suscripcion/ElegirPlan'
+import { AVISO_COBRO_NO_HABILITADO, funcionesDelTaller } from '@/components/suscripcion/planes'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -23,8 +25,7 @@ import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
 import useSuscripcion from '@/hooks/useSuscripcion'
 import { formatearFecha, formatearFechaHora } from '@/lib/fechas'
-import { esProximamente, etiquetaFuncion, funcionesDePlan, ordenar } from '@/lib/funcionesPlan'
-import { esErrorDePlanExcedido, suscripcionService } from '@/services/suscripcion'
+import { suscripcionService } from '@/services/suscripcion'
 import { pesos } from '@/utils/formato'
 
 const CLASE_TARJETA = 'rounded-box border border-graphite-600 bg-graphite-800 p-5'
@@ -59,29 +60,6 @@ function textoPersonal(plan, activo, maximo) {
   return `Hasta ${maximo} del personal`
 }
 
-/* Lista de funciones de un plan, con "Próximamente" en las que todavía no existen
-   (docs/Oferta.md). */
-function ListaFunciones({ funciones, className = '' }) {
-  if (funciones.length === 0) return null
-  return (
-    <ul className={`space-y-1.5 text-sm text-muted ${className}`}>
-      {funciones.map((codigo) => (
-        <li key={codigo} className="flex flex-wrap items-center gap-2">
-          <Icono nombre="check" className="h-4 w-4 shrink-0 text-amber-texto" />
-          <span>{etiquetaFuncion(codigo)}</span>
-          {esProximamente(codigo) && <Badge>Próximamente</Badge>}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-// Las del taller: las del plan más los adicionales (funciones_efectivas), o las del plan.
-function funcionesDelTaller(suscripcion) {
-  if (Array.isArray(suscripcion?.funciones_efectivas)) return ordenar(suscripcion.funciones_efectivas)
-  return funcionesDePlan(suscripcion?.plan)
-}
-
 /* Los pagos manuales los carga Boxly (el superadmin no es del taller y el
    servidor no manda su nombre); null en un cobro de Mercado Pago es automático. */
 function quienRegistro(pago) {
@@ -89,52 +67,19 @@ function quienRegistro(pago) {
   return pago.medio === 'manual' ? 'Boxly' : 'Automático'
 }
 
-/* El 409 del servidor ("Tu personal activo supera el límite de ese plan") no dice
-   cuántos son ni qué hacer: con la suscripción a mano lo explicamos. */
-function mensajeErrorPlan(problema, plan, suscripcion) {
-  if (!esErrorDePlanExcedido(problema)) return problema?.message
-  const activos = suscripcion?.personal_activo
-  if (activos == null || !plan?.max_personal) return problema.message
-  return (
-    `Tenés ${activos} personas activas en el personal y el plan ${plan.nombre} permite ` +
-    `hasta ${plan.max_personal}. Desactivá a quien ya no trabaje en el taller desde ` +
-    'Usuarios, o elegí un plan más grande.'
-  )
-}
-
 export default function Suscripcion() {
   const { token } = useAuth()
   const { avisar } = useToast()
   const { suscripcion, cargando, error, recargar } = useSuscripcion()
 
-  const cargarPlanes = useCallback((t) => suscripcionService.planes(t), [])
-  const { datos: planes } = useRecurso(cargarPlanes)
   const cargarPagos = useCallback((t) => suscripcionService.pagos(t), [])
   const { datos: pagos, cargando: cargandoPagos, error: errorPagos } = useRecurso(cargarPagos)
 
-  const [planAConfirmar, setPlanAConfirmar] = useState(null)
-  const [cambiandoPlan, setCambiandoPlan] = useState(false)
-  const [errorPlan, setErrorPlan] = useState('')
   const [confirmarBaja, setConfirmarBaja] = useState(false)
   const [cancelando, setCancelando] = useState(false)
   const [activando, setActivando] = useState(false)
   const [errorCobro, setErrorCobro] = useState('')
   const [avisoCobro, setAvisoCobro] = useState('')
-
-  async function confirmarCambioPlan() {
-    setCambiandoPlan(true)
-    setErrorPlan('')
-    try {
-      await suscripcionService.cambiarPlan(planAConfirmar.codigo, token)
-      avisar('Plan actualizado.')
-      setPlanAConfirmar(null)
-      await recargar()
-    } catch (problema) {
-      setErrorPlan(mensajeErrorPlan(problema, planAConfirmar, suscripcion))
-    } finally {
-      setCambiandoPlan(false)
-    }
-  }
 
   async function activarCobro() {
     setActivando(true)
@@ -145,9 +90,7 @@ export default function Suscripcion() {
       window.location.assign(init_point)
     } catch (problema) {
       if (problema.status === 503) {
-        setAvisoCobro(
-          'El débito automático todavía no está habilitado. Escribinos y te ayudamos.',
-        )
+        setAvisoCobro(AVISO_COBRO_NO_HABILITADO)
       } else {
         setErrorCobro(problema.message)
       }
@@ -187,7 +130,6 @@ export default function Suscripcion() {
   const visual = estadoVisual(suscripcion)
   const avisoDemo = avisoAntesDeFinDemo(suscripcion)
   const sobran = personalExcedido(suscripcion.personal_activo, suscripcion.max_personal)
-  const planActual = suscripcion.plan?.codigo
   const listaPagos = pagos ?? []
 
   return (
@@ -269,44 +211,11 @@ export default function Suscripcion() {
           Planes
         </h2>
         <p className="mt-1 text-sm text-muted">
-          El precio nuevo rige desde el próximo período; el actual no se prorratea.
+          {esDemo(suscripcion)
+            ? 'Elegí cómo seguir cuando termine la demo.'
+            : 'El precio nuevo rige desde el próximo período; el actual no se prorratea.'}
         </p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(planes ?? []).map((plan) => {
-            const actual = plan.codigo === planActual
-            return (
-              <div
-                key={plan.codigo}
-                className={`${CLASE_TARJETA} flex flex-col ${actual ? 'border-amber/60' : ''}`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-ink">{plan.nombre}</h3>
-                  {actual && <Badge tono="ok">Plan actual</Badge>}
-                </div>
-                <p className="mt-2 text-2xl font-bold text-ink">
-                  {pesos(plan.precio_mensual)}
-                  <span className="text-sm font-normal text-muted">/mes</span>
-                </p>
-                <p className="mt-1 text-sm text-muted">
-                  {plan.max_personal ? `Hasta ${plan.max_personal} del personal` : 'Personal sin límite'}
-                </p>
-                <ListaFunciones funciones={funcionesDePlan(plan)} className="mt-3 flex-1" />
-                {!actual && (
-                  <Button
-                    variante="secundario"
-                    className="mt-4"
-                    onClick={() => {
-                      setErrorPlan('')
-                      setPlanAConfirmar(plan)
-                    }}
-                  >
-                    Pasar a este plan
-                  </Button>
-                )}
-              </div>
-            )
-          })}
-        </div>
+        <ElegirPlan suscripcion={suscripcion} onCambio={recargar} />
       </section>
 
       <section className={CLASE_TARJETA} aria-labelledby="cobro-suscripcion">
@@ -396,19 +305,6 @@ export default function Suscripcion() {
         )}
       </section>
 
-      <Confirmacion
-        abierto={planAConfirmar != null}
-        titulo={`Pasar a ${planAConfirmar?.nombre ?? ''}`}
-        mensaje={`El plan ${planAConfirmar?.nombre ?? ''} cuesta ${pesos(
-          planAConfirmar?.precio_mensual,
-        )} por mes. El precio nuevo rige desde el próximo período; el actual no se prorratea.`}
-        error={errorPlan}
-        procesando={cambiandoPlan}
-        textoConfirmar="Cambiar plan"
-        peligrosa={false}
-        onConfirmar={confirmarCambioPlan}
-        onCerrar={() => setPlanAConfirmar(null)}
-      />
       <Confirmacion
         abierto={confirmarBaja}
         titulo="Cancelar cobro automático"

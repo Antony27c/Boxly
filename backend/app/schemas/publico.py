@@ -22,6 +22,8 @@ class PlanPublico(BaseModel):
     # Facturas ARCA por mes incluidas; null = pendiente y la landing no muestra
     # ningún número.
     cupo_facturas_arca: Optional[int] = None
+    # % de descuento por pago anual (solo informativo); null = sin descuento.
+    descuento_anual_pct: Optional[int] = None
 
 
 class ContactoCreate(BaseModel):

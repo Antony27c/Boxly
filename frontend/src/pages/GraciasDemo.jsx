@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import Textarea from '@/components/ui/Textarea'
+import ElegirPlan from '@/components/suscripcion/ElegirPlan'
 import { fechasFinDemo, DIAS_PARA_ELEGIR } from '@/components/suscripcion/finDemo'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
@@ -133,7 +134,7 @@ export default function GraciasDemo() {
   const { token } = useAuth()
   const { avisar } = useToast()
   const navegar = useNavigate()
-  const { suscripcion } = useSuscripcion()
+  const { suscripcion, recargar } = useSuscripcion()
   const [datos, setDatos] = useState(VACIO)
   const [error, setError] = useState('')
   const [accion, setAccion] = useState(null) // 'enviar' | 'saltear' mientras espera
@@ -210,6 +211,20 @@ export default function GraciasDemo() {
           Si no elegís uno, después el acceso se suspende.
         </p>
       </div>
+
+      {/* Cómo seguir (V2): con la demo, Pro preseleccionado y destacado. */}
+      {suscripcion && (
+        <section aria-labelledby="como-seguir" className="mt-6">
+          <h2 id="como-seguir" className="text-lg font-semibold">
+            Cómo seguir
+          </h2>
+          <ElegirPlan
+            suscripcion={suscripcion}
+            onCambio={recargar}
+            antesDeIrAPagar={() => marcarEncuestaResuelta(token)}
+          />
+        </section>
+      )}
 
       <form
         onSubmit={enviar}

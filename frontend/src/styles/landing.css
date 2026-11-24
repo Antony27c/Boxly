@@ -169,3 +169,24 @@ main > section.landing-seccion:nth-of-type(even),
 .landing-saltar:focus-visible {
   transform: translateY(0);
 }
+
+/* Tarjetas de planes (components/landing/planes). Pro va destacado y, en
+   pantallas anchas, más alto que los demás; Profesional, con un borde superior
+   que le da peso de "lo más completo". Sin transform: la animación de
+   .landing-revelar ya lo usa. */
+.landing-plan--destacado {
+  border-color: rgb(var(--c-amber));
+  box-shadow: 0 18px 40px -22px rgb(var(--c-amber) / 0.55);
+}
+
+@media (min-width: 768px) {
+  .landing-plan--destacado {
+    z-index: 1;
+    margin-block: -1rem;
+    padding-block: 2.25rem;
+  }
+}
+
+.landing-plan--completo {
+  border-top: 3px solid rgb(var(--c-ink) / 0.55);
+}

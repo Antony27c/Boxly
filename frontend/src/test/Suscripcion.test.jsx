@@ -140,7 +140,7 @@ describe('Suscripcion', () => {
     expect(screen.getByText(/Personal sin límite/)).toBeInTheDocument()
   })
 
-  it('muestra las funciones del plan actual y las de cada plan, con "Próximamente"', async () => {
+  it('muestra las funciones del plan actual y las de cada plan, sin etiquetas de "próximamente"', async () => {
     servicio.obtener.mockResolvedValue(
       suscripcionCon('al_dia', { funciones_efectivas: ['gestion', 'whatsapp_manual', 'arca'] }),
     )
@@ -149,14 +149,14 @@ describe('Suscripcion', () => {
     const incluye = (await screen.findByText('Incluye tu plan')).parentElement
     // El adicional ARCA entra por funciones_efectivas, aunque el plan no lo traiga.
     expect(within(incluye).getByText('Facturación electrónica ARCA')).toBeInTheDocument()
-    expect(within(incluye).getAllByText('Próximamente')).toHaveLength(1)
+    expect(incluye).not.toHaveTextContent(/próximamente/i)
 
     const tarjeta = (await screen.findByRole('heading', { level: 3, name: 'Profesional' })).closest(
       'div.flex-col',
     )
     expect(within(tarjeta).getByText('Personalización de marca')).toBeInTheDocument()
     expect(within(tarjeta).getByText('Gestión del taller')).toBeInTheDocument()
-    expect(within(tarjeta).getAllByText('Próximamente')).toHaveLength(4)
+    expect(tarjeta).not.toHaveTextContent(/próximamente/i)
   })
 
   it('en gracia muestra la frase con el límite para pagar sin cortes', async () => {
@@ -204,6 +204,123 @@ describe('Suscripcion', () => {
     expect(aviso).toHaveTextContent('La demo termina el 07/12')
     expect(aviso).toHaveTextContent('3 días de solo lectura, hasta el 10/12, para elegir un plan')
     expect(aviso).toHaveTextContent('la cuenta se suspende')
+  })
+
+  it('Pro lleva la etiqueta "Recomendado"', async () => {
+    montar()
+    const titulo = await screen.findByRole('heading', { name: 'Pro', level: 3 })
+    const tarjeta = titulo.closest('div.flex-col')
+    expect(within(tarjeta).getByText('Recomendado')).toBeInTheDocument()
+    expect(screen.getAllByText('Recomendado')).toHaveLength(1)
+  })
+
+  it('bajar de Pro a Esencial lista lo que se pierde, según las funciones del taller', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', {
+        plan: PLANES[1],
+        personal_activo: 2,
+        max_personal: 10,
+        funciones_efectivas: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'telegram_automatico', 'arca'],
+      }),
+    )
+    montar()
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Pasar a este plan' }))[0]) // Esencial
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText('Con Esencial dejás de tener:')).toBeInTheDocument()
+    const perdidas = within(dialogo).getAllByRole('listitem').map((li) => li.textContent)
+    expect(perdidas).toHaveLength(3)
+    expect(perdidas.join(' ')).toMatch(/WhatsApp/)
+    expect(perdidas.join(' ')).toMatch(/Telegram/)
+    expect(perdidas.join(' ')).toMatch(/ARCA/)
+    expect(within(dialogo).getByRole('button', { name: 'Cambiar plan' })).toBeEnabled()
+  })
+
+  it('un adicional vigente no figura como pérdida', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', {
+        plan: PLANES[1],
+        max_personal: 10,
+        funciones_efectivas: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'arca'],
+        adicionales: [{ codigo: 'arca', desde: null, hasta: null }],
+      }),
+    )
+    montar()
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Pasar a este plan' }))[0]) // Esencial
+    const dialogo = await screen.findByRole('dialog')
+    const perdidas = within(dialogo).getAllByRole('listitem').map((li) => li.textContent)
+    expect(perdidas).toHaveLength(1)
+    expect(perdidas[0]).not.toMatch(/ARCA/)
+  })
+
+  it('subir de plan no muestra pérdidas', async () => {
+    montar()
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Pasar a este plan' }))[0]) // Pro
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).queryByText(/dejás de tener/)).not.toBeInTheDocument()
+  })
+
+  describe('con la demo', () => {
+    const DEMO = (extra) =>
+      suscripcionCon('solo_lectura', {
+        plan: PLANES[1],
+        tipo_acceso: 'demo',
+        vence_en: '2026-11-20',
+        personal_activo: 2,
+        max_personal: 10,
+        funciones_efectivas: PLANES[1].funciones,
+        ...extra,
+      })
+
+    it('Pro queda destacado con "Seguí con Pro" y Esencial como opción secundaria', async () => {
+      servicio.obtener.mockResolvedValue(DEMO())
+      montar()
+
+      const seguir = await screen.findByRole('button', { name: 'Seguí con Pro' })
+      const tarjetaPro = seguir.closest('[aria-current="true"]')
+      expect(tarjetaPro).toBeInTheDocument()
+      expect(within(tarjetaPro).getByText('Recomendado')).toBeInTheDocument()
+      expect(within(tarjetaPro).getByText('Mantené todo lo que usaste estos 14 días')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Elegir Esencial' })).toBeInTheDocument()
+      expect(screen.queryByText('Plan actual')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Pasar a este plan' })).not.toBeInTheDocument()
+    })
+
+    it('"Seguí con Pro" activa el cobro sin cambiar el plan', async () => {
+      servicio.obtener.mockResolvedValue(DEMO())
+      montar()
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguí con Pro' }))
+      await waitFor(() => expect(servicio.activarCobro).toHaveBeenCalledWith('tok'))
+      expect(servicio.cambiarPlan).not.toHaveBeenCalled()
+      await waitFor(() => expect(window.location.hash).toBe('#mp-init'))
+    })
+
+    it('elegir Esencial muestra lo que deja de tener y, al confirmar, cambia el plan y activa el cobro', async () => {
+      servicio.obtener.mockResolvedValue(DEMO())
+      montar()
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Elegir Esencial' }))
+      const dialogo = await screen.findByRole('dialog')
+      expect(within(dialogo).getByText('Con Esencial dejás de tener:')).toBeInTheDocument()
+      expect(within(dialogo).getAllByRole('listitem')).toHaveLength(2) // WhatsApp automático y ARCA
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Seguir con Esencial' }))
+
+      await waitFor(() => expect(servicio.cambiarPlan).toHaveBeenCalledWith('esencial', 'tok'))
+      await waitFor(() => expect(servicio.activarCobro).toHaveBeenCalled())
+    })
+
+    it('si el débito automático no está habilitado lo explica', async () => {
+      servicio.obtener.mockResolvedValue(DEMO())
+      servicio.activarCobro.mockRejectedValue(Object.assign(new Error('x'), { status: 503 }))
+      montar()
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguí con Pro' }))
+      expect(
+        (await screen.findAllByText('El débito automático todavía no está habilitado. Escribinos y te ayudamos.')).length,
+      ).toBeGreaterThan(0)
+    })
   })
 
   it('un piloto vigente dice "Piloto hasta …" y no muestra el aviso de la demo', async () => {
@@ -275,23 +392,37 @@ describe('Suscripcion', () => {
     expect(await within(dialogo).findByText('Tu personal activo supera el límite de ese plan')).toBeInTheDocument()
   })
 
-  it('el 409 por personal explica cuántos son y qué hacer', async () => {
+  it('el 409 por personal (alguien se sumó mientras tanto) explica cuántos son y qué hacer', async () => {
     servicio.obtener.mockResolvedValue(
-      suscripcionCon('al_dia', { plan: PLANES[1], personal_activo: 4, max_personal: 10 }),
+      suscripcionCon('al_dia', { plan: PLANES[2], personal_activo: 9, max_personal: null }),
     )
     servicio.cambiarPlan.mockRejectedValue(new ApiError('Otro texto cualquiera', 409, 'plan_personal_excedido'))
     montar()
 
     const botones = await screen.findAllByRole('button', { name: 'Pasar a este plan' })
-    fireEvent.click(botones[0]) // Esencial
+    fireEvent.click(botones[1]) // Pro
     const dialogo = await screen.findByRole('dialog')
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cambiar plan' }))
 
     expect(
       await within(dialogo).findByText(
-        /Tenés 4 personas activas en el personal y el plan Esencial permite hasta 3\. Desactivá/,
+        /Tenés 9 personas activas en el personal y el plan Pro permite hasta 10\. Desactivá/,
       ),
     ).toBeInTheDocument()
+  })
+
+  it('bajar a un plan donde no entra el personal se explica antes y no deja confirmar', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', { plan: PLANES[1], personal_activo: 4, max_personal: 10 }),
+    )
+    montar()
+
+    const botones = await screen.findAllByRole('button', { name: 'Pasar a este plan' })
+    fireEvent.click(botones[0]) // Esencial
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText(/tenés 4 personas activas y Esencial permite hasta 3/)).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Cambiar plan' })).toBeDisabled()
+    expect(servicio.cambiarPlan).not.toHaveBeenCalled()
   })
 
   it('activar cobro automático redirige al init_point de Mercado Pago', async () => {
@@ -360,7 +491,7 @@ describe('Suscripcion', () => {
 
   it('un 409 sin el código de plan muestra el mensaje del servidor tal cual', async () => {
     servicio.obtener.mockResolvedValue(
-      suscripcionCon('al_dia', { plan: PLANES[1], personal_activo: 4, max_personal: 10 }),
+      suscripcionCon('al_dia', { plan: PLANES[1], personal_activo: 3, max_personal: 10 }),
     )
     servicio.cambiarPlan.mockRejectedValue(new ApiError('El plan cambió mientras tanto', 409))
     montar()
@@ -371,7 +502,7 @@ describe('Suscripcion', () => {
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cambiar plan' }))
 
     expect(await within(dialogo).findByText('El plan cambió mientras tanto')).toBeInTheDocument()
-    expect(within(dialogo).queryByText(/Tenés 4 personas activas/)).not.toBeInTheDocument()
+    expect(within(dialogo).queryByText(/Tenés 3 personas activas/)).not.toBeInTheDocument()
   })
 
   it('con la suscripción suspendida el 403 del GET la marca suspendida, sin recargar en bucle', async () => {

@@ -22,8 +22,9 @@ MSG_SIN_PERMISO = "No tenés permisos para esta acción"
 MSG_VENCIDA = "La suscripción del taller está vencida"
 MSG_LECTURA = "El taller está en solo lectura por falta de pago de la suscripción"
 MSG_TOPE_PLAN = "Tu personal activo supera el límite de ese plan"
+# Esencial permite 2 personas (decisión del dueño, tarea V3; antes eran 3).
 MSG_CUPO = (
-    "Tu plan permite hasta 3 usuarios del personal. "
+    "Tu plan permite hasta 2 usuarios del personal. "
     "Pasá a un plan mayor para sumar más."
 )
 
@@ -49,7 +50,7 @@ def _vence(taller_id: int, fecha: date) -> None:
 
 @pytest.fixture
 def datos():
-    """Taller 1 (esencial, 3 de personal = al límite) y taller 2 (pro, 4 de
+    """Taller 1 (esencial, 3 de personal = uno más que su límite de 2) y taller 2 (pro, 4 de
     personal, para probar la baja de plan), más un superadmin."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
@@ -131,7 +132,8 @@ def test_estado_segun_vencimiento(api, datos):
         assert cuerpo["vence_en"] == vence.isoformat()
         assert cuerpo["dias_para_vencer"] == (vence - hoy).days
         assert cuerpo["plan"]["codigo"] == "esencial"
-        assert cuerpo["max_personal"] == 3
+        assert cuerpo["max_personal"] == 2  # Esencial: 2 desde la tarea V3
+        # El exceso no da de baja a nadie: siguen los 3.
         assert cuerpo["personal_activo"] == 3
         assert cuerpo["proximo_monto"] == "35000.00"
 
@@ -292,7 +294,7 @@ def test_bajar_de_plan_con_personal_de_mas_da_409(api, datos):
     hs = datos["headers"]["superadmin"]
     t2 = datos["taller2_id"]
 
-    # Taller 2: pro con 4 de personal -> esencial (máx. 3) no entra.
+    # Taller 2: pro con 4 de personal -> esencial (máx. 2) no entra.
     r = api.put(f"/api/v1/plataforma/talleres/{t2}/plan", headers=hs,
                 json={"plan": "esencial"})
     assert r.status_code == 409
@@ -368,7 +370,7 @@ def test_edicion_de_planes_por_superadmin(api, datos):
     assert r.status_code == 200
     planes = {p["codigo"]: p for p in r.json()}
     assert set(planes) == {"esencial", "pro", "profesional"}
-    assert planes["esencial"]["max_personal"] == 3
+    assert planes["esencial"]["max_personal"] == 2  # decisión del dueño (V3)
     assert planes["profesional"]["max_personal"] is None
 
     # Edición parcial: precio y sacar el límite de pro.
@@ -409,7 +411,7 @@ def _body_usuario(email, rol="mecanico", **extra):
 def test_limite_de_personal_al_crear(api, datos):
     h = datos["headers"]["admin"]
 
-    # Taller 1 en esencial (máx. 3) ya tiene 3 de personal: el cuarto no entra.
+    # Taller 1 en esencial (máx. 2) ya tiene 3 de personal: el cuarto no entra.
     r = api.post("/api/v1/users", headers=h,
                  json=_body_usuario("mec4@x.com"))
     assert r.status_code == 409
@@ -433,16 +435,20 @@ def test_limite_de_personal_al_reactivar(api, datos):
     assert r.status_code == 409
     assert r.json()["detail"] == MSG_CUPO
 
-    # Si se libera lugar (se desactiva a otro), la reactivación entra.
+    # Con 3 activos y máximo 2, liberar un lugar no alcanza: hay que bajar a 1.
     assert api.delete(f"/api/v1/users/{ids['mecanico']}", headers=h).status_code == 200
+    r = api.put(f"/api/v1/users/{ids['inactivo']}", headers=h,
+                json={"activo": True})
+    assert r.status_code == 409
+    assert api.delete(f"/api/v1/users/{ids['recepcion']}", headers=h).status_code == 200
     r = api.put(f"/api/v1/users/{ids['inactivo']}", headers=h,
                 json={"activo": True})
     assert r.status_code == 200, r.text
     assert r.json()["activo"] is True
 
-    # Y actualizar a alguien que ya cuenta no gasta cupo.
-    assert api.put(f"/api/v1/users/{ids['recepcion']}", headers=h,
-                   json={"nombre": "Recep Editada"}).status_code == 200
+    # Y actualizar a alguien que ya cuenta no gasta cupo (con el cupo lleno).
+    assert api.put(f"/api/v1/users/{ids['inactivo']}", headers=h,
+                   json={"nombre": "Mec Editado"}).status_code == 200
 
 
 # --- Aislamiento entre talleres y roles ----------------------------------------

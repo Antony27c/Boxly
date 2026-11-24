@@ -44,22 +44,6 @@ export const PLANES_RESPALDO = [
   },
 ]
 
-/* Funciones que todavía no existen en Boxly: se muestran con "Próximamente".
-   Sale de docs/Disponibilidad.md (C1) más lo construido después: WhatsApp
-   manual (W1), pago en el local (W2) y avisos de stock mínimo (W3) ya existen.
-   Sin fechas: cuando una función se construye, se saca de acá. */
-export const PROXIMAMENTE = new Set([
-  'whatsapp_automatico',
-  'telegram_automatico',
-  'arca',
-  'recordatorios_service',
-  'marca_propia',
-])
-
-export function esProximamente(codigo) {
-  return PROXIMAMENTE.has(codigo)
-}
-
 // Lo que cubre "gestion" (la gestión diaria), contado en la landing.
 export const DETALLE_GESTION = [
   'Clientes, vehículos y turnos',

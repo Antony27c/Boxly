@@ -156,6 +156,6 @@ def test_modo_soporte_no_actualiza_ultimo_uso(api, datos):
 
 def test_listado_trae_max_personal(api, datos):
     resumenes = _resumenes(api, datos)
-    assert resumenes[1]["max_personal"] == 3       # esencial
+    assert resumenes[1]["max_personal"] == 2       # esencial (2 desde la tarea V3)
     assert resumenes[datos["norte_id"]]["max_personal"] == 10   # pro
     assert resumenes[datos["sur_id"]]["max_personal"] is None   # profesional

@@ -64,6 +64,11 @@ class Plan(Base):
     límite de personal (docs/Oferta.md)."""
 
     __tablename__ = "planes"
+    __table_args__ = (
+        CheckConstraint(
+            "descuento_anual_pct BETWEEN 0 AND 100", name="ck_planes_descuento_anual_pct"
+        ),
+    )
 
     codigo: Mapped[str] = mapped_column(String(20), primary_key=True)
     nombre: Mapped[str] = mapped_column(String(60), nullable=False)
@@ -75,6 +80,9 @@ class Plan(Base):
     # Facturas ARCA por mes que incluye el plan. NULL = cupo pendiente de definir
     # (docs/Oferta.md): la landing no muestra ningún número.
     cupo_facturas_arca: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Descuento por pago anual, en %. Solo se muestra: el cobro anual todavía no
+    # existe (docs/Despliegue.md, pendientes). NULL = sin descuento anual.
+    descuento_anual_pct: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -95,7 +103,8 @@ FUNCIONES_PROFESIONAL = (
 )
 
 PLANES_INICIALES = (
-    ("esencial", "Esencial", Decimal("35000.00"), 3, list(FUNCIONES_ESENCIAL)),
+    # Esencial con 2 personas: decisión del dueño para empujar hacia Pro.
+    ("esencial", "Esencial", Decimal("35000.00"), 2, list(FUNCIONES_ESENCIAL)),
     ("pro", "Pro", Decimal("79000.00"), 10, list(FUNCIONES_PRO)),
     ("profesional", "Profesional", Decimal("169000.00"), None, list(FUNCIONES_PROFESIONAL)),
 )
