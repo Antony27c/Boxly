@@ -1,4 +1,4 @@
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import BackgroundTasks, HTTPException, UploadFile
@@ -11,8 +11,13 @@ import anyio
 
 from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
 from app.db.session import SessionLocal, fijar_taller
-from app.schemas.orden import ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate
+from app.schemas.orden import (
+    ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, NotificacionResponse,
+    OrdenCreate, OrdenUpdate, PagoLocalRequest,
+)
+from app.api.v1.pagos.service import marcar_aprobado
 from app.models.orden import Orden
+from app.models.pago import Pago
 from app.models.usuario import RolUsuario, Usuario, es_admin
 from app.models.vehiculo import Vehiculo
 from app.models.detalle_orden import DetalleOrden
@@ -103,6 +108,44 @@ class OrdenService:
         orden = orden_repository.guardar_cambios(db, orden)
         self._avisar_cobro(orden, background_tasks)
         return orden
+
+    def registrar_pago_local(self, db: Session, orden_id: int, datos: PagoLocalRequest) -> Orden:
+        """Pago presencial (efectivo, tarjeta, transferencia u otro) de un cobro emitido.
+
+        Queda como un `Pago` aprobado más: la orden pasa a pagada por el mismo
+        camino que un pago online aprobado y las métricas lo cuentan igual.
+        """
+        # Lock de la orden: dos registros simultáneos no pueden pagarla dos veces.
+        if db.scalar(select(Orden.id).where(Orden.id == orden_id).with_for_update()) is None:
+            raise HTTPException(status_code=404, detail="Orden no encontrada")
+        orden = self.obtener_detalle_orden(db, orden_id)
+        if orden.pagada:
+            raise HTTPException(status_code=409, detail="La orden ya está pagada")
+        if orden.cobro_estado != "aprobado" or orden.costo_final is None:
+            raise HTTPException(
+                status_code=409, detail="La orden no tiene un cobro emitido para registrar el pago"
+            )
+        # Sin pagos parciales por ahora: se registra el cobro completo.
+        if datos.monto != orden.costo_final:
+            raise HTTPException(
+                status_code=422,
+                detail=f"El monto tiene que ser el del cobro emitido: $ {orden.costo_final:,.2f}",
+            )
+        # Un intento de pago online que quedó abierto no puede cobrarse después.
+        for pendiente in orden.pagos:
+            if pendiente.estado == "pendiente":
+                pendiente.estado = "rechazado"
+        referencia = (datos.referencia or "").strip() or None
+        pago = Pago(
+            orden_id=orden.id, monto=orden.costo_final, estado="pendiente",
+            medio=datos.medio, referencia=referencia,
+        )
+        db.add(pago)
+        db.flush()
+        marcar_aprobado(pago)
+        db.commit()
+        db.expire(orden)
+        return self.obtener_detalle_orden(db, orden_id)
 
     def listar_estados(self) -> List[EstadoOrdenResponse]:
         return [

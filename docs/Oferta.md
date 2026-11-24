@@ -110,6 +110,25 @@ Es dato de la plataforma sobre el taller, sin datos de clientes.
 
 Las rutas `/suscripcion*` ya quedan libres del bloqueo, así que la encuesta anda aunque el taller esté en solo lectura o suspendido.
 
+## 4b. Lo que falta construir para que Esencial cumpla lo que promete
+
+C1 (`docs/Disponibilidad.md`) encontró tres funciones de Esencial que todavía no están completas. Son funciones ya decididas para el plan, no inventadas:
+
+- **W1. WhatsApp manual** (solo frontend).
+  - Botón "WhatsApp" en la orden, el turno y el cliente. Abre `https://wa.me/<teléfono>?text=<mensaje>` con un mensaje armado según el evento: turno confirmado, recordatorio del turno, auto recibido, presupuesto o trabajos a cotizar, auto listo y link al portal.
+  - El taller lo manda desde su propio teléfono. No hay integración, ni cupo, ni costo.
+  - El teléfono se normaliza al formato argentino (`549` + código de área + número). Si falta, el botón queda deshabilitado con su explicación.
+  - Los textos van en un solo módulo de plantillas.
+- **W2. Cobro registrado en el local** (backend y frontend).
+  - Recepción o el administrador registran el pago presencial de una orden con cobro emitido: `POST /api/v1/ordenes/{id}/pago-local` con `{medio: efectivo|tarjeta|transferencia|otro, monto, referencia?}`.
+  - El pago queda en `pagos` con su medio y la orden queda pagada, igual que con un pago online aprobado. El mecánico recibe 403.
+  - Se ve en el detalle de la orden, en el portal ("Pagada") y en las métricas.
+  - El "transferencia" de acá es el cobro del taller a su cliente, no el abono de Boxly.
+- **W3. Aviso de stock mínimo** (backend).
+  - Cuando un descuento o un ajuste deja un repuesto en `stock_minimo` o por debajo, se crea una notificación interna para el administrador y recepción.
+  - Hay una sola notificación por cruce del umbral: no se repite mientras siga bajo. Se rearma cuando el stock vuelve a subir por encima.
+- **Historial del vehículo:** hoy son sus órdenes. La landing tiene que decir "historial de órdenes del vehículo" y no prometer más.
+
 ## 5. Tareas
 
 | Tarea | Qué | Depende de |

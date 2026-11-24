@@ -133,9 +133,9 @@ def test_activar_devuelve_init_point_y_guarda_preapproval(api, datos, monkeypatc
     r = api.post(f"{BASE}/cobro-automatico", headers=datos["headers"]["admin"])
     assert r.status_code == 201
     assert r.json()["init_point"] == "https://mp.test/init"
-    assert llamadas[0]["reason"] == "Boxly · plan Básico · Taller principal"
+    assert llamadas[0]["reason"] == "Boxly · plan Esencial · Taller principal"
     assert llamadas[0]["external_reference"] == "taller-1"
-    assert llamadas[0]["monto"] == Decimal("15000.00")
+    assert llamadas[0]["monto"] == Decimal("35000.00")
     assert llamadas[0]["back_url"] == "http://front.test/suscripcion"
     with SessionLocal() as db:
         taller = _taller(db)
@@ -408,3 +408,86 @@ def test_simular_sin_token_funciona_en_dev_debug(api, datos, monkeypatch):
     r = api.post(f"{BASE}/simular-cobro", headers=datos["headers"]["admin"],
                  json={"estado": "aprobado"})
     assert r.status_code == 200
+
+
+def test_simular_cobro_no_registra_usuario(api, datos, monkeypatch):
+    """Un cobro de Mercado Pago (real o simulado) queda con registrado_por NULL."""
+    _settings(monkeypatch)
+    r = api.post(f"{BASE}/simular-cobro", headers=datos["headers"]["admin"],
+                 json={"estado": "aprobado"})
+    assert r.status_code == 200
+    with SessionLocal() as db:
+        pagos = _pagos(db, taller_id=1)
+        assert len(pagos) == 1
+        assert pagos[0].registrado_por_id is None
+
+
+# --- Mismo cobro avisado dos veces (pendiente -> aprobado) ------------------------
+
+
+def _info_cobro(status_mp, pago_id="555001", data_id=9001):
+    return {
+        "id": data_id,
+        "preapproval_id": "pre-1",
+        "status": "processed",
+        "payment": {"id": pago_id, "status": status_mp,
+                    "transaction_amount": 15000.0},
+    }
+
+
+def _prepara_taller_vencido(db):
+    taller = _taller(db)
+    taller.mp_preapproval_id = "pre-1"
+    taller.suscripcion_vence_en = date.today() - timedelta(days=10)
+    db.commit()
+
+
+def test_cobro_pendiente_despues_aprobado_extiende(api, datos, monkeypatch):
+    """MP avisa el mismo cobro dos veces: primero pendiente y después aprobado.
+    La fila se actualiza (no se duplica) y el vencimiento se extiende recién
+    cuando llega el aprobado."""
+    _settings(monkeypatch, boxly_mp_access_token="tok-boxly")
+    with SessionLocal() as db:
+        _prepara_taller_vencido(db)
+    respuestas = iter([_info_cobro("pending"), _info_cobro("approved")])
+    monkeypatch.setattr(cliente_mp, "obtener_pago_autorizado",
+                        lambda *a, **k: next(respuestas))
+
+    _webhook(api, "authorized_payment", "9001")
+    with SessionLocal() as db:
+        pagos = _pagos(db, taller_id=1)
+        assert len(pagos) == 1
+        assert pagos[0].estado == "pendiente"
+        # Todavía no extendió: el cobro no está aprobado.
+        assert _taller(db).suscripcion_vence_en == date.today() - timedelta(days=10)
+
+    _webhook(api, "authorized_payment", "9001")
+    with SessionLocal() as db:
+        pagos = _pagos(db, taller_id=1)
+        assert len(pagos) == 1
+        assert pagos[0].estado == "aprobado"
+        taller = _taller(db)
+        assert taller.suscripcion_vence_en == pagos[0].periodo_hasta
+        assert taller.suscripcion_vence_en > date.today()
+
+
+def test_cobro_aprobado_luego_rechazado_no_desfaz(api, datos, monkeypatch):
+    """Decisión: aprobado y rechazado son estados finales. Si MP manda después
+    un aviso contradictorio para el mismo cobro, no se deshace el pago ni se
+    retrocede el vencimiento (un replay viejo no puede "despagar" un cobro)."""
+    _settings(monkeypatch, boxly_mp_access_token="tok-boxly")
+    with SessionLocal() as db:
+        _prepara_taller_vencido(db)
+    respuestas = iter([_info_cobro("approved"), _info_cobro("rejected")])
+    monkeypatch.setattr(cliente_mp, "obtener_pago_autorizado",
+                        lambda *a, **k: next(respuestas))
+
+    _webhook(api, "authorized_payment", "9001")
+    _webhook(api, "authorized_payment", "9001")
+    with SessionLocal() as db:
+        pagos = _pagos(db, taller_id=1)
+        assert len(pagos) == 1
+        assert pagos[0].estado == "aprobado"
+        taller = _taller(db)
+        assert taller.suscripcion_vence_en == pagos[0].periodo_hasta
+        assert taller.suscripcion_vence_en > date.today()

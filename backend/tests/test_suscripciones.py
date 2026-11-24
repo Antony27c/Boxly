@@ -49,7 +49,7 @@ def _vence(taller_id: int, fecha: date) -> None:
 
 @pytest.fixture
 def datos():
-    """Taller 1 (basico, 3 de personal = al límite) y taller 2 (pro, 4 de
+    """Taller 1 (esencial, 3 de personal = al límite) y taller 2 (pro, 4 de
     personal, para probar la baja de plan), más un superadmin."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
@@ -130,10 +130,10 @@ def test_estado_segun_vencimiento(api, datos):
         assert cuerpo["estado"] == estado, (dias, cuerpo)
         assert cuerpo["vence_en"] == vence.isoformat()
         assert cuerpo["dias_para_vencer"] == (vence - hoy).days
-        assert cuerpo["plan"]["codigo"] == "basico"
+        assert cuerpo["plan"]["codigo"] == "esencial"
         assert cuerpo["max_personal"] == 3
         assert cuerpo["personal_activo"] == 3
-        assert cuerpo["proximo_monto"] == "15000.00"
+        assert cuerpo["proximo_monto"] == "35000.00"
 
 
 def test_solo_lectura_bloquea_escritura_pero_no_lectura(api, datos):
@@ -272,19 +272,19 @@ def test_cambio_de_plan_taller_y_plataforma(api, datos):
     r = api.put("/api/v1/suscripcion/plan", headers=h, json={"plan": "pro"})
     assert r.status_code == 200, r.text
     assert r.json()["plan"]["codigo"] == "pro"
-    assert r.json()["plan"]["precio_mensual"] == "30000.00"
+    assert r.json()["plan"]["precio_mensual"] == "79000.00"
     assert r.json()["max_personal"] == 10
 
-    # La plataforma cambia el plan del taller 2 (pro -> taller_plus).
+    # La plataforma cambia el plan del taller 2 (pro -> profesional).
     r = api.put(f"/api/v1/plataforma/talleres/{t2}/plan", headers=hs,
-                json={"plan": "taller_plus"})
+                json={"plan": "profesional"})
     assert r.status_code == 200
-    assert r.json()["plan"]["codigo"] == "taller_plus"
+    assert r.json()["plan"]["codigo"] == "profesional"
     assert r.json()["max_personal"] is None
 
     # El admin del taller 2 ve su plan nuevo.
     r = api.get("/api/v1/suscripcion", headers=h2)
-    assert r.json()["plan"]["codigo"] == "taller_plus"
+    assert r.json()["plan"]["codigo"] == "profesional"
 
 
 def test_bajar_de_plan_con_personal_de_mas_da_409(api, datos):
@@ -292,9 +292,9 @@ def test_bajar_de_plan_con_personal_de_mas_da_409(api, datos):
     hs = datos["headers"]["superadmin"]
     t2 = datos["taller2_id"]
 
-    # Taller 2: pro con 4 de personal -> basico (máx. 3) no entra.
+    # Taller 2: pro con 4 de personal -> esencial (máx. 3) no entra.
     r = api.put(f"/api/v1/plataforma/talleres/{t2}/plan", headers=hs,
-                json={"plan": "basico"})
+                json={"plan": "esencial"})
     assert r.status_code == 409
     assert r.json()["detail"] == MSG_TOPE_PLAN
 
@@ -306,7 +306,7 @@ def test_bajar_de_plan_con_personal_de_mas_da_409(api, datos):
         "password": PASSWORD, "rol": "mecanico",
     })
     assert r.status_code == 201
-    r = api.put("/api/v1/suscripcion/plan", headers=h, json={"plan": "basico"})
+    r = api.put("/api/v1/suscripcion/plan", headers=h, json={"plan": "esencial"})
     assert r.status_code == 409
     assert r.json()["detail"] == MSG_TOPE_PLAN
 
@@ -329,24 +329,24 @@ def test_cambio_de_plan_actualiza_el_monto_de_la_preapproval(api, datos, monkeyp
             taller.mp_preapproval_id = f"pre-{tid}"
         db.commit()
 
-    # Taller: basico -> pro ($30.000).
+    # Taller: esencial -> pro ($79.000).
     r = api.put("/api/v1/suscripcion/plan", headers=datos["headers"]["admin"],
                 json={"plan": "pro"})
     assert r.status_code == 200
     assert len(llamadas) == 1
     preapproval_id, kw = llamadas[0]
     assert preapproval_id == "pre-1"
-    assert kw["monto"] == Decimal("30000.00")
+    assert kw["monto"] == Decimal("79000.00")
 
-    # Plataforma: pro -> taller_plus ($50.000) en el taller 2.
+    # Plataforma: pro -> profesional ($169.000) en el taller 2.
     r = api.put(f"/api/v1/plataforma/talleres/{t2}/plan",
                 headers=datos["headers"]["superadmin"],
-                json={"plan": "taller_plus"})
+                json={"plan": "profesional"})
     assert r.status_code == 200
     assert len(llamadas) == 2
     preapproval_id, kw = llamadas[1]
     assert preapproval_id == f"pre-{t2}"
-    assert kw["monto"] == Decimal("50000.00")
+    assert kw["monto"] == Decimal("169000.00")
 
     # Sin cobro automático no hay llamada a MP (el PUT igual responde 200).
     with SessionLocal() as db:
@@ -367,9 +367,9 @@ def test_edicion_de_planes_por_superadmin(api, datos):
     r = api.get("/api/v1/plataforma/planes", headers=hs)
     assert r.status_code == 200
     planes = {p["codigo"]: p for p in r.json()}
-    assert set(planes) == {"basico", "pro", "taller_plus"}
-    assert planes["basico"]["max_personal"] == 3
-    assert planes["taller_plus"]["max_personal"] is None
+    assert set(planes) == {"esencial", "pro", "profesional"}
+    assert planes["esencial"]["max_personal"] == 3
+    assert planes["profesional"]["max_personal"] is None
 
     # Edición parcial: precio y sacar el límite de pro.
     r = api.put("/api/v1/plataforma/planes/pro", headers=hs, json={
@@ -383,15 +383,15 @@ def test_edicion_de_planes_por_superadmin(api, datos):
     # Plan inexistente: 404. Plan inactivo no aparece en /suscripcion/planes.
     assert api.put("/api/v1/plataforma/planes/no_existe", headers=hs,
                    json={"nombre": "X"}).status_code == 404
-    api.put("/api/v1/plataforma/planes/taller_plus", headers=hs,
+    api.put("/api/v1/plataforma/planes/profesional", headers=hs,
             json={"activo": False})
     codigos = [p["codigo"] for p in api.get("/api/v1/suscripcion/planes",
                                             headers=h).json()]
-    assert codigos == ["basico", "pro"]
+    assert codigos == ["esencial", "pro"]
     # Pero la plataforma lo sigue viendo, inactivo.
     planes = {p["codigo"]: p for p in api.get("/api/v1/plataforma/planes",
                                              headers=hs).json()}
-    assert planes["taller_plus"]["activo"] is False
+    assert planes["profesional"]["activo"] is False
 
 
 # --- Límite de personal ---------------------------------------------------------
@@ -409,7 +409,7 @@ def _body_usuario(email, rol="mecanico", **extra):
 def test_limite_de_personal_al_crear(api, datos):
     h = datos["headers"]["admin"]
 
-    # Taller 1 en basico (máx. 3) ya tiene 3 de personal: el cuarto no entra.
+    # Taller 1 en esencial (máx. 3) ya tiene 3 de personal: el cuarto no entra.
     r = api.post("/api/v1/users", headers=h,
                  json=_body_usuario("mec4@x.com"))
     assert r.status_code == 409
@@ -463,7 +463,7 @@ def test_cada_taller_ve_solo_su_suscripcion_y_sus_pagos(api, datos):
     # Cada admin ve su plan y solo sus pagos.
     s1 = api.get("/api/v1/suscripcion", headers=h1).json()
     s2 = api.get("/api/v1/suscripcion", headers=h2).json()
-    assert s1["plan"]["codigo"] == "basico"
+    assert s1["plan"]["codigo"] == "esencial"
     assert s2["plan"]["codigo"] == "pro"
     assert [p["id"] for p in api.get("/api/v1/suscripcion/pagos",
                                      headers=h1).json()] == []
@@ -473,7 +473,7 @@ def test_cada_taller_ve_solo_su_suscripcion_y_sus_pagos(api, datos):
     # La plataforma distingue las dos suscripciones.
     d1 = api.get("/api/v1/plataforma/talleres/1/suscripcion", headers=hs).json()
     d2 = api.get("/api/v1/plataforma/talleres/2/suscripcion", headers=hs).json()
-    assert d1["plan"]["codigo"] == "basico" and d1["pagos"] == []
+    assert d1["plan"]["codigo"] == "esencial" and d1["pagos"] == []
     assert d2["plan"]["codigo"] == "pro" and [p["id"] for p in d2["pagos"]] == [pago2]
 
 
@@ -515,7 +515,7 @@ def test_roles_de_las_rutas_de_suscripcion(api, datos):
 # --- Alta de taller con prueba --------------------------------------------------
 
 
-def test_alta_de_taller_arranca_en_basico_con_30_dias(api, datos):
+def test_alta_de_taller_sin_acceso_arranca_en_demo_pro_14_dias(api, datos):
     hs = datos["headers"]["superadmin"]
     r = api.post("/api/v1/plataforma/talleres", headers=hs, json={
         "nombre": "Taller Nuevo",
@@ -524,20 +524,23 @@ def test_alta_de_taller_arranca_en_basico_con_30_dias(api, datos):
     })
     assert r.status_code == 201, r.text
     resumen = r.json()["taller"]
-    assert resumen["plan_codigo"] == "basico"
+    # Sin acceso, el alta es demo: Pro por 14 días (docs/Oferta.md, C2).
+    assert resumen["plan_codigo"] == "pro"
+    assert resumen["tipo_acceso"] == "demo"
     assert resumen["suscripcion_estado"] == "al_dia"
     assert resumen["suscripcion_vence_en"] == (
-        date.today() + timedelta(days=30)
+        date.today() + timedelta(days=14)
     ).isoformat()
 
-    # El admin nuevo entra y ve su prueba.
+    # El admin nuevo entra y ve su demo.
     r = api.post("/api/v1/auth/login", json={
         "email": "admin.nuevo@x.com", "password": r.json()["password_temporal"],
     })
     assert r.status_code == 200, r.text
     token = {"Authorization": "Bearer " + r.json()["access_token"]}
     s = api.get("/api/v1/suscripcion", headers=token).json()
-    assert s["plan"]["codigo"] == "basico"
-    assert s["max_personal"] == 3
+    assert s["plan"]["codigo"] == "pro"
+    assert s["tipo_acceso"] == "demo"
+    assert s["max_personal"] == 10
     assert s["personal_activo"] == 1
-    assert s["dias_para_vencer"] == 30
+    assert s["dias_para_vencer"] == 14

@@ -135,12 +135,19 @@ _METODOS_LECTURA = {"GET", "HEAD", "OPTIONS"}
 
 
 def _verificar_suscripcion(request: Request, user: Usuario, taller: Taller) -> None:
-    """Corta según el estado de pago de la suscripción (docs/Suscripciones.md).
+    """Corta según el estado de pago de la suscripción (docs/Suscripciones.md
+    y docs/Oferta.md).
 
     solo_lectura: nadie del taller escribe. suspendida: solo el administrador, y
     solo para pagar. Las rutas de suscripción, login y términos quedan libres.
     """
-    estado = estado_suscripcion(taller.suscripcion_vence_en)
+    # Login, /auth/me y logout andan siempre: si no, el frontend desloguea al
+    # personal del taller suspendido en cada recarga.
+    if request.url.path.startswith("/api/v1/auth"):
+        return
+    estado = estado_suscripcion(
+        taller.suscripcion_vence_en, tipo_acceso=taller.tipo_acceso
+    )
     if estado in (AL_DIA, GRACIA) or ruta_libre(request.url.path):
         if estado == SUSPENDIDA and user.rol != RolUsuario.administrador:
             raise HTTPException(

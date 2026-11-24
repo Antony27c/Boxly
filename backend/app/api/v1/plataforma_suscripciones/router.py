@@ -1,8 +1,11 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 
 from app.api.v1.plataforma_suscripciones import service
 from app.core.dependencies import DbSession, SuperAdminUser
 from app.schemas.suscripcion import (
+    AccesoTaller,
+    AdicionalCreate,
+    AdicionalResponse,
     CambioPlanRequest,
     PagoManualCreate,
     PagoSuscripcionResponse,
@@ -13,7 +16,8 @@ from app.schemas.suscripcion import (
     VencimientoUpdate,
 )
 
-# Suscripciones desde la plataforma (docs/Suscripciones.md, S1): solo superadmin.
+# Suscripciones desde la plataforma (docs/Suscripciones.md, S1, y docs/Oferta.md,
+# C2: tipo de acceso y adicionales): solo superadmin.
 # El router ya está montado bajo /api/v1: las rutas son absolutas.
 router = APIRouter(prefix="/plataforma", tags=["Plataforma: suscripciones"])
 
@@ -79,3 +83,49 @@ def ajustar_vencimiento(
     _: SuperAdminUser,
 ) -> SuscripcionResponse:
     return service.ajustar_vencimiento(db, taller_id, datos.vence_en)
+
+
+@router.post(
+    "/talleres/{taller_id}/acceso",
+    response_model=SuscripcionResponse,
+    summary="Convertir el tipo de acceso de un taller",
+)
+def convertir_acceso(
+    taller_id: int, datos: AccesoTaller, db: DbSession, usuario: SuperAdminUser
+) -> SuscripcionResponse:
+    return service.convertir_acceso(db, taller_id, datos, usuario)
+
+
+@router.get(
+    "/talleres/{taller_id}/adicionales",
+    response_model=list[AdicionalResponse],
+    summary="Adicionales de un taller",
+)
+def listar_adicionales(
+    taller_id: int, db: DbSession, _: SuperAdminUser
+) -> list[AdicionalResponse]:
+    return service.listar_adicionales(db, taller_id)
+
+
+@router.post(
+    "/talleres/{taller_id}/adicionales",
+    response_model=AdicionalResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Activar un adicional",
+)
+def activar_adicional(
+    taller_id: int, datos: AdicionalCreate, db: DbSession, _: SuperAdminUser
+) -> AdicionalResponse:
+    return service.activar_adicional(db, taller_id, datos)
+
+
+@router.delete(
+    "/talleres/{taller_id}/adicionales/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Desactivar un adicional",
+)
+def desactivar_adicional(
+    taller_id: int, codigo: str, db: DbSession, _: SuperAdminUser
+) -> Response:
+    service.desactivar_adicional(db, taller_id, codigo)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

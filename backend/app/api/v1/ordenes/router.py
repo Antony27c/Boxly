@@ -4,7 +4,10 @@ from typing import List, Optional, Annotated
 
 from app.core.dependencies import CurrentUser, PersonalUser,DbSession, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.orden import CobroRequest, EstadoOrdenResponse, HistorialResponse, NotificacionResponse, OrdenCreate, OrdenUpdate, OrdenResponse
+from app.schemas.orden import (
+    CobroRequest, EstadoOrdenResponse, HistorialResponse, NotificacionResponse,
+    OrdenCreate, OrdenResponse, OrdenUpdate, PagoLocalRequest,
+)
 from .service import orden_service
 from app.schemas.usuario import MessageResponse
 from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse,DetallePrecioUpdate
@@ -51,6 +54,11 @@ def emitir_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: Per
 @router.post("/{orden_id}/cobro/aprobar", response_model=OrdenResponse)
 def aprobar_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: RecepcionUser, background_tasks: BackgroundTasks):
     return orden_service.aprobar_cobro(db, orden_id, datos.monto, usuario.id, background_tasks)
+
+
+@router.post("/{orden_id}/pago-local", response_model=OrdenResponse)
+def registrar_pago_local(orden_id: int, datos: PagoLocalRequest, db: DbSession, _: RecepcionUser):
+    return orden_service.registrar_pago_local(db, orden_id, datos)
 
 
 @router.get("/{orden_id}/historial", response_model=List[HistorialResponse])

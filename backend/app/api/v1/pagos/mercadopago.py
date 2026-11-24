@@ -1,28 +1,14 @@
-import json
-import re
-import urllib.error
-import urllib.request
+"""Cliente de la cuenta de Mercado Pago de cada taller (cobro de órdenes).
+
+La lógica HTTP, el error y la validación de ids viven en
+app/core/mercadopago.py, compartida con la cuenta de Boxly
+(app/api/v1/suscripcion_mp/cliente_mp.py).
+"""
 from decimal import Decimal
 
-API_URL = "https://api.mercadopago.com"
+from app.core.mercadopago import API_URL, ID_SEGURO, MercadoPagoError, request
 
-
-class MercadoPagoError(Exception):
-    pass
-
-
-def _request(method: str, path: str, token: str, body: dict | None = None) -> dict:
-    request = urllib.request.Request(
-        f"{API_URL}{path}",
-        data=json.dumps(body).encode() if body is not None else None,
-        method=method,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return json.loads(response.read())
-    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise MercadoPagoError(str(exc)) from exc
+__all__ = ["API_URL", "MercadoPagoError", "crear_preferencia", "obtener_pago", "obtener_preferencia"]
 
 
 def crear_preferencia(
@@ -45,18 +31,18 @@ def crear_preferencia(
         body["auto_return"] = "approved"
     if notification_url:
         body["notification_url"] = notification_url
-    return _request("POST", "/checkout/preferences", token, body)
+    return request("POST", "/checkout/preferences", token, body)
 
 
 def obtener_preferencia(token: str, preference_id: str) -> dict:
     # El id va dentro de la ruta de la API: solo caracteres seguros.
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", preference_id or ""):
+    if not ID_SEGURO.fullmatch(preference_id or ""):
         raise MercadoPagoError("preference_id inválido")
-    return _request("GET", f"/checkout/preferences/{preference_id}", token)
+    return request("GET", f"/checkout/preferences/{preference_id}", token)
 
 
 def obtener_pago(token: str, payment_id: str) -> dict:
     # Defensa en profundidad: el id va dentro de la URL, solo dígitos.
     if not payment_id.isdigit():
         raise MercadoPagoError("payment_id inválido")
-    return _request("GET", f"/v1/payments/{payment_id}", token)
+    return request("GET", f"/v1/payments/{payment_id}", token)

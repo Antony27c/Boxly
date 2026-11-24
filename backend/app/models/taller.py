@@ -33,6 +33,10 @@ class Taller(Base):
     __tablename__ = "talleres"
     __table_args__ = (
         CheckConstraint("estado IN ('activo', 'suspendido')", name="ck_talleres_estado_valido"),
+        # docs/Oferta.md: cómo entró el taller (pago, demo o piloto).
+        CheckConstraint(
+            "tipo_acceso IN ('pago', 'demo', 'piloto')", name="ck_talleres_tipo_acceso"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -53,10 +57,17 @@ class Taller(Base):
         nullable=True,
     )
 
-    # Suscripción (docs/Suscripciones.md). Vencimiento NULL = sin vencimiento (al día).
+    # Suscripción (docs/Suscripciones.md y docs/Oferta.md). Vencimiento NULL = sin
+    # vencimiento (al día).
     plan_codigo: Mapped[str] = mapped_column(
         String(20), ForeignKey("planes.codigo", name="fk_talleres_plan_codigo_planes"),
-        nullable=False, default="basico", server_default="basico",
+        nullable=False, default="esencial", server_default="esencial",
+    )
+    # Cómo accedió el taller: pago (suscripción normal), demo (Pro por 14 días,
+    # la otorga el superadmin) o piloto (plan y vencimiento a elección, con
+    # motivo). El estado según el tipo lo define C2/C6 (docs/Oferta.md).
+    tipo_acceso: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pago", server_default="pago"
     )
     suscripcion_vence_en: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     cobro_automatico: Mapped[bool] = mapped_column(

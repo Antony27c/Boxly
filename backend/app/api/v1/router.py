@@ -1,28 +1,30 @@
 from fastapi import APIRouter
 
+from app.api.v1.admin_auditoria.router import router as admin_auditoria_router
 from app.api.v1.auth.router import router as auth_router
+from app.api.v1.catalogo.router import router as catalogo_router
 from app.api.v1.clientes.router import router as clientes_router
-from app.api.v1.users.router import router as users_router
+from app.api.v1.mecanicos.router import router as mecanicos_router
+from app.api.v1.metricas.router import router as metricas_router
 from app.api.v1.ordenes.router import router as ordenes_router
 from app.api.v1.pagos.router import router as pagos_router
-from app.api.v1.portal.router import router as portal_router
-from app.api.v1.repuestos.router import router as repuestos_router
-from app.api.v1.turnos.router import router as turnos_router
-from app.api.v1.vehiculos.router import router as vehiculos_router
-from app.api.v1.catalogo.router import router as catalogo_router
-from app.api.v1.metricas.router import router as metricas_router
-from app.api.v1.mecanicos.router import router as mecanicos_router
-from app.api.v1.admin_auditoria.router import router as admin_auditoria_router
-from app.api.v1.sistema.router import router as sistema_router
-from app.api.v1.taller.router import router as taller_router
-from app.api.v1.plataforma_talleres.router import router as plataforma_talleres_router
-from app.api.v1.soporte.router import router as soporte_router
-from app.api.v1.terminos.router import router as terminos_router
-from app.api.v1.publico.router import router as publico_router
-from app.api.v1.suscripcion.router import router as suscripcion_router
-from app.api.v1.suscripcion_mp.router import router as suscripcion_mp_router
-from app.api.v1.plataforma_suscripciones.router import router as plataforma_suscripciones_router
+from app.api.v1.plataforma_encuestas.router import router as plataforma_encuestas_router
 from app.api.v1.plataforma_solicitudes.router import router as plataforma_solicitudes_router
+from app.api.v1.plataforma_suscripciones.router import router as plataforma_suscripciones_router
+from app.api.v1.plataforma_talleres.router import router as plataforma_talleres_router
+from app.api.v1.portal.router import router as portal_router
+from app.api.v1.publico.router import router as publico_router
+from app.api.v1.repuestos.router import router as repuestos_router
+from app.api.v1.sistema.router import router as sistema_router
+from app.api.v1.soporte.router import router as soporte_router
+from app.api.v1.suscripcion.router import router as suscripcion_router
+from app.api.v1.suscripcion_encuesta.router import router as suscripcion_encuesta_router
+from app.api.v1.suscripcion_mp.router import router as suscripcion_mp_router
+from app.api.v1.taller.router import router as taller_router
+from app.api.v1.terminos.router import router as terminos_router
+from app.api.v1.turnos.router import router as turnos_router
+from app.api.v1.users.router import router as users_router
+from app.api.v1.vehiculos.router import router as vehiculos_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/api/v1")
@@ -44,7 +46,9 @@ api_router.include_router(plataforma_talleres_router, prefix="/api/v1")
 api_router.include_router(soporte_router, prefix="/api/v1")
 api_router.include_router(terminos_router, prefix="/api/v1")
 api_router.include_router(suscripcion_router, prefix="/api/v1")
+api_router.include_router(suscripcion_encuesta_router, prefix="/api/v1")
 api_router.include_router(suscripcion_mp_router, prefix="/api/v1")
+api_router.include_router(plataforma_encuestas_router, prefix="/api/v1")
 api_router.include_router(plataforma_suscripciones_router, prefix="/api/v1")
 api_router.include_router(publico_router, prefix="/api/v1")
 api_router.include_router(plataforma_solicitudes_router, prefix="/api/v1")

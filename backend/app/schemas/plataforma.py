@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.usuario import RolUsuario
+from app.schemas.suscripcion import AccesoTaller, TipoAcceso
 
 
 class TallerAdminCreate(BaseModel):
@@ -17,6 +18,8 @@ class TallerAdminCreate(BaseModel):
 class TallerCreate(BaseModel):
     nombre: str = Field(min_length=2, max_length=120)
     admin: TallerAdminCreate
+    # Tipo de acceso (docs/Oferta.md, C2). Sin acceso: demo (Pro, 14 días).
+    acceso: AccesoTaller = Field(default_factory=AccesoTaller)
 
 
 class TallerRenombrar(BaseModel):
@@ -50,9 +53,10 @@ class TallerResumen(BaseModel):
     soporte_vigente_hasta: Optional[datetime] = None
     terminos_aceptados_en: Optional[datetime] = None
     # Suscripción del taller (docs/Suscripciones.md).
-    plan_codigo: str = "basico"
+    plan_codigo: str = "esencial"
     suscripcion_estado: str = "al_dia"
     suscripcion_vence_en: Optional[date] = None
+    tipo_acceso: TipoAcceso = "pago"
 
 
 class OtorganteSoporte(BaseModel):

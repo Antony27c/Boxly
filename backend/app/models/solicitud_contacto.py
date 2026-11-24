@@ -6,10 +6,11 @@ TallerMixin y solo la ve el superadmin.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String, Text, func
+from sqlalchemy import CheckConstraint, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.tipos import FechaHoraUTC
 
 ESTADOS_SOLICITUD = ("nueva", "contactada", "convertida", "descartada")
 
@@ -39,5 +40,5 @@ class SolicitudContacto(Base):
     # Solo para el límite de envíos; se puede borrar a los 90 días.
     ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        FechaHoraUTC(), server_default=func.now(), nullable=False
     )

@@ -1,9 +1,16 @@
-"""Schemas de suscripciones, planes y pagos manuales (docs/Suscripciones.md, S1)."""
+"""Schemas de suscripciones, planes, pagos manuales, adicionales y tipo de acceso
+(docs/Suscripciones.md, S1, y docs/Oferta.md, C2)."""
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.core.funciones import FUNCIONES
+
+TipoAcceso = Literal["pago", "demo", "piloto"]
+# Adicionales confirmados (docs/Oferta.md): por ahora solo ARCA.
+CodigoAdicional = Literal["arca"]
 
 
 class PlanResponse(BaseModel):
@@ -14,7 +21,19 @@ class PlanResponse(BaseModel):
     precio_mensual: Decimal
     # NULL = sin límite de personal.
     max_personal: Optional[int] = None
+    funciones: list[str] = []
     activo: bool
+
+
+class AdicionalResponse(BaseModel):
+    """Adicional del taller encima de su plan (hoy solo ``arca``)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    codigo: str
+    # NULL = sin límite de ese lado.
+    desde: Optional[date] = None
+    hasta: Optional[date] = None
 
 
 class SuscripcionResponse(BaseModel):
@@ -28,6 +47,16 @@ class SuscripcionResponse(BaseModel):
     personal_activo: int
     max_personal: Optional[int] = None
     proximo_monto: Decimal
+    # docs/Oferta.md (C2): cómo accede el taller, adicionales vigentes y las
+    # funciones que tiene por su plan más sus adicionales.
+    tipo_acceso: TipoAcceso = "pago"
+    adicionales: list[AdicionalResponse] = []
+    funciones_efectivas: list[str] = []
+    # Calculadas con app/core/suscripcion.py para que el frontend no repita la
+    # regla de los días: último día con todo normal (null si no hay gracia,
+    # como en la demo) y último día antes de la suspensión.
+    fin_gracia: Optional[date] = None
+    fin_acceso: Optional[date] = None
 
 
 class PagoSuscripcionResponse(BaseModel):
@@ -64,6 +93,18 @@ class PlanUpdate(BaseModel):
     precio_mensual: Optional[Decimal] = Field(default=None, gt=0)
     max_personal: Optional[int] = Field(default=None, ge=0)
     activo: Optional[bool] = None
+    # Códigos de app/core/funciones.py; se guardan sin repetidos.
+    funciones: Optional[list[str]] = None
+
+    @field_validator("funciones")
+    @classmethod
+    def _funciones_validas(cls, valor: Optional[list[str]]) -> Optional[list[str]]:
+        if valor is None:
+            return None
+        invalidas = [f for f in valor if f not in FUNCIONES]
+        if invalidas:
+            raise ValueError(f"Función desconocida: {', '.join(invalidas)}")
+        return list(dict.fromkeys(valor))
 
 
 class PagoManualCreate(BaseModel):
@@ -80,3 +121,51 @@ class VencimientoUpdate(BaseModel):
     """Ajuste manual del vencimiento (cortesía o corrección)."""
 
     vence_en: date
+
+
+def _validar_rango(desde: Optional[date], hasta: Optional[date]) -> None:
+    if desde is not None and hasta is not None and hasta < desde:
+        raise ValueError("La fecha de fin no puede ser anterior a la de inicio")
+
+
+class AdicionalCreate(BaseModel):
+    """Activación de un adicional por el superadmin (docs/Oferta.md, C2)."""
+
+    codigo: CodigoAdicional
+    desde: Optional[date] = None
+    hasta: Optional[date] = None
+
+    @model_validator(mode="after")
+    def _rango(self) -> "AdicionalCreate":
+        _validar_rango(self.desde, self.hasta)
+        return self
+
+
+# Qué datos pide cada tipo de acceso (docs/Oferta.md, API de C2). Demo no pide
+# nada: el plan y el vencimiento los fija el sistema.
+CAMPOS_POR_ACCESO: dict[str, tuple[str, ...]] = {
+    "demo": (),
+    "piloto": ("plan", "vence_en", "motivo"),
+    "pago": ("plan",),
+}
+
+
+class AccesoTaller(BaseModel):
+    """Tipo de acceso del taller, en el alta o al convertirlo."""
+
+    tipo: TipoAcceso = "demo"
+    plan: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    vence_en: Optional[date] = None
+    motivo: Optional[str] = Field(default=None, max_length=300)
+
+    @field_validator("motivo")
+    @classmethod
+    def _motivo_sin_espacios(cls, valor: Optional[str]) -> Optional[str]:
+        return (valor or "").strip() or None
+
+    @model_validator(mode="after")
+    def _campos_requeridos(self) -> "AccesoTaller":
+        faltan = [c for c in CAMPOS_POR_ACCESO[self.tipo] if getattr(self, c) is None]
+        if faltan:
+            raise ValueError(f"El acceso {self.tipo} pide: {', '.join(faltan)}")
+        return self

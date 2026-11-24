@@ -1,7 +1,4 @@
-import hashlib
-import hmac
 import logging
-import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -12,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.pagos import mercadopago
 from app.core.config import get_settings
+from app.core.mercadopago import VENTANA_FIRMA_SEG, firma_valida
 from app.db.session import SIN_FILTRO_TALLER, fijar_taller
 from app.models.orden import Orden
 from app.models.pago import Pago
@@ -85,6 +83,15 @@ def _aplicar_estado(pago: Pago, estado: str, payment_id: str | None) -> None:
     pago.payment_id = payment_id or pago.payment_id
     if estado == "aprobado":
         pago.fecha_pago = datetime.now(timezone.utc)
+
+
+def marcar_aprobado(pago: Pago, payment_id: str | None = None) -> None:
+    """Deja el pago aprobado y, con él, la orden pagada (`Orden.pagada`).
+
+    Es el mismo camino para el pago online aprobado y para el registrado en el
+    local: fija la fecha del pago, que es la que cuentan las métricas.
+    """
+    _aplicar_estado(pago, "aprobado", payment_id)
 
 
 def _pendiente_vigente(orden: Orden) -> Pago | None:
@@ -243,29 +250,15 @@ def _payment_id_ajeno(db: Session, pago: Pago, mp_id: str) -> bool:
     )
 
 
-# Ventana de validez del timestamp de x-signature (segundos Unix). Solo se exige
-# en producción; en desarrollo se aceptan firmas de prueba con ts arbitrario.
-VENTANA_FIRMA_WEBHOOK_SEG = 300
-
-
-def _ts_fresco(ts: str) -> bool:
-    """El ts de x-signature de MP viene en segundos Unix (algunos avisos, en ms)."""
-    try:
-        valor = int(str(ts).strip())
-    except (TypeError, ValueError):
-        return False
-    if valor > 10**12:
-        valor //= 1000
-    return abs(time.time() - valor) <= VENTANA_FIRMA_WEBHOOK_SEG
-
-
 def verificar_firma_webhook(
     payment_id: str | None, x_signature: str | None, x_request_id: str | None
 ) -> None:
     """Valida el header x-signature de Mercado Pago (HMAC-SHA256 del manifest).
 
     Sin MP_WEBHOOK_SECRET configurado no hay con qué verificar: en producción se
-    rechaza; en desarrollo se avisa y se sigue.
+    rechaza; en desarrollo se avisa y se sigue. La comparación y la frescura
+    del timestamp son las de app/core/mercadopago.py (compartidas con el webhook
+    de suscripciones).
     """
     settings = get_settings()
     secret = settings.mp_webhook_secret
@@ -279,26 +272,12 @@ def verificar_firma_webhook(
             "Webhook de Mercado Pago recibido sin MP_WEBHOOK_SECRET: no se valida la firma"
         )
         return
-    partes = {}
-    for trozo in (x_signature or "").split(","):
-        clave, sep, valor = trozo.partition("=")
-        if sep:
-            partes[clave.strip()] = valor.strip()
-    ts, v1 = partes.get("ts"), partes.get("v1")
-    if not ts or not v1 or not x_request_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Firma de webhook inválida"
-        )
-    if settings.environment == "prod" and not _ts_fresco(ts):
-        # Una firma válida pero vieja no se puede reenviar: el ts es parte del manifest.
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Firma de webhook inválida"
-        )
-    manifest = f"id:{payment_id or ''};request-id:{x_request_id};ts:{ts};"
-    esperado = hmac.new(
-        secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-    if not hmac.compare_digest(esperado, v1):
+    # En producción el ts tiene que ser reciente: una firma vieja no se puede
+    # reenviar (el ts es parte del manifest firmado).
+    ventana = VENTANA_FIRMA_SEG if settings.environment == "prod" else None
+    if not firma_valida(
+        secret, payment_id, x_signature, x_request_id, ventana_seg=ventana
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Firma de webhook inválida"
         )

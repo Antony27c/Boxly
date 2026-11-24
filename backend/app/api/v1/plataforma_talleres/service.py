@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.v1.plataforma_suscripciones import acceso as acceso_taller
 from app.api.v1.plataforma_talleres import repository
+from app.api.v1.suscripcion.service import estado_del_taller
 from app.api.v1.users import repository as users_repository
 from app.core.security import hash_password
-from app.core.suscripcion import estado_suscripcion
 from app.db.session import fijar_taller
 from app.models import AccesoSoporte, ConfiguracionTaller, Taller, Usuario
 from app.models.usuario import RolUsuario
@@ -87,8 +88,9 @@ def _resumen(db: Session, taller: Taller, conteos: dict[int, dict]) -> TallerRes
         soporte_vigente_hasta=c.get("soporte_vigente_hasta"),
         terminos_aceptados_en=taller.terminos_aceptados_en,
         plan_codigo=taller.plan_codigo,
-        suscripcion_estado=estado_suscripcion(taller.suscripcion_vence_en),
+        suscripcion_estado=estado_del_taller(taller),
         suscripcion_vence_en=taller.suscripcion_vence_en,
+        tipo_acceso=taller.tipo_acceso,
     )
 
 
@@ -144,17 +146,26 @@ def detalle(db: Session, taller_id: int) -> TallerDetalle:
     )
 
 
-def crear_taller(db: Session, data: TallerCreate) -> TallerAltaResponse:
-    """Alta completa: taller + su configuracion_taller + primer administrador
-    con contraseña temporal. Todo con taller_id explícito (contexto plataforma)."""
+def crear_taller(db: Session, data: TallerCreate, usuario: Usuario) -> TallerAltaResponse:
+    """Alta completa: taller con su tipo de acceso (demo por defecto,
+    docs/Oferta.md) + su configuracion_taller + primer administrador con
+    contraseña temporal. Todo con taller_id explícito (contexto plataforma)."""
     if users_repository.email_existe(db, data.admin.email):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ya existe un usuario con ese email",
         )
+    # Antes de crear nada: un plan inexistente o inactivo responde 404.
+    resuelto = acceso_taller.resolver(db, data.acceso)
 
     temporal = _password_temporal()
-    taller = repository.crear_taller(db, nombre=data.nombre.strip())
+    taller = repository.crear_taller(
+        db,
+        nombre=data.nombre.strip(),
+        tipo_acceso=resuelto.tipo,
+        plan_codigo=resuelto.plan.codigo,
+        vence_en=resuelto.vence_en,
+    )
     # La guardia de taller_id (app.db.session) no deja crear datos de un taller
     # desde la plataforma: se fija el taller recién creado un instante y se
     # vuelve a contexto plataforma apenas commitea.
@@ -171,6 +182,9 @@ def crear_taller(db: Session, data: TallerCreate) -> TallerAltaResponse:
             activo=True,
         )
         db.add(admin)
+        acceso_taller.registrar_motivo(
+            db, taller, resuelto, data.acceso.motivo, usuario, ruta="/api/v1/plataforma/talleres"
+        )
         db.commit()
     finally:
         fijar_taller(db, None)

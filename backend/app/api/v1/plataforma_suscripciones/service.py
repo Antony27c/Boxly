@@ -3,6 +3,7 @@
 Delega en ``app.api.v1.suscripcion.service``: la lógica de planes, pagos y
 vencimiento es la misma que usa el taller.
 """
+from app.api.v1.plataforma_suscripciones import acceso, adicionales
 from app.api.v1.suscripcion import service
 
 
@@ -33,3 +34,19 @@ def registrar_pago(db, taller_id, datos, usuario):
 def ajustar_vencimiento(db, taller_id, vence_en):
     taller = service.taller_por_id(db, taller_id)
     return service.ajustar_vencimiento(db, taller, vence_en)
+
+
+def convertir_acceso(db, taller_id, datos, usuario):
+    return acceso.convertir(db, taller_id, datos, usuario)
+
+
+def listar_adicionales(db, taller_id):
+    return adicionales.listar(db, taller_id)
+
+
+def activar_adicional(db, taller_id, datos):
+    return adicionales.activar(db, taller_id, datos)
+
+
+def desactivar_adicional(db, taller_id, codigo):
+    adicionales.desactivar(db, taller_id, codigo)

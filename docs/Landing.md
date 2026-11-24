@@ -7,7 +7,8 @@ También en `/boxly` siempre, para poder mostrarla estando logueado.
 ## Reglas de contenido (obligatorias)
 
 - **No inventar.** Solo funciones que Boxly tiene de verdad (mirá las páginas y los
-  contratos `docs/Plataforma.md` y `docs/Suscripciones.md`). Nada de "integración con
+  contratos `docs/Plataforma.md`, `docs/Suscripciones.md` y la oferta vigente en
+  `docs/Oferta.md`). Nada de "integración con
   AFIP", "app móvil nativa", "WhatsApp" ni nada que no exista.
 - **Sin testimonios, logos de clientes, cifras de uso ni reseñas falsas.** Si una sección
   así haría falta, no va.

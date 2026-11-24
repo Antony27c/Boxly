@@ -7,11 +7,7 @@ docs/Suscripciones.md, tarea S2.
 Ojo con los modelos: PagoSuscripcion no es TallerMixin, así que el filtro
 automático de taller NO lo alcanza: toda consulta filtra por taller_id a mano.
 """
-import hashlib
-import hmac
 import logging
-import re
-import time
 import uuid
 from calendar import monthrange
 from datetime import date, timedelta
@@ -24,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.suscripcion_mp import cliente_mp
 from app.core.config import get_settings
+from app.core.mercadopago import ID_SEGURO, VENTANA_FIRMA_SEG, firma_valida
 from app.db.session import SIN_FILTRO_TALLER, fijar_taller
 from app.models.suscripcion import PagoSuscripcion, Plan
 from app.models.taller import Taller
@@ -134,32 +131,15 @@ def cancelar_cobro(db: Session, usuario: Usuario) -> None:
 # --- Webhook (sin usuario) ------------------------------------------------------
 
 
-# Ventana de validez del timestamp de x-signature (segundos Unix). Solo se exige
-# en producción; en desarrollo se aceptan firmas de prueba con ts arbitrario.
-VENTANA_FIRMA_WEBHOOK_SEG = 300
-
-# El id de la notificación (preapproval o authorized_payment) va dentro de la
-# ruta de la API de MP: solo caracteres seguros, con tope de largo.
-_ID_NOTIFICACION = re.compile(r"[A-Za-z0-9_-]{1,64}")
-
-
-def _ts_fresco(ts: str) -> bool:
-    """El ts de x-signature de MP viene en segundos Unix (algunos avisos, en ms)."""
-    try:
-        valor = int(str(ts).strip())
-    except (TypeError, ValueError):
-        return False
-    if valor > 10**12:
-        valor //= 1000
-    return abs(time.time() - valor) <= VENTANA_FIRMA_WEBHOOK_SEG
-
-
 def verificar_firma_webhook(
     data_id: str | None, x_signature: str | None, x_request_id: str | None
 ) -> None:
-    """Valida el header x-signature igual que el webhook de pagos, pero con el
-    secreto de la cuenta de Boxly. Sin secreto configurado no hay con qué
-    verificar: en producción se rechaza; en desarrollo se avisa y se sigue.
+    """Valida el header x-signature con el secreto de la cuenta de Boxly.
+
+    Sin secreto configurado no hay con qué verificar: en producción se rechaza;
+    en desarrollo se avisa y se sigue. La comparación y la frescura del
+    timestamp son las de app/core/mercadopago.py (compartidas con el webhook de
+    pagos de los talleres).
     """
     settings = get_settings()
     secret = settings.boxly_mp_webhook_secret
@@ -173,26 +153,12 @@ def verificar_firma_webhook(
             "no se valida la firma"
         )
         return
-    partes = {}
-    for trozo in (x_signature or "").split(","):
-        clave, sep, valor = trozo.partition("=")
-        if sep:
-            partes[clave.strip()] = valor.strip()
-    ts, v1 = partes.get("ts"), partes.get("v1")
-    if not ts or not v1 or not x_request_id:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "Firma de webhook inválida"
-        )
-    if settings.environment == "prod" and not _ts_fresco(ts):
-        # Una firma válida pero vieja no se puede reenviar: el ts es parte del manifest.
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "Firma de webhook inválida"
-        )
-    manifest = f"id:{data_id or ''};request-id:{x_request_id};ts:{ts};"
-    esperado = hmac.new(
-        secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-    if not hmac.compare_digest(esperado, v1):
+    # En producción el ts tiene que ser reciente: una firma vieja no se puede
+    # reenviar (el ts es parte del manifest firmado).
+    ventana = VENTANA_FIRMA_SEG if settings.environment == "prod" else None
+    if not firma_valida(
+        secret, data_id, x_signature, x_request_id, ventana_seg=ventana
+    ):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "Firma de webhook inválida"
         )
@@ -266,12 +232,32 @@ def _registrar_cobro(
     referencia: str,
     registrado_por_id: int | None = None,
 ) -> PagoSuscripcion | None:
-    """Crea la fila de pagos_suscripcion; None si ese cobro ya estaba (idempotente)."""
-    ya_existe = db.scalar(
-        select(PagoSuscripcion.id).where(PagoSuscripcion.mp_payment_id == mp_payment_id)
+    """Crea o actualiza la fila de pagos_suscripcion.
+
+    MP avisa el mismo cobro más de una vez: primero pendiente y después
+    aprobado (o rechazado). Si la fila ya existe y no está en un estado final
+    (aprobado/rechazado), se actualiza el estado; al pasar a aprobado se
+    recalcula el período y se extiende el vencimiento. None cuando el cobro ya
+    estaba en estado final: ahí sí es idempotente (un aviso repetido o uno
+    contradictorio posterior no deshace un pago registrado).
+    """
+    existente = db.scalar(
+        select(PagoSuscripcion).where(
+            PagoSuscripcion.mp_payment_id == mp_payment_id,
+            PagoSuscripcion.taller_id == taller.id,
+        )
     )
-    if ya_existe is not None:
-        return None
+    if existente is not None:
+        if existente.estado in ("aprobado", "rechazado"):
+            return None
+        existente.estado = estado
+        if estado == "aprobado":
+            desde, hasta = _periodo(taller.suscripcion_vence_en)
+            existente.periodo_desde = desde
+            existente.periodo_hasta = hasta
+            taller.suscripcion_vence_en = hasta
+            taller.tipo_acceso = "pago"  # demo/piloto -> pago
+        return existente
     desde, hasta = _periodo(taller.suscripcion_vence_en)
     pago = PagoSuscripcion(
         taller_id=taller.id,
@@ -293,7 +279,7 @@ def _registrar_cobro(
         fijar_taller(db, taller.id)
         return None
     if estado == "aprobado":
-        taller.suscripcion_vence_en = hasta
+        taller.suscripcion_vence_en, taller.tipo_acceso = hasta, "pago"  # demo/piloto -> pago
     return pago
 
 
@@ -350,7 +336,7 @@ def procesar_notificacion(db: Session, tipo: str | None, data_id: str | None) ->
     """
     settings = get_settings()
     token = settings.boxly_mp_access_token
-    if not token or not data_id or not _ID_NOTIFICACION.fullmatch(data_id):
+    if not token or not data_id or not ID_SEGURO.fullmatch(data_id):
         return
     if tipo in _TIPOS_PREAPPROVAL:
         _procesar_preapproval(db, token, data_id)
@@ -384,7 +370,8 @@ def simular_cobro(db: Session, usuario: Usuario, estado: str | None) -> dict:
         estado=estado,
         mp_payment_id=f"simulado-{uuid.uuid4().hex[:20]}",
         referencia="simulador",
-        registrado_por_id=usuario.id,
+        # Un cobro de Mercado Pago (real o simulado) no lo registra una persona:
+        # registrado_por queda NULL, igual que los que llegan por webhook.
     )
     db.commit()
     return {

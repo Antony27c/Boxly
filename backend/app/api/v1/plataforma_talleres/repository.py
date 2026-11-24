@@ -14,7 +14,6 @@ from app.db.session import SIN_FILTRO_TALLER
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.orden import Orden
-from app.models.suscripcion import DIAS_DE_PRUEBA, PLAN_POR_DEFECTO
 from app.models.taller import AccesoSoporte, Taller
 from app.models.usuario import ROLES_PERSONAL, Usuario
 from app.schemas.paginacion import ParametrosPagina, aplicar, contar
@@ -54,12 +53,21 @@ def get_taller(db: Session, taller_id: int) -> Taller | None:
     return db.get(Taller, taller_id)
 
 
-def crear_taller(db: Session, *, nombre: str) -> Taller:
-    # Plan básico con 30 días de prueba (docs/Suscripciones.md).
+def crear_taller(
+    db: Session,
+    *,
+    nombre: str,
+    tipo_acceso: str,
+    plan_codigo: str,
+    vence_en: date | None,
+) -> Taller:
+    # Plan y vencimiento según el tipo de acceso (docs/Oferta.md, C2): los
+    # resuelve plataforma_suscripciones.acceso antes de llamar acá.
     taller = Taller(
         nombre=nombre,
-        plan_codigo=PLAN_POR_DEFECTO,
-        suscripcion_vence_en=date.today() + timedelta(days=DIAS_DE_PRUEBA),
+        tipo_acceso=tipo_acceso,
+        plan_codigo=plan_codigo,
+        suscripcion_vence_en=vence_en,
     )
     db.add(taller)
     db.flush()

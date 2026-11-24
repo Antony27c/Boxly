@@ -16,6 +16,9 @@ class PlanPublico(BaseModel):
     precio_mensual: Decimal
     # NULL = sin límite de personal.
     max_personal: Optional[int] = None
+    # Códigos de función del plan (app/core/funciones.py, docs/Oferta.md): la
+    # landing arma "qué trae cada plan" con esta lista.
+    funciones: list[str]
 
 
 class ContactoCreate(BaseModel):

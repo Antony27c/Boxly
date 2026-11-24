@@ -47,9 +47,9 @@ def listar_talleres(
 def crear_taller(
     data: TallerCreate,
     db: DbSession,
-    _: SuperAdminUser,
+    usuario: SuperAdminUser,
 ) -> TallerAltaResponse:
-    return service.crear_taller(db, data)
+    return service.crear_taller(db, data, usuario)
 
 
 @router.get(

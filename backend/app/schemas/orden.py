@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from typing import Optional
+from typing import Literal, Optional
 from datetime import datetime
 from decimal import Decimal
 
@@ -46,6 +46,14 @@ class CobroRequest(BaseModel):
     monto: Optional[Decimal] = Field(default=None, gt=0)
 
 
+class PagoLocalRequest(BaseModel):
+    """Pago presencial de una orden con cobro emitido (docs/Oferta.md, W2)."""
+
+    medio: Literal["efectivo", "tarjeta", "transferencia", "otro"]
+    monto: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    referencia: Optional[str] = Field(default=None, max_length=100)
+
+
 class OrdenResponse(OrdenBase):
     model_config=ConfigDict(from_attributes=True)
 
@@ -74,6 +82,9 @@ class OrdenResponse(OrdenBase):
     fecha_estimada_entrega: Optional[datetime]= None
     fecha_entrega: Optional[datetime]= None
     lineas_a_cotizar: int = 0
+    # Medio y fecha del pago aprobado (online o en el local); null si no está pagada.
+    pago_medio: Optional[str] = None
+    pago_fecha: Optional[datetime] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -84,6 +95,17 @@ class OrdenResponse(OrdenBase):
             data.lineas_a_cotizar = sum(
                 1 for d in detalles if getattr(d, "precio_unitario", 0) is None
             )
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _datos_del_pago(cls, data):
+        """Medio y fecha del pago aprobado; `pagos` viene eager-loaded."""
+        pagos = getattr(data, "pagos", None)
+        if pagos is not None:
+            aprobado = next((p for p in pagos if p.estado == "aprobado"), None)
+            data.pago_medio = aprobado.medio if aprobado else None
+            data.pago_fecha = aprobado.fecha_pago if aprobado else None
         return data
 
 class HistorialResponse(BaseModel):

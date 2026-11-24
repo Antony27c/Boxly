@@ -126,6 +126,7 @@ CASOS_PARAMS = [
     ("DELETE", "/api/v1/ordenes/{orden_id}", None, None),
     ("POST", "/api/v1/ordenes/{orden_id}/cobro", {}, None),
     ("POST", "/api/v1/ordenes/{orden_id}/cobro/aprobar", {}, None),
+    ("POST", "/api/v1/ordenes/{orden_id}/pago-local", {"medio": "efectivo", "monto": "100"}, None),
     ("GET", "/api/v1/ordenes/{orden_id}/historial", None, None),
     ("GET", "/api/v1/ordenes/{orden_id}/notificaciones", None, None),
     ("POST", "/api/v1/ordenes/{orden_id}/notificaciones", None, None),
@@ -199,6 +200,7 @@ CASOS_LISTAS = [
     ("GET", "/api/v1/soporte/accesos"),
     ("GET", "/api/v1/soporte/actividad"),
     ("GET", "/api/v1/suscripcion"),
+    ("GET", "/api/v1/suscripcion/encuesta"),
     ("GET", "/api/v1/suscripcion/pagos"),
     ("GET", "/api/v1/suscripcion/planes"),
     ("GET", "/api/v1/taller"),
@@ -249,6 +251,7 @@ CASOS_CREACIONES = [
     ("POST", "/api/v1/soporte/accesos", {"horas": 4, "motivo": "Prueba de aislamiento"}),
     # suscripción del taller de la sesión (S1/S2)
     ("PUT", "/api/v1/suscripcion/plan", {"plan": "pro"}),
+    ("POST", "/api/v1/suscripcion/encuesta", {"salteada": True}),
     ("POST", "/api/v1/suscripcion/cobro-automatico", {}),
     ("DELETE", "/api/v1/suscripcion/cobro-automatico", {}),
     ("POST", "/api/v1/suscripcion/simular-cobro", {"estado": "aprobado"}),
@@ -927,3 +930,35 @@ def test_accesos_y_actividad_soporte_del_taller_a_no_muestran_b(api, datos):
         "FUGA: /soporte/actividad devolvió auditoría de otro taller"
     )
     assert not _filtra_b(r, datos["centinelas"])
+
+
+# ---------------------------------------------------------------------------
+# Rutas de plataforma de la oferta (docs/Oferta.md, C2): tipo de acceso,
+# adicionales y funciones de los planes. Ningún usuario de un taller las usa,
+# ni sobre el suyo ni sobre el otro.
+# ---------------------------------------------------------------------------
+
+CASOS_PLATAFORMA_C2 = [
+    ("POST", "/api/v1/plataforma/talleres/{taller}/acceso", {"tipo": "pago", "plan": "pro"}),
+    ("GET", "/api/v1/plataforma/talleres/{taller}/adicionales", None),
+    ("POST", "/api/v1/plataforma/talleres/{taller}/adicionales", {"codigo": "arca"}),
+    ("DELETE", "/api/v1/plataforma/talleres/{taller}/adicionales/arca", None),
+    ("PUT", "/api/v1/plataforma/planes/esencial", {"funciones": ["gestion", "arca"]}),
+]
+
+
+@pytest.mark.parametrize(
+    "metodo,plantilla,json_body",
+    CASOS_PLATAFORMA_C2,
+    ids=[f"{m} {p}" for m, p, _ in CASOS_PLATAFORMA_C2],
+)
+@pytest.mark.parametrize("persona", ["admin", "recepcion", "mecanico", "cliente"])
+def test_rutas_de_plataforma_c2_no_son_para_el_taller(
+    api, datos, metodo, plantilla, json_body, persona
+):
+    for taller_id in (TALLER_PRINCIPAL_ID, datos["taller_b_id"]):
+        url = plantilla.format(taller=taller_id)
+        r = api.request(metodo, url, headers=datos["headers"][persona], json=json_body)
+        assert r.status_code == 403, f"{metodo} {url} como {persona}: {r.status_code}"
+    with SessionLocal() as db:
+        assert db.get(Taller, datos["taller_b_id"]).tipo_acceso == "pago"

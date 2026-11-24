@@ -70,9 +70,25 @@ def test_planes_publicos_sin_token_solo_activos_y_ordenados(api, datos):
     r = api.get("/api/v1/publico/planes")
     assert r.status_code == 200
     planes = r.json()
-    assert [p["codigo"] for p in planes] == ["mini", "basico", "pro", "taller_plus"]
-    assert set(planes[0]) == {"codigo", "nombre", "precio_mensual", "max_personal"}
+    assert [p["codigo"] for p in planes] == ["mini", "esencial", "pro", "profesional"]
+    assert set(planes[0]) == {"codigo", "nombre", "precio_mensual", "max_personal", "funciones"}
     assert planes[-1]["max_personal"] is None
+
+
+def test_planes_publicos_traen_sus_funciones(api, datos):
+    """La landing arma lo que trae cada plan con `funciones` (docs/Oferta.md)."""
+    planes = {p["codigo"]: p for p in api.get("/api/v1/publico/planes").json()}
+    assert planes["mini"]["funciones"] == []
+
+    esencial = set(planes["esencial"]["funciones"])
+    assert esencial == {"gestion", "whatsapp_manual"}
+    assert "whatsapp_automatico" not in esencial
+
+    pro = set(planes["pro"]["funciones"])
+    assert {"whatsapp_automatico", "arca"} <= pro
+
+    profesional = set(planes["profesional"]["funciones"])
+    assert {"recordatorios_service", "marca_propia"} <= profesional
 
 
 def test_contacto_valido_se_guarda(api, datos):

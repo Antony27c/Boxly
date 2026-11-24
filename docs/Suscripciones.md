@@ -4,20 +4,26 @@ Complementa `docs/Plataforma.md`. Fechas en `YYYY-MM-DD`; montos en pesos con 2 
 
 ## Planes
 
-Tabla `planes` (la edita el superadmin): `codigo` (PK, `basico|pro|taller_plus`),
-`nombre`, `precio_mensual`, `max_personal` (int o `null` = sin límite), `activo`.
-Valores iniciales (provisorios): Básico $15.000 hasta 3; Pro $30.000 hasta 10;
-Taller+ $50.000 sin límite. "Personal" = usuarios activos con rol administrador,
-recepción o mecánico (no cuentan clientes).
+La oferta vigente (planes, precios, funciones, adicionales y tipo de acceso) está
+en `docs/Oferta.md`; esta sección describe la mecánica de suscripciones.
+
+Tabla `planes` (la edita el superadmin): `codigo` (PK, `esencial|pro|profesional`),
+`nombre`, `precio_mensual`, `max_personal` (int o `null` = sin límite), `funciones`
+(lista JSON de códigos de `app/core/funciones.py`), `activo`.
+Valores iniciales (provisorios, docs/Oferta.md): Esencial $35.000 hasta 3; Pro
+$79.000 hasta 10; Profesional $169.000 sin límite. "Personal" = usuarios activos
+con rol administrador, recepción o mecánico (no cuentan clientes).
 
 `PlanResponse`: `codigo, nombre, precio_mensual, max_personal, activo`.
 
 ## Suscripción del taller
 
-Campos nuevos en `talleres`: `plan_codigo` (FK `planes`, default `basico`),
+Campos nuevos en `talleres`: `plan_codigo` (FK `planes`, default `esencial`),
+`tipo_acceso` (`pago|demo|piloto`, default `pago`; la demo de Pro por 14 días y los
+pilotos los otorga el superadmin según `docs/Oferta.md`),
 `suscripcion_vence_en` (date: pagado hasta ese día inclusive), `cobro_automatico`
-(bool), `mp_preapproval_id` (str|null). Alta de taller: `basico` y 30 días de prueba.
-La migración deja los talleres existentes en `basico` con vencimiento en 30 días.
+(bool), `mp_preapproval_id` (str|null). El alta de taller sigue usando el plan por
+defecto con 30 días (la conversión demo/pago es de C2/C6, `docs/Oferta.md`).
 
 Estado (lo calcula `app/core/suscripcion.py::estado_suscripcion(vence_en, hoy)`):
 
@@ -34,9 +40,9 @@ Bloqueos (en `app/core/dependencies.py`, fase 0):
 - `solo_lectura`: método distinto de GET/HEAD/OPTIONS → 403
   `"El taller está en solo lectura por falta de pago de la suscripción"`, salvo
   `/api/v1/suscripcion*`, `/api/v1/auth*` y `/api/v1/terminos*`.
-- `suspendida`: todo → 403 `"La suscripción del taller está vencida"`, salvo el
-  administrador en `/api/v1/suscripcion*`, `/api/v1/auth*` y `/api/v1/terminos*`.
-  El login funciona (para que el admin pueda pagar).
+- `suspendida`: todo responde 403 `"La suscripción del taller está vencida"`, con estas excepciones:
+  - `/api/v1/auth*` (login, me, logout) funciona **para cualquier rol**, así el frontend sabe quién es y muestra la pantalla de suspensión en lugar de cerrar la sesión. Decidido el 2026-11-23, después de la prueba E1.
+  - El administrador puede usar además `/api/v1/suscripcion*` y `/api/v1/terminos*`, para pagar.
 
 `SuscripcionResponse`: `plan: PlanResponse, vence_en, estado, dias_para_vencer (int,
 negativo si venció), cobro_automatico, personal_activo (int), max_personal (int|null),
@@ -51,6 +57,9 @@ registrado_por_id (null si fue automático), creado_en`.
 
 Un pago aprobado extiende `suscripcion_vence_en`: `periodo_desde = max(vence_en + 1,
 hoy)`, `periodo_hasta = periodo_desde + 1 mes - 1 día` (o los meses que indique).
+El cobro del abono es solo Mercado Pago (`docs/Oferta.md`: sin transferencias); el
+pago manual de este contrato queda como herramienta interna de la plataforma para
+ajustes, cortesías y pilotos.
 
 ## S1. Planes, suscripción y pagos manuales (backend)
 

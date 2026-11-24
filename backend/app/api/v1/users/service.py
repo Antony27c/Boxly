@@ -1,4 +1,9 @@
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.v1.suscripcion.service import personal_activo
@@ -208,6 +213,40 @@ def _exigir_cupo_personal(db: Session, taller_id: int | None) -> None:
         )
 
 
+# Un lock por taller para el cupo en SQLite (ver _cupo_reservado).
+_LOCKS_CUPO: dict[int, threading.Lock] = {}
+_LOCKS_CUPO_GUARDA = threading.Lock()
+
+
+def _lock_cupo(taller_id: int) -> threading.Lock:
+    with _LOCKS_CUPO_GUARDA:
+        return _LOCKS_CUPO.setdefault(taller_id, threading.Lock())
+
+
+@contextmanager
+def _cupo_reservado(db: Session, taller_id: int | None) -> Iterator[None]:
+    """Serializa, por taller, el control del cupo de personal hasta el commit.
+
+    Sin esto, dos altas simultáneas cuentan las dos antes de que ninguna inserte
+    y el taller queda por encima del límite del plan. Hay que envolver el conteo
+    Y el commit (repository.create/update commitean).
+    - PostgreSQL: SELECT ... FOR UPDATE sobre la fila del taller. Vale entre
+      workers y procesos, y lo libera el commit o el rollback de la request.
+    - SQLite (dev y tests): no tiene FOR UPDATE; se usa un lock por taller en el
+      proceso, que alcanza porque SQLite se usa con un solo proceso.
+    Solo esperan otras altas o reactivaciones del mismo taller; el resto no.
+    """
+    if taller_id is None:
+        yield
+        return
+    if db.get_bind().dialect.name != "sqlite":
+        db.execute(select(Taller.id).where(Taller.id == taller_id).with_for_update())
+        yield
+        return
+    with _lock_cupo(taller_id):
+        yield
+
+
 def _validar_no_ultimo_admin(db: Session, user: Usuario, payload: dict) -> None:
     """No se puede dejar el taller sin administrador activo: ni desactivándolo
     ni cambiándole el rol (docs/Plataforma.md, P1). El filtro de taller ya
@@ -232,17 +271,22 @@ def create_usuario(db: Session, data: UsuarioCreate, actor: Usuario) -> UsuarioR
             detail="Ya existe un usuario con ese email",
         )
     cliente_id = _validar_cliente(db, data.rol, data.cliente_id)
-    if data.rol in ROLES_PERSONAL:
-        _exigir_cupo_personal(db, db.info.get(CLAVE_TALLER))
-    user = repository.create(
-        db,
-        nombre=data.nombre,
-        apellido=data.apellido,
-        email=data.email,
-        password_hash=hash_password(data.password),
-        rol=data.rol,
-        cliente_id=cliente_id,
-    )
+    # El hash va afuera del lock: es lo lento del alta.
+    password_hash = hash_password(data.password)
+    ocupa_cupo = data.rol in ROLES_PERSONAL
+    taller_id = db.info.get(CLAVE_TALLER)
+    with _cupo_reservado(db, taller_id if ocupa_cupo else None):
+        if ocupa_cupo:
+            _exigir_cupo_personal(db, taller_id)
+        user = repository.create(
+            db,
+            nombre=data.nombre,
+            apellido=data.apellido,
+            email=data.email,
+            password_hash=password_hash,
+            rol=data.rol,
+            cliente_id=cliente_id,
+        )
     return _to_response(user)
 
 
@@ -296,8 +340,7 @@ def update_usuario(
     rol_nuevo = payload.get("rol") or user.rol
     activo_nuevo = payload.get("activo", user.activo)
     ya_contaba = user.rol in ROLES_PERSONAL and user.activo
-    if rol_nuevo in ROLES_PERSONAL and activo_nuevo and not ya_contaba:
-        _exigir_cupo_personal(db, user.taller_id)
+    ocupa_cupo = rol_nuevo in ROLES_PERSONAL and activo_nuevo and not ya_contaba
 
     if "email" in payload:
         email = payload["email"].lower().strip()
@@ -325,7 +368,11 @@ def update_usuario(
     if "apellido" in payload and isinstance(payload["apellido"], str):
         payload["apellido"] = payload["apellido"].strip()
 
-    updated = repository.update(db, user, payload)
+    # El cupo se controla al final, con el lock tomado hasta el commit.
+    with _cupo_reservado(db, user.taller_id if ocupa_cupo else None):
+        if ocupa_cupo:
+            _exigir_cupo_personal(db, user.taller_id)
+        updated = repository.update(db, user, payload)
     return _to_response(updated)
 
 
