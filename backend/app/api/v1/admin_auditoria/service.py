@@ -1,10 +1,10 @@
 import csv
 import io
-from datetime import date
 
 from sqlalchemy.orm import Session
 
 from app.api.v1.admin_auditoria import repository
+from app.core.suscripcion import hoy
 from app.schemas.auditoria import AuditoriaResponse, FiltrosAuditoria
 from app.schemas.paginacion import ParametrosPagina
 
@@ -63,4 +63,4 @@ def exportar_csv(
     for fila in filas:
         escritor.writerow(_fila_csv(AuditoriaResponse.model_validate(fila)))
     contenido = "﻿" + salida.getvalue()
-    return contenido, f"auditoria-{date.today():%Y%m%d}.csv"
+    return contenido, f"auditoria-{hoy():%Y%m%d}.csv"

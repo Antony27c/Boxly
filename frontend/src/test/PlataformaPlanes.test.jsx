@@ -185,7 +185,7 @@ describe('PlataformaPlanes', () => {
     })
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Guardar plan' }))
 
-    expect(await within(dialogo).findByText(/precio válido/)).toBeInTheDocument()
+    expect(await within(dialogo).findByText(/Escribí el monto con coma/)).toBeInTheDocument()
     expect(await within(dialogo).findByText(/entero de 1 o más/)).toBeInTheDocument()
     expect(suscripciones.actualizarPlan).not.toHaveBeenCalled()
   })

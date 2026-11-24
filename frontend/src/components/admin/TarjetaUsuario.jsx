@@ -22,18 +22,26 @@ const FONDO_AVATAR = {
    - `soloSuperadmin`: quien mira es administrador y la cuenta es de un admin o
      superadmin: se ve la ficha pero sin acciones, con el chip "Solo superadmin".
    - `esSuperadmin`: quien mira es superadmin: ve además Restablecer contraseña
-     y Cerrar sesiones. */
+     y Cerrar sesiones.
+   - `ultimoAdmin`: es el único administrador activo del taller: Desactivar y
+     Eliminar quedan deshabilitados con la explicación (el servidor responde 409). */
+const MOTIVO_ULTIMO_ADMIN =
+  'Es el único administrador activo del taller: no se puede desactivar ni eliminar.'
+
 export default function TarjetaUsuario({
   usuario,
   esPropio = false,
   soloSuperadmin = false,
   esSuperadmin = false,
+  ultimoAdmin = false,
   onEditar,
   onAlternarEstado,
   onEliminar,
   onRestablecer,
   onCerrarSesiones,
 }) {
+  const idMotivo = `motivo-ultimo-admin-${usuario.id}`
+  const bloqueo = ultimoAdmin ? { disabled: true, 'aria-describedby': idMotivo } : {}
   return (
     <Ficha acento={ACENTO_ROL[usuario.rol] ?? 'neutro'}>
       <FichaCabecera
@@ -79,13 +87,23 @@ export default function TarjetaUsuario({
               </Button>
             )}
             {!esPropio && (
-              <Button variante="fantasma" className={BOTON_PIE} onClick={onAlternarEstado}>
+              <Button variante="fantasma" className={BOTON_PIE} onClick={onAlternarEstado} {...bloqueo}>
                 {usuario.activo ? 'Desactivar' : 'Activar'}
               </Button>
             )}
-            <Button variante="fantasma" className={`${BOTON_PIE} ml-auto hover:!text-danger`} onClick={onEliminar}>
+            <Button
+              variante="fantasma"
+              className={`${BOTON_PIE} ml-auto hover:!text-danger`}
+              onClick={onEliminar}
+              {...bloqueo}
+            >
               Eliminar
             </Button>
+            {ultimoAdmin && (
+              <p id={idMotivo} className="w-full px-3 pb-1 text-xs text-muted">
+                {MOTIVO_ULTIMO_ADMIN}
+              </p>
+            )}
           </>
         )}
       </FichaPie>

@@ -1,25 +1,18 @@
 import { Link } from 'react-router-dom'
+import { estadoSuscripcion } from '@/components/suscripcion/estados'
 import { Chip, Chips, Ficha, FichaCabecera, FichaSeccion } from '@/components/ui/Ficha'
+import { hoyAR } from '@/lib/fechas'
 import { TIPOS_ACCESO } from './funciones'
 import { etiquetaSoporte, haceCuanto, numero } from './formatos'
-
-// Misma tabla de estados que SuscripcionTaller (docs/Suscripciones.md), en
-// versión mínima para el chip: los componentes no comparten exports.
-const ESTADOS_SUSCRIPCION = {
-  al_dia: { texto: 'Al día', tono: 'ok' },
-  gracia: { texto: 'En gracia', tono: 'ambar' },
-  solo_lectura: { texto: 'Solo lectura', tono: 'peligro' },
-  suspendida: { texto: 'Suspendida por falta de pago', tono: 'peligro' },
-}
 
 // Días enteros hasta el vencimiento (fecha YYYY-MM-DD), sin zona horaria.
 function diasParaVencer(fecha) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(fecha ?? ''))
   if (!m) return null
-  const vence = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-  const hoy = new Date()
-  const hoyMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
-  return Math.round((vence - hoyMedianoche) / 86400000)
+  const vence = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  // "Hoy" del taller (hora de Argentina), no el del navegador del superadmin.
+  const [anio, mes, dia] = hoyAR().split('-').map(Number)
+  return Math.round((vence - Date.UTC(anio, mes - 1, dia)) / 86400000)
 }
 
 // Chip de acceso sin cargo (demo o piloto): avisa los días que quedan solo
@@ -62,13 +55,12 @@ export default function TarjetaTaller({ taller }) {
   const suspendido = taller.estado === 'suspendido'
   const soporte = taller.soporte_vigente_hasta ? etiquetaSoporte(taller.soporte_vigente_hasta) : null
   // El resumen trae plan_codigo y suscripcion_estado (S1); el chip de
-  // suscripción solo aparece cuando el taller no está al día.
+  // suscripción solo aparece cuando el taller no está al día. Las etiquetas
+  // y tonos salen de components/suscripcion/estados.js, compartidas con la
+  // pantalla del taller.
   const suscripcion =
     taller.suscripcion_estado && taller.suscripcion_estado !== 'al_dia'
-      ? (ESTADOS_SUSCRIPCION[taller.suscripcion_estado] ?? {
-          texto: taller.suscripcion_estado,
-          tono: 'neutro',
-        })
+      ? estadoSuscripcion(taller.suscripcion_estado)
       : null
   const acceso = chipAcceso(taller)
 

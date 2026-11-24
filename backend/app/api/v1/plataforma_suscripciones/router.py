@@ -114,9 +114,9 @@ def listar_adicionales(
     summary="Activar un adicional",
 )
 def activar_adicional(
-    taller_id: int, datos: AdicionalCreate, db: DbSession, _: SuperAdminUser
+    taller_id: int, datos: AdicionalCreate, db: DbSession, usuario: SuperAdminUser
 ) -> AdicionalResponse:
-    return service.activar_adicional(db, taller_id, datos)
+    return service.activar_adicional(db, taller_id, datos, usuario)
 
 
 @router.delete(
@@ -125,7 +125,7 @@ def activar_adicional(
     summary="Desactivar un adicional",
 )
 def desactivar_adicional(
-    taller_id: int, codigo: str, db: DbSession, _: SuperAdminUser
+    taller_id: int, codigo: str, db: DbSession, usuario: SuperAdminUser
 ) -> Response:
-    service.desactivar_adicional(db, taller_id, codigo)
+    service.desactivar_adicional(db, taller_id, codigo, usuario)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

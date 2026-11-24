@@ -15,7 +15,6 @@ from app.schemas.turno import (
     TurnoUpdate,
 )
 
-
 HORAS_TURNO = (8, 10, 12, 14, 16)
 
 ZONA_TALLER = ZoneInfo("America/Argentina/Buenos_Aires")
@@ -211,7 +210,11 @@ def update_turno(db: Session, turno_id: int, data: TurnoUpdate) -> TurnoResponse
     if payload.get("estado") is not None and payload["estado"] != turno.estado:
         _validar_transicion(turno.estado, payload["estado"])
     # Un turno viejo (fuera de la grilla) se puede seguir editando mientras no se le cambie la hora.
-    if "fecha_hora" in payload and payload["fecha_hora"].replace(tzinfo=None) != turno.fecha_hora.replace(tzinfo=None):
+    hora_cambiada = (
+        "fecha_hora" in payload
+        and payload["fecha_hora"].replace(tzinfo=None) != turno.fecha_hora.replace(tzinfo=None)
+    )
+    if hora_cambiada:
         _validar_horario(fecha_hora)
     if nuevo_estado != "cancelado" and ("fecha_hora" in payload or "mecanico_id" in payload):
         _validar_disponibilidad(

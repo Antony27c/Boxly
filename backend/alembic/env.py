@@ -1,9 +1,8 @@
-import sys
 import os
+import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
@@ -12,9 +11,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Importamos nuestra Base y TODOS los modelos para que Alembic los detecte
 # automáticamente al generar migraciones
+from app import models  # noqa: F401 - se importa para que Base.metadata los conozca
 from app.core.config import get_settings
 from app.db.base import Base
-from app import models  # noqa: F401 - se importa para que Base.metadata los conozca
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Dict, List
 
-from sqlalchemy import extract, func, select
+from sqlalchemy import extract, func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.suscripcion import ZONA_ARGENTINA
 from app.models.detalle_orden import DetalleOrden
 from app.models.orden import Orden
 from app.models.pago import Pago
@@ -11,23 +12,32 @@ from app.models.usuario import RolUsuario, Usuario
 
 CERRADOS = ("entregado", "cancelado")
 
+# Corrimiento de Argentina respecto de UTC en horas (-3). Es fijo: no hay
+# horario de verano desde 2009, así que alcanza con restarlo antes de agrupar.
+HORAS_ARGENTINA = int(ZONA_ARGENTINA.utcoffset(datetime(2026, 1, 1)).total_seconds() // 3600)
+
 
 def _es_sqlite(db: Session) -> bool:
     return db.get_bind().dialect.name == "sqlite"
 
 
-def _mes_de(db: Session, columna):
-    """Clave 'YYYY-MM' de un timestamp, portable entre SQLite y Postgres."""
+def _formato_argentino(db: Session, columna, formato_sqlite: str, formato_pg: str):
+    """Formatea un DateTime guardado en UTC naive según la hora argentina,
+    portable entre SQLite y Postgres: se le suman ``HORAS_ARGENTINA`` horas
+    antes de formatear, así 02:30 UTC del 1/2 cae en el 31/1 argentino."""
     if _es_sqlite(db):
-        return func.strftime("%Y-%m", columna)
-    return func.to_char(columna, "YYYY-MM")
+        return func.strftime(formato_sqlite, columna, f"{HORAS_ARGENTINA} hours")
+    return func.to_char(columna + text(f"interval '{HORAS_ARGENTINA} hours'"), formato_pg)
+
+
+def _mes_de(db: Session, columna):
+    """Clave 'YYYY-MM' del mes argentino de un timestamp UTC."""
+    return _formato_argentino(db, columna, "%Y-%m", "YYYY-MM")
 
 
 def _dia_de(db: Session, columna):
-    """Clave 'YYYY-MM-DD' de un timestamp, portable entre SQLite y Postgres."""
-    if _es_sqlite(db):
-        return func.strftime("%Y-%m-%d", columna)
-    return func.date(columna)
+    """Clave 'YYYY-MM-DD' del día argentino de un timestamp UTC."""
+    return _formato_argentino(db, columna, "%Y-%m-%d", "YYYY-MM-DD")
 
 
 def _horas_entre(db: Session, inicio, fin):
@@ -137,14 +147,21 @@ class MetricasRepository:
         )
         return {mes: total for mes, total in db.execute(stmt)}
 
-    def total_cobrado(self, db: Session, desde: datetime, hasta: datetime):
-        """SUM(monto) de pagos aprobados cuyo fecha_pago cae en el intervalo."""
-        stmt = select(func.sum(Pago.monto)).where(
-            Pago.estado == "aprobado",
-            Pago.fecha_pago >= desde,
-            Pago.fecha_pago < hasta,
+    def cobrado_por_medio(self, db: Session, desde: datetime, hasta: datetime) -> Dict[str, object]:
+        """SUM(monto) por medio de los pagos aprobados cuyo fecha_pago cae en el intervalo.
+
+        Incluye el cobro online (Mercado Pago) y el registrado en el local.
+        """
+        stmt = (
+            select(Pago.medio, func.sum(Pago.monto))
+            .where(
+                Pago.estado == "aprobado",
+                Pago.fecha_pago >= desde,
+                Pago.fecha_pago < hasta,
+            )
+            .group_by(Pago.medio)
         )
-        return db.scalar(stmt)
+        return {medio: total for medio, total in db.execute(stmt)}
 
 
 metricas_repository = MetricasRepository()

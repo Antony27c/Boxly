@@ -18,7 +18,8 @@ import useRecurso from '@/hooks/useRecurso'
 import { clientesService } from '@/services/clientes'
 import { ESTADOS_TURNO, HORARIOS, turnosService } from '@/services/turnos'
 import { vehiculosService } from '@/services/vehiculos'
-import { aISO, etiquetaDia, lunesDe, sumarDias } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
+import { etiquetaDia, lunesDe, sumarDias } from '@/utils/fechas'
 import { ETIQUETAS_ESTADO } from '@/utils/etiquetas'
 
 // Barra de color de la ficha de cada turno según su estado.
@@ -36,7 +37,7 @@ export default function Turnos() {
   const { token } = useAuth()
   const [parametros, setParametros] = useSearchParams()
   const navigate = useNavigate()
-  const hoy = aISO(new Date())
+  const hoy = hoyAR()
 
   const [inicioSemana, setInicioSemana] = useState(() => lunesDe(hoy))
   const [estadoFiltro, setEstadoFiltro] = useState('')

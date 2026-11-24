@@ -3,7 +3,6 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # DER §3.7 + estados de agenda frontend
 EstadoTurno = Literal[
     "pendiente",

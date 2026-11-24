@@ -5,6 +5,7 @@ import { useSoporte } from '@/context/SoporteContext'
 import { ZonaSoloLectura } from '@/context/SoloLecturaContext'
 import { formatearHora } from '@/lib/fechas'
 import useSuscripcion from '@/hooks/useSuscripcion'
+import useTallerSuspendido from '@/hooks/useTallerSuspendido'
 import AvisoSuscripcion from '@/components/suscripcion/AvisoSuscripcion'
 import Logo from '@/components/ui/Logo'
 import Icono from '@/components/ui/Icono'
@@ -56,6 +57,9 @@ export default function AppLayout() {
   // En suspendida el administrador solo puede usar /suscripcion (y /terminos,
   // que el backend también exime); el resto del personal ve una pantalla.
   const suspendida = estadoSuscripcion === 'suspendida' && esPersonal
+  // Suspensión manual del superadmin (403 taller_suspendido): pantalla para
+  // todo el personal, admin incluido, en lugar del error de cada pantalla.
+  const tallerSuspendido = useTallerSuspendido() && esPersonal
   const enPantallaSuscripcion = /^\/(suscripcion|terminos)(\/|$)/.test(location.pathname)
   const avisoSuscripcion =
     estadoSuscripcion === 'gracia' || estadoSuscripcion === 'solo_lectura'
@@ -168,7 +172,18 @@ export default function AppLayout() {
               links siguen andando (ver SoloLecturaContext). Con la
               suscripción suspendida el resto del personal ve una pantalla. */}
           <ZonaSoloLectura activo={deshabilitado} className="w-full min-w-0">
-            {suspendida && !esAdmin ? (
+            {tallerSuspendido ? (
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <Icono nombre="alerta" className="h-10 w-10 text-danger" />
+                <h1 className="text-xl font-bold text-ink">El taller está suspendido.</h1>
+                <p className="max-w-md text-sm text-muted">
+                  Boxly suspendió el acceso de este taller, así que por ahora no se puede usar.
+                  {esAdmin
+                    ? ' Escribinos para saber el motivo y volver a habilitarlo.'
+                    : ' Hablá con el administrador del taller.'}
+                </p>
+              </div>
+            ) : suspendida && !esAdmin ? (
               <div className="flex flex-col items-center gap-3 py-16 text-center">
                 <Icono nombre="alerta" className="h-10 w-10 text-danger" />
                 <h1 className="text-xl font-bold text-ink">

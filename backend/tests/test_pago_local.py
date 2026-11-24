@@ -170,4 +170,6 @@ def test_las_metricas_cuentan_el_ingreso(api, datos):
         params={"desde": str(hoy - timedelta(days=1)), "hasta": str(hoy + timedelta(days=1))},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["cobrado_online"] == "1500.00"
+    assert r.json()["cobrado"] == "1500.00"
+    assert r.json()["cobrado_por_medio"]["efectivo"] == "1500.00"
+    assert r.json()["cobrado_por_medio"]["mercadopago"] == "0.00"

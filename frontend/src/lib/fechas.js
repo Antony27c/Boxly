@@ -92,10 +92,17 @@ export function formatearHora(valor) {
   return fecha ? FORMATO_HORA.format(fecha) : '—'
 }
 
+/* "Hoy" del taller, YYYY-MM-DD en hora de Argentina, sin importar la zona
+   del navegador (un dueño de viaje en España a las 22:00 de acá sigue en el
+   mismo día que el taller). Todo "hoy" de la app sale de acá. */
+export function hoyAR(ahora = new Date()) {
+  return FORMATO_DIA.format(ahora)
+}
+
 // ¿El instante del servidor cae en el día de hoy (hora de Argentina)?
 export function esHoyEnTaller(valor) {
   const fecha = fechaServidor(valor)
-  return fecha != null && FORMATO_DIA.format(fecha) === FORMATO_DIA.format(new Date())
+  return fecha != null && FORMATO_DIA.format(fecha) === hoyAR()
 }
 
 // "23/11" — día y mes en hora de Argentina.

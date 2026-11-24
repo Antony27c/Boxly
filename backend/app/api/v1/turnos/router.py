@@ -4,15 +4,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.v1.turnos import service
-from app.core.dependencies import PersonalUser, DbSession, filtro_mecanico, require_roles
+from app.core.dependencies import DbSession, PersonalUser, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.usuario import MessageResponse
 from app.schemas.turno import (
     TurnoCreate,
     TurnoEstadoUpdate,
     TurnoResponse,
     TurnoUpdate,
 )
+from app.schemas.usuario import MessageResponse
 
 router = APIRouter(prefix="/turnos", tags=["Turnos"])
 

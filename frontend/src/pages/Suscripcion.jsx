@@ -18,7 +18,7 @@ import useRecurso from '@/hooks/useRecurso'
 import useSuscripcion from '@/hooks/useSuscripcion'
 import { formatearFecha, formatearFechaHora } from '@/lib/fechas'
 import { esProximamente, etiquetaFuncion, funcionesDePlan, ordenar } from '@/lib/funcionesPlan'
-import { suscripcionService } from '@/services/suscripcion'
+import { esErrorDePlanExcedido, suscripcionService } from '@/services/suscripcion'
 import { pesos } from '@/utils/formato'
 
 const CLASE_TARJETA = 'rounded-box border border-graphite-600 bg-graphite-800 p-5'
@@ -79,7 +79,7 @@ function quienRegistro(pago) {
 /* El 409 del servidor ("Tu personal activo supera el límite de ese plan") no dice
    cuántos son ni qué hacer: con la suscripción a mano lo explicamos. */
 function mensajeErrorPlan(problema, plan, suscripcion) {
-  if (problema?.status !== 409) return problema?.message
+  if (!esErrorDePlanExcedido(problema)) return problema?.message
   const activos = suscripcion?.personal_activo
   if (activos == null || !plan?.max_personal) return problema.message
   return (

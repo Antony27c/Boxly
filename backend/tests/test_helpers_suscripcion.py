@@ -75,22 +75,23 @@ def test_periodo_vencido_arranca_hoy():
 
 
 def test_periodo_en_fin_de_mes():
-    # Vence el 30/01: el período arranca el 31/01 y termina el 27/02.
+    # Vence el 30/01: el período arranca el 31/01 y termina el último día de
+    # febrero (el 31/02 no existe), no el 27/02.
     assert periodo_siguiente(date(2026, 1, 30), 1, desde=date(2026, 1, 15)) == (
-        date(2026, 1, 31), date(2026, 2, 27),
+        date(2026, 1, 31), date(2026, 2, 28),
     )
 
 
 def test_periodo_en_anio_bisiesto():
     assert periodo_siguiente(date(2028, 1, 30), 1, desde=date(2028, 1, 15)) == (
-        date(2028, 1, 31), date(2028, 2, 28),
+        date(2028, 1, 31), date(2028, 2, 29),
     )
     assert periodo_siguiente(None, 1, desde=date(2028, 2, 29)) == (
         date(2028, 2, 29), date(2028, 3, 28),
     )
-    # 29/02 + 12 meses: 28/02 del año siguiente; el período termina el 27/02.
+    # 29/02 + 12 meses: el 29/02/2029 no existe, el período termina el 28/02.
     assert periodo_siguiente(None, 12, desde=date(2028, 2, 29)) == (
-        date(2028, 2, 29), date(2029, 2, 27),
+        date(2028, 2, 29), date(2029, 2, 28),
     )
 
 

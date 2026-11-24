@@ -1,20 +1,20 @@
-import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.v1.suscripcion.service import personal_activo
 from app.api.v1.users import repository
 from app.core.config import get_settings
+from app.core.errores import LIMITE_PERSONAL, ErrorConCodigo
 from app.core.security import (
     create_access_token,
     decode_invitation_token,
     hash_password,
     verify_password,
 )
+from app.core.suscripcion import reservar_cupo
 from app.db.session import CLAVE_TALLER
 from app.models import Plan, Taller
 from app.models.cliente import Cliente
@@ -204,47 +204,24 @@ def _exigir_cupo_personal(db: Session, taller_id: int | None) -> None:
     if plan is None or plan.max_personal is None:
         return
     if personal_activo(db, taller_id) >= plan.max_personal:
-        raise HTTPException(
+        raise ErrorConCodigo(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 f"Tu plan permite hasta {plan.max_personal} usuarios del personal. "
                 "Pasá a un plan mayor para sumar más."
             ),
+            codigo=LIMITE_PERSONAL,
         )
-
-
-# Un lock por taller para el cupo en SQLite (ver _cupo_reservado).
-_LOCKS_CUPO: dict[int, threading.Lock] = {}
-_LOCKS_CUPO_GUARDA = threading.Lock()
-
-
-def _lock_cupo(taller_id: int) -> threading.Lock:
-    with _LOCKS_CUPO_GUARDA:
-        return _LOCKS_CUPO.setdefault(taller_id, threading.Lock())
 
 
 @contextmanager
 def _cupo_reservado(db: Session, taller_id: int | None) -> Iterator[None]:
-    """Serializa, por taller, el control del cupo de personal hasta el commit.
-
-    Sin esto, dos altas simultáneas cuentan las dos antes de que ninguna inserte
-    y el taller queda por encima del límite del plan. Hay que envolver el conteo
-    Y el commit (repository.create/update commitean).
-    - PostgreSQL: SELECT ... FOR UPDATE sobre la fila del taller. Vale entre
-      workers y procesos, y lo libera el commit o el rollback de la request.
-    - SQLite (dev y tests): no tiene FOR UPDATE; se usa un lock por taller en el
-      proceso, que alcanza porque SQLite se usa con un solo proceso.
-    Solo esperan otras altas o reactivaciones del mismo taller; el resto no.
-    """
-    if taller_id is None:
-        yield
-        return
-    if db.get_bind().dialect.name != "sqlite":
-        db.execute(select(Taller.id).where(Taller.id == taller_id).with_for_update())
-        yield
-        return
-    with _lock_cupo(taller_id):
-        yield
+    """Reserva el cupo de personal del taller hasta el commit (ver
+    ``reservar_cupo``). Hay que envolver el conteo Y el commit
+    (repository.create/update commitean)."""
+    if taller_id is not None:
+        reservar_cupo(db, taller_id)
+    yield
 
 
 def _validar_no_ultimo_admin(db: Session, user: Usuario, payload: dict) -> None:

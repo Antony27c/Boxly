@@ -9,6 +9,8 @@ from datetime import date
 
 from sqlalchemy import select
 
+from app.core.suscripcion import hoy
+
 # --- Códigos de función (docs/Oferta.md, sección 4) ---------------------------
 FUNCION_GESTION = "gestion"  # toda la gestión diaria del taller
 FUNCION_WHATSAPP_MANUAL = "whatsapp_manual"  # aviso armado que el taller manda
@@ -53,5 +55,7 @@ def taller_tiene(db, taller, funcion: str) -> bool:
         AdicionalTaller.codigo == funcion,
         AdicionalTaller.activo.is_(True),
     )
-    hoy = date.today()
-    return any(_adicional_vigente(a, hoy) for a in db.scalars(stmt))
+    # El día argentino, como ``adicionales_vigentes``: con el del servidor (UTC)
+    # un adicional que vence hoy dejaba de valer a las 21.
+    dia = hoy()
+    return any(_adicional_vigente(a, dia) for a in db.scalars(stmt))

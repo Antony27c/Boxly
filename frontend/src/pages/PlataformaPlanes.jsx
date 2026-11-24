@@ -13,6 +13,7 @@ import { suscripcionesPlataformaService } from '@/services/suscripcionesPlatafor
 import { pesos } from '@/utils/formato'
 import { numero as numeroLegible } from '@/components/plataforma/formatos'
 import { FUNCIONES, etiquetaFuncion } from '@/components/plataforma/funciones'
+import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
 
 /* La página de planes del superadmin (S5, contrato en docs/Suscripciones.md):
    una tarjeta por plan con precio y límite de personal, y edición en un
@@ -71,7 +72,8 @@ function TarjetaPlan({ plan, onEditar }) {
 
 function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
   const [nombre, setNombre] = useState(plan.nombre ?? '')
-  const [precio, setPrecio] = useState(plan.precio_mensual != null ? String(plan.precio_mensual) : '')
+  // Se precarga y se tipea en formato argentino ("15.000", "15.000,50").
+  const [precio, setPrecio] = useState(plan.precio_mensual != null ? formatearMontoAR(plan.precio_mensual) : '')
   const [maxPersonal, setMaxPersonal] = useState(
     plan.max_personal != null ? String(plan.max_personal) : '',
   )
@@ -88,9 +90,9 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
   function validar() {
     const encontrados = {}
     if (nombre.trim().length < 2) encontrados.nombre = 'Ingresá el nombre del plan.'
-    const precioNumero = Number(precio)
-    if (precio.trim() === '' || !Number.isFinite(precioNumero) || precioNumero < 0)
-      encontrados.precio = 'Ingresá un precio válido (0 o más).'
+    const precioNumero = parsearMontoAR(precio)
+    if (precio.trim() === '') encontrados.precio = 'Ingresá el precio mensual.'
+    else if (precioNumero === null) encontrados.precio = MENSAJE_MONTO_INVALIDO
     if (maxPersonal.trim() !== '') {
       const limite = Number(maxPersonal)
       if (!Number.isInteger(limite) || limite < 1)
@@ -105,7 +107,7 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
     if (!validar()) return
     onGuardar({
       nombre: nombre.trim(),
-      precio_mensual: Number(precio),
+      precio_mensual: parsearMontoAR(precio),
       // Vacío = sin límite (null), igual que en el contrato.
       max_personal: maxPersonal.trim() === '' ? null : Number(maxPersonal),
       activo,
@@ -130,11 +132,9 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label="Precio mensual"
-          type="number"
           inputMode="decimal"
-          min="0"
-          step="0.01"
           value={precio}
+          placeholder="Ej.: 15.000 o 15.000,50"
           onChange={(e) => setPrecio(e.target.value)}
           error={errores.precio}
           disabled={guardando}

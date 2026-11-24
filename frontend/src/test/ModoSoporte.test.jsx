@@ -166,9 +166,12 @@ describe('Modo soporte', () => {
     await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent('/clientes'))
   })
 
-  it('un 403 de "acceso de soporte" sale del modo con aviso', async () => {
+  it('un 403 con código soporte_sin_acceso sale del modo con aviso', async () => {
     fetchMock.mockResolvedValue(
-      respuestaJson({ detail: 'El taller no te dio acceso de soporte' }, { status: 403 }),
+      respuestaJson(
+        { detail: 'El taller no te dio acceso de soporte', codigo: 'soporte_sin_acceso' },
+        { status: 403 },
+      ),
     )
     montar()
     fireEvent.click(screen.getByRole('button', { name: 'entrar' }))

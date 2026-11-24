@@ -7,13 +7,15 @@ import Select from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import useTaller from '@/hooks/useTaller'
 import { formatearFechaHora } from '@/lib/fechas'
-import { estadoCobro, MEDIOS_PAGO_LOCAL, ordenesService, textoPagada } from '@/services/ordenes'
+import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
+import { estadoCobro, MEDIOS_PAGO_LOCAL, montoDelServidor, ordenesService, textoPagada } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 import '@/styles/ticket.css'
 
+// Se precarga en formato argentino ("185.000,50"), igual que se tipea.
 function montoInicial(orden) {
-  const valor = Number(orden.costo_final) || Number(orden.monto_propuesto) || Number(orden.costo_estimado) || ''
-  return String(valor)
+  const valor = Number(orden.costo_final) || Number(orden.monto_propuesto) || Number(orden.costo_estimado) || 0
+  return valor > 0 ? formatearMontoAR(valor) : ''
 }
 
 // El CUIT se muestra como XX-XXXXXXXX-X cuando tiene los 11 dígitos.
@@ -23,22 +25,21 @@ function cuitLegible(cuit) {
   return `${digitos.slice(0, 2)}-${digitos.slice(2, 10)}-${digitos.slice(10)}`
 }
 
-/* Pago presencial de un cobro ya emitido (W2). El monto viene precargado con
-   el del cobro: el backend no acepta pagos parciales y explica si no coincide. */
+/* Pago presencial de un cobro ya emitido (W2). El backend exige el monto
+   exacto del cobro (no hay pagos parciales): se muestra solo para leer y se
+   manda el costo_final tal cual, sin pasar por lo que se tipee. */
 function RegistrarPagoLocal({ orden, abierto, onCerrar, onListo }) {
   const { token } = useAuth()
   const [medio, setMedio] = useState('efectivo')
-  const [monto, setMonto] = useState(() => String(Number(orden.costo_final) || ''))
   const [referencia, setReferencia] = useState('')
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const monto = montoDelServidor(orden.costo_final)
+  const montoValido = monto != null && monto > 0
 
   async function registrar(evento) {
     evento.preventDefault()
-    if (!(Number(monto) > 0)) {
-      setError('Poné un monto mayor a 0.')
-      return
-    }
+    if (!montoValido) return
     setGuardando(true)
     setError('')
     try {
@@ -54,7 +55,7 @@ function RegistrarPagoLocal({ orden, abierto, onCerrar, onListo }) {
     <Modal
       abierto={abierto}
       titulo="Registrar pago en el local"
-      descripcion={`El cliente pagó en el taller el cobro de ${pesos(orden.costo_final)}.`}
+      descripcion="El cliente pagó en el taller el cobro emitido."
       ancho="max-w-sm"
       onCerrar={guardando ? () => {} : onCerrar}
     >
@@ -66,17 +67,11 @@ function RegistrarPagoLocal({ orden, abierto, onCerrar, onListo }) {
           opciones={MEDIOS_PAGO_LOCAL}
           disabled={guardando}
         />
-        <Field
-          label="Monto"
-          inputMode="numeric"
-          value={monto}
-          onChange={(e) => {
-            setMonto(e.target.value)
-            if (error) setError('')
-          }}
-          disabled={guardando}
-          ayuda="Tiene que ser el monto del cobro emitido."
-        />
+        <dl>
+          <dt className="text-sm font-medium text-muted">Monto del cobro</dt>
+          <dd className="mt-1 font-mono text-2xl font-semibold text-ink">{montoValido ? pesos(monto) : '—'}</dd>
+        </dl>
+        {!montoValido && <Alert>La orden no tiene un cobro emitido con monto válido.</Alert>}
         <Field
           label="Referencia (opcional)"
           value={referencia}
@@ -90,7 +85,7 @@ function RegistrarPagoLocal({ orden, abierto, onCerrar, onListo }) {
           <Button type="button" variante="fantasma" onClick={onCerrar} disabled={guardando}>
             Cancelar
           </Button>
-          <Button type="submit" cargando={guardando}>
+          <Button type="submit" cargando={guardando} disabled={!montoValido}>
             Registrar pago
           </Button>
         </div>
@@ -160,7 +155,12 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
 
   async function enviar(evento) {
     evento.preventDefault()
-    if (!(Number(monto) > 0)) {
+    const numero = parsearMontoAR(monto)
+    if (numero === null) {
+      setError(String(monto).trim() ? MENSAJE_MONTO_INVALIDO : 'Poné el monto a cobrar.')
+      return
+    }
+    if (!(numero > 0)) {
       setError('Poné un monto mayor a 0.')
       return
     }
@@ -168,10 +168,10 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
     setError('')
     try {
       if (esMostrador && situacion === 'pendiente') {
-        await ordenesService.aprobarCobro(orden.id, monto, token)
+        await ordenesService.aprobarCobro(orden.id, numero, token)
         onListo('Cobro aprobado. El cliente ya puede pagarlo desde su portal.')
       } else {
-        await ordenesService.emitirCobro(orden.id, monto, token)
+        await ordenesService.emitirCobro(orden.id, numero, token)
         onListo(
           esMostrador
             ? 'Cobro enviado. El cliente ya puede pagarlo desde su portal.'
@@ -252,14 +252,14 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
           <>
             <Field
               label={esMostrador ? 'Monto a cobrar' : 'Monto a cobrar (lo aprueba recepción)'}
-              inputMode="numeric"
+              inputMode="decimal"
               value={monto}
               onChange={(e) => {
                 setMonto(e.target.value)
                 if (error) setError('')
               }}
               disabled={guardando}
-              placeholder="Ej.: 185000"
+              placeholder="Ej.: 185.000 o 185.000,50"
               ayuda={
                 esMostrador
                   ? 'Al confirmar, el cliente lo ve en su portal y puede pagarlo online.'

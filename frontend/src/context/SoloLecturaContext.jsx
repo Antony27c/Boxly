@@ -8,7 +8,12 @@ import { createContext, useContext, useLayoutEffect, useRef } from 'react'
    - lo marcado con `data-lectura` (o lo que está adentro de algo marcado),
      para buscadores, filtros y paginación;
    - por su rol: pestañas (role="tab"), chips de filtro (aria-pressed),
-     inputs type="search" y lo que vive en role="search".
+     inputs type="search", lo que vive en role="search" y los botones que
+     abren o cierran algo en pantalla (button[aria-expanded]: menús,
+     acordeones, "ver tabla"); lo que escribe adentro de un menú se sigue
+     apagando.
+   Las preferencias de este dispositivo (tema, tamaño de letra, animaciones)
+   van marcadas con `data-lectura` donde se usan.
    Todo lo demás (botones, campos, selects, textareas) queda deshabilitado.
    Los links (<a>) nunca se tocan: navegar es leer.
 
@@ -17,7 +22,8 @@ import { createContext, useContext, useLayoutEffect, useRef } from 'react'
    exactamente lo que se apagó acá. */
 
 const CONTROLES = 'button, input, select, textarea'
-const LECTURA = '[data-lectura], [role="tab"], [aria-pressed], input[type="search"], [role="search"]'
+const LECTURA =
+  '[data-lectura], [role="tab"], [aria-pressed], input[type="search"], [role="search"], button[aria-expanded]'
 const MARCA = 'data-apagado-por-lectura'
 
 const SoloLecturaContext = createContext({ activo: false })
@@ -77,6 +83,13 @@ function useApagadoDeEscritura(ref, activo) {
       attributeFilter: ['disabled'],
     })
     return () => {
+      // Los cambios de React de este mismo commit (por ejemplo un botón que
+      // pasó a `cargando`) todavía no llegaron al callback: si se descartan
+      // con disconnect(), restaurar() habilitaría un botón que React cree
+      // deshabilitado (doble envío). Se atienden antes de soltar la zona.
+      for (const registro of observador.takeRecords()) {
+        if (registro.type === 'attributes') atenderCambioDeReact(registro.target)
+      }
       observador.disconnect()
       restaurar(raiz)
     }

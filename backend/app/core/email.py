@@ -55,7 +55,10 @@ ESTADO_TEMPLATE = """
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+        .header {{
+            background: #2563eb; color: white; padding: 20px; text-align: center;
+            border-radius: 8px 8px 0 0;
+        }}
         .content {{ background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }}
         .info {{ background: white; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0; }}
         .estado {{ font-size: 18px; font-weight: bold; color: #2563eb; }}
@@ -70,7 +73,8 @@ ESTADO_TEMPLATE = """
         <div class="content">
             <h2>Actualización de tu orden de trabajo</h2>
             <p>Hola <strong>{cliente_nombre}</strong>,</p>
-            <p>Tu vehículo <strong>{vehiculo_patente}</strong> ({vehiculo_marca} {vehiculo_modelo}) ha cambiado de estado.</p>
+            <p>Tu vehículo <strong>{vehiculo_patente}</strong> ({vehiculo_marca} {vehiculo_modelo})
+            ha cambiado de estado.</p>
             
             <div class="info">
                 <p><strong>Orden:</strong> {orden_codigo}</p>
@@ -216,20 +220,30 @@ INVITACION_TEMPLATE = """
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+        <div style="background: #2563eb; color: white; padding: 20px; text-align: center;
+                    border-radius: 8px 8px 0 0;">
             <h1>🔧 Boxly Taller Mecánico</h1>
         </div>
         <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2>Activá tu cuenta</h2>
             <p>Hola <strong>{cliente_nombre}</strong>,</p>
-            <p>El taller te dio de alta en Boxly. Desde tu cuenta vas a poder seguir el estado de tus vehículos, ver tus órdenes y pagar online.</p>
+            <p>El taller te dio de alta en Boxly.
+            Desde tu cuenta vas a poder seguir el estado de tus vehículos, ver tus órdenes y pagar online.</p>
             <p>Revisá que tus datos sean correctos y elegí tu contraseña:</p>
             <p style="text-align: center; margin: 30px 0;">
-                <a href="{enlace}" style="background: #2563eb; color: white; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold;">Activar mi cuenta</a>
+                <a href="{enlace}"
+                   style="background: #2563eb; color: white; padding: 12px 28px; border-radius: 6px;
+                          text-decoration: none; font-weight: bold;">Activar mi cuenta</a>
             </p>
-            <p style="font-size: 13px; color: #666;">Si el botón no funciona, copiá este enlace en tu navegador:<br>{enlace}</p>
-            <p style="font-size: 13px; color: #666;">El enlace vale {horas} horas. Si no esperabas este correo, ignoralo.</p>
-            <p style="text-align: center; margin-top: 30px; color: #666; font-size: 12px;">Boxly Taller Mecánico - {fecha}</p>
+            <p style="font-size: 13px; color: #666;">
+                Si el botón no funciona, copiá este enlace en tu navegador:<br>{enlace}
+            </p>
+            <p style="font-size: 13px; color: #666;">
+                El enlace vale {horas} horas. Si no esperabas este correo, ignoralo.
+            </p>
+            <p style="text-align: center; margin-top: 30px; color: #666; font-size: 12px;">
+                Boxly Taller Mecánico - {fecha}
+            </p>
         </div>
     </div>
 </body>

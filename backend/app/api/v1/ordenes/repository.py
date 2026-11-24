@@ -1,11 +1,12 @@
-from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import select
 from typing import List, Optional
 
-from app.models.orden import Historial_estado, Orden
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload, selectinload
+
 from app.models.detalle_orden import DetalleOrden
 from app.models.imagen_orden import ImagenOrden
 from app.models.notificacion import Notificacion
+from app.models.orden import Historial_estado, Orden
 
 # Relaciones que siempre serializa OrdenResponse: las de uno-a-uno con
 # joinedload (una sola query) y la colección de pagos con selectinload.
@@ -21,7 +22,9 @@ _LOADERS_ORDEN = (
 
 class OrdenRepository:
 
-    def obtener_ordenes(self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None) -> List[Orden]:
+    def obtener_ordenes(
+        self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None
+    ) -> List[Orden]:
         query = (
             select(Orden)
             .order_by(Orden.fecha_ingreso.desc())
@@ -53,7 +56,10 @@ class OrdenRepository:
         db.refresh(orden)
         return orden
 
-    def guardar_historial(self, db: Session,*, orden_id: int, usuario_id:int, estado_anterior: Optional[str], estado_nuevo: str, comentario:Optional[str]=None) -> Historial_estado:
+    def guardar_historial(
+        self, db: Session, *, orden_id: int, usuario_id: int, estado_anterior: Optional[str],
+        estado_nuevo: str, comentario: Optional[str] = None,
+    ) -> Historial_estado:
 
         historial = Historial_estado(
             orden_id=orden_id,
@@ -136,7 +142,11 @@ class OrdenRepository:
         db.commit()
 
     def listar_imagenes(self, db:Session, orden_id: int) -> List[ImagenOrden]:
-        stmt = select(ImagenOrden).where(ImagenOrden.orden_id == orden_id).order_by(ImagenOrden.fecha, ImagenOrden.id)
+        stmt = (
+            select(ImagenOrden)
+            .where(ImagenOrden.orden_id == orden_id)
+            .order_by(ImagenOrden.fecha, ImagenOrden.id)
+        )
         return list(db.scalars(stmt).all())
     def obtener_imagen(self, db:Session, imagen_id:int) -> Optional[ImagenOrden]:
         return db.get(ImagenOrden,imagen_id)

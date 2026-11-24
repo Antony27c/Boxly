@@ -24,6 +24,7 @@ const ordenes = vi.hoisted(() => ({
   crear: vi.fn(),
 }))
 const repuestos = vi.hoisted(() => ({ listar: vi.fn() }))
+const sesion = vi.hoisted(() => ({ rol: 'mecanico' }))
 
 vi.mock('@/services/ordenes', async (importOriginal) => {
   const real = await importOriginal()
@@ -33,7 +34,7 @@ vi.mock('@/services/repuestos', () => ({ repuestosService: repuestos }))
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     token: 'tok',
-    usuario: { id: 9, nombre: 'Mario', apellido: 'Pérez', rol: 'mecanico' },
+    usuario: { id: 9, nombre: 'Mario', apellido: 'Pérez', rol: sesion.rol },
     autenticado: true,
     cargandoSesion: false,
   }),
@@ -74,6 +75,7 @@ function montar(url = '/ordenes/7') {
 describe('OrdenDetalle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sesion.rol = 'mecanico'
     ordenes.obtener.mockResolvedValue(ORDEN)
     ordenes.historial.mockResolvedValue([])
     ordenes.imagenes.mockResolvedValue([])
@@ -156,5 +158,23 @@ describe('OrdenDetalle', () => {
     expect(await screen.findByRole('tab', { name: 'Trabajo' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Cobro' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /cobro/i })).not.toBeInTheDocument()
+  })
+
+  it('la pestaña Cobro de una orden pagada dice cómo y cuándo se pagó', async () => {
+    sesion.rol = 'recepcion'
+    ordenes.obtener.mockResolvedValue({
+      ...ORDEN,
+      estado: 'Listo',
+      costo_final: 185000,
+      cobro_estado: 'aprobado',
+      pagada: true,
+      pago_medio: 'efectivo',
+      pago_fecha: '2026-11-23T21:30:00',
+    })
+    montar('/ordenes/7?tab=cobro')
+
+    expect(await screen.findByText(/^Pagada en el taller \(efectivo\):/)).toHaveTextContent(
+      /23\/11\/2026, 18:30$/,
+    )
   })
 })

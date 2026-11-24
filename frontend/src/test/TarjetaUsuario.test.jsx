@@ -105,4 +105,27 @@ describe('TarjetaUsuario', () => {
     expect(screen.getByRole('button', { name: 'Restablecer contraseña' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
   })
+
+  it('el único administrador activo tiene Desactivar y Eliminar deshabilitados con la explicación', () => {
+    const onAlternarEstado = vi.fn()
+    const onEliminar = vi.fn()
+    renderTarjeta({
+      usuario: { ...USUARIO, rol: 'administrador' },
+      ultimoAdmin: true,
+      onAlternarEstado,
+      onEliminar,
+    })
+    const desactivar = screen.getByRole('button', { name: 'Desactivar' })
+    const eliminar = screen.getByRole('button', { name: 'Eliminar' })
+    expect(desactivar).toBeDisabled()
+    expect(eliminar).toBeDisabled()
+    expect(desactivar).toHaveAccessibleDescription(
+      'Es el único administrador activo del taller: no se puede desactivar ni eliminar.',
+    )
+    fireEvent.click(desactivar)
+    fireEvent.click(eliminar)
+    expect(onAlternarEstado).not.toHaveBeenCalled()
+    expect(onEliminar).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Editar' })).toBeEnabled()
+  })
 })

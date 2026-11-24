@@ -4,7 +4,7 @@ Cubre docs/Oferta.md: la demo no tiene gracia (1-3 días solo lectura, desde el
 4 suspendida), la encuesta opcional de una sola vez por taller y el listado
 del superadmin en /plataforma/encuestas.
 """
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.core.security import create_access_token, hash_password
 from app.core.suscripcion import estado_suscripcion
+from app.core.suscripcion import hoy as hoy_argentino
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
@@ -42,7 +43,7 @@ def _acceso(taller_id: int, tipo: str, dias: int) -> None:
     with SessionLocal() as db:
         taller = db.get(Taller, taller_id)
         taller.tipo_acceso = tipo
-        taller.suscripcion_vence_en = date.today() + timedelta(days=dias)
+        taller.suscripcion_vence_en = hoy_argentino() + timedelta(days=dias)
         db.commit()
 
 
@@ -52,7 +53,7 @@ def datos():
     usuarios de cada rol más un superadmin."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
-    hoy = date.today()
+    hoy = hoy_argentino()
     with SessionLocal() as db:
         taller1 = db.get(Taller, 1)
         taller1.tipo_acceso = "demo"
@@ -127,7 +128,7 @@ def _encuestas(db):
 
 def test_estado_suscripcion_demo_dias_limite():
     """La demo no tiene gracia: 1-3 días solo lectura, desde el 4 suspendida."""
-    hoy = date.today()
+    hoy = hoy_argentino()
     for dias in range(0, 6):
         vence = hoy - timedelta(days=dias)
         assert estado_suscripcion(vence, hoy, "demo") == (
@@ -329,9 +330,9 @@ def test_superadmin_lista_y_filtra_encuestas(api, datos):
     assert [i["taller_id"] for i in r.json()] == [datos["taller2_id"]]
     r = api.get(PLATAFORMA_ENCUESTAS, headers=hs, params={"puntaje_min": 4})
     assert [i["taller_id"] for i in r.json()] == [1]
-    # desde/hasta filtran por día (en UTC, como se guardan las fechas).
-    ayer = (date.today() - timedelta(days=1)).isoformat()
-    manana = (date.today() + timedelta(days=1)).isoformat()
+    # desde/hasta filtran por día argentino (ver tests/test_fechas_argentinas.py).
+    ayer = (hoy_argentino() - timedelta(days=1)).isoformat()
+    manana = (hoy_argentino() + timedelta(days=1)).isoformat()
     r = api.get(PLATAFORMA_ENCUESTAS, headers=hs,
                 params={"desde": ayer, "hasta": manana})
     assert len(r.json()) == 2
@@ -371,7 +372,7 @@ def test_pagar_plan_saca_al_taller_de_la_demo(api, datos):
     with SessionLocal() as db:
         taller = db.get(Taller, 1)
         assert taller.tipo_acceso == "pago"
-        assert taller.suscripcion_vence_en > date.today()
+        assert taller.suscripcion_vence_en > hoy_argentino()
 
     # Ya puede escribir y la suscripción queda al día.
     r = api.get("/api/v1/suscripcion", headers=h)

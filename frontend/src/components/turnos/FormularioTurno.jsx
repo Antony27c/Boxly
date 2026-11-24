@@ -8,7 +8,7 @@ import Textarea from '@/components/ui/Textarea'
 import { SERVICIOS_SUGERIDOS } from '@/services/serviciosTurno'
 import { ESTADOS_TURNO, HORARIOS } from '@/services/turnos'
 import { ETIQUETAS_ESTADO } from '@/utils/etiquetas'
-import { aISO } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
 import { validarTurno } from '@/utils/validation'
 
 export default function FormularioTurno({
@@ -24,7 +24,7 @@ export default function FormularioTurno({
   const [datos, setDatos] = useState(() => ({
     cliente_id: '',
     vehiculo_id: '',
-    fecha: fechaSugerida ?? aISO(new Date()),
+    fecha: fechaSugerida ?? hoyAR(),
     hora: '',
     servicio: '',
     estado: 'pendiente',
@@ -143,7 +143,7 @@ export default function FormularioTurno({
         <Field
           label="Fecha"
           type="date"
-          min={aISO(new Date())}
+          min={hoyAR()}
           value={datos.fecha}
           onChange={(e) => cambiar('fecha', e.target.value)}
           error={errores.fecha}

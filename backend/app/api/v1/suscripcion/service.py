@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.errores import PLAN_PERSONAL_EXCEDIDO, ErrorConCodigo
 from app.core.funciones import FUNCIONES, taller_tiene
 from app.core.suscripcion import (
     dias_para_vencer,
@@ -23,6 +24,7 @@ from app.core.suscripcion import (
     fechas_limite,
     hoy,
     periodo_siguiente,
+    reservar_cupo,
 )
 from app.db.session import CLAVE_TALLER, SIN_FILTRO_TALLER, fijar_taller
 from app.models import AdicionalTaller, PagoSuscripcion, Plan, Taller, Usuario
@@ -175,11 +177,17 @@ def planes(db: Session) -> list[PlanResponse]:
 
 
 def exigir_cupo_plan(db: Session, taller: Taller, plan: Plan) -> None:
-    """Bajar a un plan con menos lugar que el personal activo: 409 del contrato."""
+    """Bajar a un plan con menos lugar que el personal activo: 409 del contrato.
+
+    Reserva el cupo del taller hasta el commit del cambio (el mismo lock que el
+    alta de personal): si no, un alta simultánea cuenta con el plan viejo y el
+    taller queda por encima del límite del plan nuevo."""
+    reservar_cupo(db, taller.id)
     if plan.max_personal is not None and personal_activo(db, taller.id) > plan.max_personal:
-        raise HTTPException(
+        raise ErrorConCodigo(
             status_code=status.HTTP_409_CONFLICT,
             detail="Tu personal activo supera el límite de ese plan",
+            codigo=PLAN_PERSONAL_EXCEDIDO,
         )
 
 

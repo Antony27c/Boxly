@@ -1,18 +1,21 @@
+from datetime import date, datetime, timedelta
+from typing import List, Optional
+
+from fastapi import HTTPException, status
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, joinedload
-from fastapi import HTTPException
-from typing import List, Optional
-from datetime import date, datetime, timedelta
 
+from app.core.suscripcion import hoy
 from app.models.horario_mecanico import HorarioMecanico
 from app.models.orden import Orden
 from app.models.turno import Turno
-from app.models.usuario import Usuario, RolUsuario
+from app.models.usuario import RolUsuario, Usuario
 from app.schemas.horario_mecanico import (
     HorarioMecanicoCreate,
-    HorarioMecanicoUpdate,
     HorarioMecanicoResponse,
+    HorarioMecanicoUpdate,
 )
+
 from .repository import mecanicos_repository
 
 ESTADOS_CERRADOS = ("entregado", "cancelado")
@@ -22,21 +25,25 @@ class MecanicosService:
     def _validar_acceso(self, usuario: Usuario, mecanico_id: int, que: str) -> None:
         # Admin y recepción ven a todos los mecánicos; un mecánico solo a sí mismo
         if usuario.rol == RolUsuario.mecanico and usuario.id != mecanico_id:
-            raise HTTPException(status_code=403, detail=f"Solo podés ver tu propio {que}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"Solo podés ver tu propio {que}",
+            )
 
     def _obtener_mecanico(self, db: Session, mecanico_id: int) -> Usuario:
         mecanico = db.get(Usuario, mecanico_id)
         if not mecanico or mecanico.rol != RolUsuario.mecanico:
-            raise HTTPException(status_code=404, detail="Mecánico no encontrado")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mecánico no encontrado")
         return mecanico
 
     def _obtener_horario(self, db: Session, mecanico_id: int, horario_id: int) -> HorarioMecanico:
         horario = mecanicos_repository.obtener_horario(db, horario_id)
         if not horario or horario.mecanico_id != mecanico_id:
-            raise HTTPException(status_code=404, detail="Horario no encontrado")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Horario no encontrado")
         return horario
 
-    def listar_horarios(self, db: Session, mecanico_id: int, usuario: Usuario) -> List[HorarioMecanicoResponse]:
+    def listar_horarios(
+        self, db: Session, mecanico_id: int, usuario: Usuario
+    ) -> List[HorarioMecanicoResponse]:
         self._validar_acceso(usuario, mecanico_id, "horario")
         self._obtener_mecanico(db, mecanico_id)
         return [
@@ -51,10 +58,14 @@ class MecanicosService:
         mecanico = db.get(Usuario, mecanico_id)
 
         if not mecanico or mecanico.rol != RolUsuario.mecanico or not mecanico.activo:
-            raise HTTPException(status_code=400, detail="El usuario no es un mecánico activo")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario no es un mecánico activo",
+            )
 
         if datos.hora_desde >= datos.hora_hasta:
-            raise HTTPException(status_code=400, detail="hora_desde debe ser menor que hora_hasta")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="hora_desde debe ser menor que hora_hasta",
+            )
 
         self._validar_superposicion(db, mecanico_id, datos.dia_semana, datos.hora_desde, datos.hora_hasta)
 
@@ -78,7 +89,9 @@ class MecanicosService:
         hasta = datos.hora_hasta if datos.hora_hasta is not None else horario.hora_hasta
 
         if desde >= hasta:
-            raise HTTPException(status_code=400, detail="hora_desde debe ser menor que hora_hasta")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="hora_desde debe ser menor que hora_hasta",
+            )
 
         self._validar_superposicion(
             db, horario.mecanico_id, dia, desde, hasta, excluir_id=horario_id
@@ -115,22 +128,25 @@ class MecanicosService:
         for h in db.scalars(stmt).all():
             if hora_desde < h.hora_hasta and hora_hasta > h.hora_desde:
                 raise HTTPException(
-                    status_code=409,
+                    status_code=status.HTTP_409_CONFLICT,
                     detail="La franja horaria se superpone con otra del mismo día",
                 )
 
     def calendario(
-        self, db: Session, mecanico_id: int, usuario: Usuario, desde: Optional[date] = None, hasta: Optional[date] = None
+        self, db: Session, mecanico_id: int, usuario: Usuario,
+        desde: Optional[date] = None, hasta: Optional[date] = None,
     ) -> dict:
         self._validar_acceso(usuario, mecanico_id, "calendario")
         mecanico = self._obtener_mecanico(db, mecanico_id)
 
         if not desde or not hasta:
-            hoy = date.today()
-            desde = hoy - timedelta(days=hoy.weekday())
+            dia = hoy()  # día argentino: en UTC el domingo a la noche ya era lunes
+            desde = dia - timedelta(days=dia.weekday())
             hasta = desde + timedelta(days=6)
         if desde > hasta:
-            raise HTTPException(status_code=400, detail="desde no puede ser posterior a hasta")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="desde no puede ser posterior a hasta",
+            )
 
         inicio = datetime.combine(desde, datetime.min.time())
         fin = datetime.combine(hasta + timedelta(days=1), datetime.min.time())
@@ -153,7 +169,11 @@ class MecanicosService:
                 Orden.mecanico_id == mecanico_id,
                 or_(
                     and_(Orden.estado.not_in(ESTADOS_CERRADOS), Orden.fecha_ingreso < fin),
-                    and_(Orden.estado == "entregado", Orden.fecha_entrega >= inicio, Orden.fecha_entrega < fin),
+                    and_(
+                        Orden.estado == "entregado",
+                        Orden.fecha_entrega >= inicio,
+                        Orden.fecha_entrega < fin,
+                    ),
                 ),
             )
             .options(joinedload(Orden.vehiculo))
@@ -202,7 +222,9 @@ class MecanicosService:
                     "vehiculo_marca": o.vehiculo.marca if o.vehiculo else None,
                     "vehiculo_modelo": o.vehiculo.modelo if o.vehiculo else None,
                     "fecha_ingreso": o.fecha_ingreso.isoformat() if o.fecha_ingreso else None,
-                    "fecha_estimada_entrega": o.fecha_estimada_entrega.isoformat() if o.fecha_estimada_entrega else None,
+                    "fecha_estimada_entrega": (
+                        o.fecha_estimada_entrega.isoformat() if o.fecha_estimada_entrega else None
+                    ),
                 }
                 for o in ordenes
             ],

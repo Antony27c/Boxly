@@ -1,18 +1,24 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, status, UploadFile, File
-from typing import List, Optional, Annotated
+from typing import Annotated, List, Optional
 
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
 
-from app.core.dependencies import CurrentUser, PersonalUser,DbSession, filtro_mecanico, require_roles
+from app.core.dependencies import CurrentUser, DbSession, PersonalUser, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.orden import (
-    CobroRequest, EstadoOrdenResponse, HistorialResponse, NotificacionResponse,
-    OrdenCreate, OrdenResponse, OrdenUpdate, PagoLocalRequest,
-)
-from .service import orden_service
-from app.schemas.usuario import MessageResponse
-from app.schemas.detalle_orden import DetalleOrdenCreate,DetalleOrdenResponse,DetallePrecioUpdate
+from app.schemas.detalle_orden import DetalleOrdenCreate, DetalleOrdenResponse, DetallePrecioUpdate
 from app.schemas.imagen_orden import ImagenOrdenResponse
+from app.schemas.orden import (
+    CobroRequest,
+    EstadoOrdenResponse,
+    HistorialResponse,
+    NotificacionResponse,
+    OrdenCreate,
+    OrdenResponse,
+    OrdenUpdate,
+    PagoLocalRequest,
+)
+from app.schemas.usuario import MessageResponse
 
+from .service import orden_service
 
 router = APIRouter()
 RecepcionUser= Annotated[
@@ -41,18 +47,29 @@ def detalle_orden(orden_id: int, db: DbSession, usuario:PersonalUser):
 
 
 @router.patch("/{orden_id}", response_model=OrdenResponse)
-def editar_orden(orden_id: int, datos: OrdenUpdate, db: DbSession, usuario:PersonalUser, background_tasks: BackgroundTasks):
+def editar_orden(
+    orden_id: int, datos: OrdenUpdate, db: DbSession, usuario: PersonalUser,
+    background_tasks: BackgroundTasks,
+):
     orden_service.validar_edicion_mecanico(db, orden_id, datos, filtro_mecanico(usuario))
-    return orden_service.editar_orden(db, orden_id, datos, usuario_id=usuario.id, background_tasks=background_tasks)
+    return orden_service.editar_orden(
+        db, orden_id, datos, usuario_id=usuario.id, background_tasks=background_tasks
+    )
 
 
 @router.post("/{orden_id}/cobro", response_model=OrdenResponse)
-def emitir_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: PersonalUser, background_tasks: BackgroundTasks):
+def emitir_cobro(
+    orden_id: int, datos: CobroRequest, db: DbSession, usuario: PersonalUser,
+    background_tasks: BackgroundTasks,
+):
     return orden_service.emitir_cobro(db, orden_id, datos.monto, usuario, background_tasks)
 
 
 @router.post("/{orden_id}/cobro/aprobar", response_model=OrdenResponse)
-def aprobar_cobro(orden_id: int, datos: CobroRequest, db: DbSession, usuario: RecepcionUser, background_tasks: BackgroundTasks):
+def aprobar_cobro(
+    orden_id: int, datos: CobroRequest, db: DbSession, usuario: RecepcionUser,
+    background_tasks: BackgroundTasks,
+):
     return orden_service.aprobar_cobro(db, orden_id, datos.monto, usuario.id, background_tasks)
 
 
@@ -72,7 +89,11 @@ def listar_notificaciones(orden_id: int, db: DbSession, usuario: PersonalUser):
     return orden_service.listar_notificaciones(db, orden_id)
 
 
-@router.post("/{orden_id}/notificaciones", response_model=NotificacionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{orden_id}/notificaciones",
+    response_model=NotificacionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def reenviar_aviso(orden_id: int, db: DbSession, usuario: AdminUser):
     return orden_service.reenviar_aviso(db, orden_id, usuario.id)
 
@@ -97,7 +118,8 @@ def cotizar_detalle(
     orden_id: int, detalle_id: int, datos: DetallePrecioUpdate,
     db: DbSession, usuario: RecepcionUser,
 ):
-    orden_service.obtener_detalle_orden(db, orden_id, filtro_mecanico(usuario))
+    # Solo administración y recepción: sin filtro de mecánico. El service ya
+    # busca la orden (404 si no es del taller).
     return orden_service.cotizar_detalle(db, orden_id, detalle_id, datos, usuario_id=usuario.id)
 
 @router.delete("/{orden_id}/detalles/{detalle_id}", response_model=MessageResponse)

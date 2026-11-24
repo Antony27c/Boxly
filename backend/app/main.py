@@ -13,6 +13,7 @@ from app.core.auditoria import AuditoriaMiddleware
 from app.core.body_limit import LimiteTamanoBody
 from app.core.config import UPLOADS_DIR, get_settings
 from app.core.enmascarado import EnmascaradoSoporteMiddleware
+from app.core.errores import registrar_manejador_errores
 from app.core.exceptions import register_exception_handlers
 from app.core.logging_config import configurar_logging
 from app.core.rate_limit import configurar_rate_limit
@@ -59,6 +60,8 @@ def create_app() -> FastAPI:
     app.add_middleware(LimiteTamanoBody)
 
     register_exception_handlers(app)
+    # Errores de negocio con código estable para el frontend (Q4).
+    registrar_manejador_errores(app)
     configurar_rate_limit(app)
     app.include_router(api_router)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

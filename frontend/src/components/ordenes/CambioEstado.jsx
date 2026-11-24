@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
+import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
 import { DESCRIPCION_ESTADOS, ordenesService, proximosEstados } from '@/services/ordenes'
 import '@/styles/ordenes.css'
 
@@ -77,7 +78,9 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
     return opciones.find((estado) => estado !== 'Cancelado') ?? opciones[0] ?? ''
   })
   const [descripcion, setDescripcion] = useState('')
-  const [monto, setMonto] = useState(() => String(Number(orden.costo_estimado) || ''))
+  const [monto, setMonto] = useState(() =>
+    Number(orden.costo_estimado) > 0 ? formatearMontoAR(Number(orden.costo_estimado)) : '',
+  )
   const [errorMonto, setErrorMonto] = useState('')
   const [fotos, setFotos] = useState([])
   const [error, setError] = useState('')
@@ -101,7 +104,13 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
       setError('Contá qué se hizo en esta etapa (mínimo 5 caracteres).')
       return
     }
-    if (pideMonto && String(monto).trim() !== '' && !(Number(monto) > 0)) {
+    const hayMonto = pideMonto && String(monto).trim() !== ''
+    const numero = hayMonto ? parsearMontoAR(monto) : null
+    if (hayMonto && numero === null) {
+      setErrorMonto(MENSAJE_MONTO_INVALIDO)
+      return
+    }
+    if (hayMonto && !(numero > 0)) {
       setErrorMonto('El monto tiene que ser mayor a 0, o dejalo vacío para emitirlo después.')
       return
     }
@@ -117,9 +126,9 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
     }
 
     let errorCobro = ''
-    if (pideMonto && Number(monto) > 0) {
+    if (hayMonto && numero > 0) {
       try {
-        await ordenesService.emitirCobro(orden.id, monto, token)
+        await ordenesService.emitirCobro(orden.id, numero, token)
       } catch (problema) {
         errorCobro = problema.message
       }
@@ -233,7 +242,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
       {pideMonto && (
         <Field
           label={puedeCobrar ? 'Monto a cobrar (opcional)' : 'Monto a cobrar (opcional, lo aprueba recepción)'}
-          inputMode="numeric"
+          inputMode="decimal"
           value={monto}
           onChange={(e) => {
             setMonto(e.target.value)
@@ -241,7 +250,7 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
           }}
           error={errorMonto}
           disabled={ocupado}
-          placeholder="Ej.: 185000"
+          placeholder="Ej.: 185.000 o 185.000,50"
           ayuda={
             puedeCobrar
               ? 'Si lo completás, el cobro le llega al cliente y puede pagarlo online.'

@@ -32,7 +32,7 @@ export default function Confirmacion({
         </div>
       )}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variante="fantasma" onClick={onCerrar} disabled={procesando}>
+        <Button variante="fantasma" onClick={onCerrar} disabled={procesando} data-lectura>
           Cancelar
         </Button>
         <Button variante={peligrosa ? 'peligro' : 'primario'} onClick={onConfirmar} cargando={procesando}>

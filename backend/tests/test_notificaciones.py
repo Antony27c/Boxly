@@ -7,9 +7,13 @@ from app.core.email import ResultadoEnvio
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
+from app.main import app
 from app.models import Cliente, Notificacion, Orden, Usuario, Vehiculo
 from app.models.usuario import RolUsuario
-from app.main import app
+
+
+def _bearer(usuario: Usuario) -> dict:
+    return {"Authorization": "Bearer " + create_access_token(usuario.id)}
 
 
 @pytest.fixture
@@ -38,8 +42,8 @@ def datos():
         db.add_all(ordenes)
         db.commit()
         return {
-            "admin": {"Authorization": "Bearer " + create_access_token(usuarios[RolUsuario.administrador].id)},
-            "recepcion": {"Authorization": "Bearer " + create_access_token(usuarios[RolUsuario.recepcion].id)},
+            "admin": _bearer(usuarios[RolUsuario.administrador]),
+            "recepcion": _bearer(usuarios[RolUsuario.recepcion]),
             "orden": ordenes[0].id,
             "orden_sin_mail": ordenes[1].id,
         }
@@ -86,7 +90,8 @@ def test_admin_reenvia_con_un_boton(api, datos, envio):
     r = api.post(f"/api/v1/ordenes/{datos['orden']}/notificaciones", headers=datos["admin"])
     assert r.status_code == 201
     assert r.json()["manual"] is True and r.json()["enviado_por_nombre"] == "Test, administrador"
-    assert len(api.get(f"/api/v1/ordenes/{datos['orden']}/notificaciones", headers=datos["admin"]).json()) == 2
+    avisos = api.get(f"/api/v1/ordenes/{datos['orden']}/notificaciones", headers=datos["admin"])
+    assert len(avisos.json()) == 2
 
 
 def test_solo_el_admin_puede_reenviar(api, datos, envio):
@@ -128,7 +133,10 @@ def _avisos(api, datos):
 
 
 def test_emitir_cobro_avisa_al_cliente(api, orden_lista, envio_cobro):
-    r = api.post(f"/api/v1/ordenes/{orden_lista['orden']}/cobro", headers=orden_lista["admin"], json={"monto": 15000})
+    r = api.post(
+        f"/api/v1/ordenes/{orden_lista['orden']}/cobro",
+        headers=orden_lista["admin"], json={"monto": 15000},
+    )
     assert r.status_code == 200
     avisos = _avisos(api, orden_lista)
     assert [a["tipo"] for a in avisos] == ["cobro"] and avisos[0]["resultado"] == "enviado"
@@ -136,7 +144,10 @@ def test_emitir_cobro_avisa_al_cliente(api, orden_lista, envio_cobro):
 
 
 def test_aprobar_cobro_avisa_al_cliente(api, orden_lista, envio_cobro):
-    r = api.post(f"/api/v1/ordenes/{orden_lista['orden']}/cobro/aprobar", headers=orden_lista["recepcion"], json={"monto": 9000})
+    r = api.post(
+        f"/api/v1/ordenes/{orden_lista['orden']}/cobro/aprobar",
+        headers=orden_lista["recepcion"], json={"monto": 9000},
+    )
     assert r.status_code == 200
     assert [a["tipo"] for a in _avisos(api, orden_lista)] == ["cobro"]
 
@@ -145,6 +156,8 @@ def test_cobro_sin_email_no_avisa(api, datos, envio_cobro):
     with SessionLocal() as db:
         db.get(Orden, datos["orden_sin_mail"]).estado = "listo"
         db.commit()
-    r = api.post(f"/api/v1/ordenes/{datos['orden_sin_mail']}/cobro", headers=datos["admin"], json={"monto": 100})
+    r = api.post(
+        f"/api/v1/ordenes/{datos['orden_sin_mail']}/cobro", headers=datos["admin"], json={"monto": 100}
+    )
     assert r.status_code == 200
     envio_cobro.assert_not_awaited()

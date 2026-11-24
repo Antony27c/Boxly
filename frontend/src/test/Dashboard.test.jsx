@@ -33,7 +33,9 @@ const FINANZAS = {
   desde: '2026-11-01',
   hasta: HOY,
   ingresos: 100000,
-  cobrado_online: 40000,
+  cobrado: 40000,
+  cobrado_por_medio: { mercadopago: 25000, efectivo: 15000, tarjeta: 0, transferencia: 0, otro: 0 },
+  cobrado_online: 25000,
   egresos_repuestos: 20000,
   balance: 80000,
   mensual: [

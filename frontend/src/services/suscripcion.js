@@ -1,4 +1,4 @@
-import { api } from '@/lib/api'
+import { CODIGOS_ERROR, api, tieneCodigo } from '@/lib/api'
 
 const RECURSO = '/api/v1/suscripcion'
 
@@ -20,4 +20,15 @@ export const suscripcionService = {
   activarCobro: (token) => api.post(`${RECURSO}/cobro-automatico`, {}, token),
 
   cancelarCobro: (token) => api.del(`${RECURSO}/cobro-automatico`, token),
+}
+
+// 409 de /users al crear o reactivar personal por encima del plan. Otros 409
+// de /users (correo repetido, cuenta ya activa) no traen este código.
+export function esErrorDeLimite(problema) {
+  return tieneCodigo(problema, CODIGOS_ERROR.limitePersonal)
+}
+
+// 409 de PUT /suscripcion/plan: el personal activo no entra en el plan elegido.
+export function esErrorDePlanExcedido(problema) {
+  return tieneCodigo(problema, CODIGOS_ERROR.planPersonalExcedido)
 }

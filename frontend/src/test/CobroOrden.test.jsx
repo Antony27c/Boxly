@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CobroOrden from '@/components/ordenes/CobroOrden'
-import { ordenesService } from '@/services/ordenes'
+import { api } from '@/lib/api'
+import { montoDelServidor, ordenesService } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 // pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
@@ -44,7 +45,40 @@ describe('Cobro como ticket de caja', () => {
     expect(screen.getByText('Propuesto:')).toBeInTheDocument()
     expect(screen.getByText(monto(90000))).toHaveClass('font-mono')
     expect(screen.getByText('Esperando aprobación de administración o recepción.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Monto a cobrar')).toHaveValue('90000')
+    expect(screen.getByLabelText('Monto a cobrar')).toHaveValue('90.000')
+  })
+
+  it('emitir un cobro tipeando "185.000" manda 185000, no 185', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    const onListo = vi.fn()
+    mostrar({}, true, onListo)
+
+    const campo = screen.getByLabelText('Monto a cobrar')
+    expect(campo).toHaveAttribute('inputmode', 'decimal')
+    fireEvent.change(campo, { target: { value: '185.000' } })
+    fireEvent.submit(campo.closest('form'))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalled())
+    expect(post).toHaveBeenCalledWith('/api/v1/ordenes/42/cobro', { monto: 185000 }, 'tok')
+    post.mockRestore()
+  })
+
+  it('con centavos "185.000,50" manda 185000.5 y un monto ambiguo muestra el error', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    mostrar({}, true, vi.fn())
+    const campo = screen.getByLabelText('Monto a cobrar')
+
+    fireEvent.change(campo, { target: { value: '185.50' } })
+    fireEvent.submit(campo.closest('form'))
+    expect(await screen.findByText(/coma para los centavos/)).toBeInTheDocument()
+    expect(post).not.toHaveBeenCalled()
+
+    fireEvent.change(campo, { target: { value: '185.000,50' } })
+    fireEvent.submit(campo.closest('form'))
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/v1/ordenes/42/cobro', { monto: 185000.5 }, 'tok'),
+    )
+    post.mockRestore()
   })
 
   it('pagada muestra lo que pagó el cliente', () => {
@@ -134,7 +168,9 @@ describe('Registrar pago en el local', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
     const dialogo = screen.getByRole('dialog', { name: 'Registrar pago en el local' })
-    expect(screen.getByLabelText('Monto')).toHaveValue('185000')
+    // El monto es el del cobro, solo para leer: no hay campo para tipearlo.
+    expect(within(dialogo).getByText('Monto del cobro')).toBeInTheDocument()
+    expect(within(dialogo).queryByLabelText(/Monto/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Medio de pago')).toHaveValue('efectivo')
 
     fireEvent.change(screen.getByLabelText('Medio de pago'), { target: { value: 'tarjeta' } })
@@ -142,7 +178,7 @@ describe('Registrar pago en el local', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
 
     await waitFor(() => expect(onListo).toHaveBeenCalledWith('Pago registrado. La orden quedó pagada.'))
-    expect(registrar).toHaveBeenCalledWith(42, { medio: 'tarjeta', monto: '185000', referencia: 'Op. 123' }, 'tok')
+    expect(registrar).toHaveBeenCalledWith(42, { medio: 'tarjeta', monto: 185000, referencia: 'Op. 123' }, 'tok')
     expect(dialogo).not.toBeInTheDocument()
   })
 
@@ -154,7 +190,6 @@ describe('Registrar pago en el local', () => {
     mostrar(emitido, true, onListo)
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
-    fireEvent.change(screen.getByLabelText('Monto'), { target: { value: '1000' } })
     fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
 
     expect(await screen.findByText('El monto tiene que ser el del cobro emitido: $ 185,000.00')).toBeInTheDocument()
@@ -162,10 +197,38 @@ describe('Registrar pago en el local', () => {
     expect(onListo).not.toHaveBeenCalled()
   })
 
+  it('un cobro de 185000,50 se muestra con formato argentino y se envía como 185000.5', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    const onListo = vi.fn()
+    // Así llega el Decimal del servidor: texto con punto decimal.
+    mostrar({ ...emitido, costo_final: '185000.50' }, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago en el local' }))
+    const dialogo = screen.getByRole('dialog', { name: 'Registrar pago en el local' })
+    expect(within(dialogo).getByText(/185\.000,50/)).toBeInTheDocument()
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalled())
+    expect(post).toHaveBeenCalledWith(
+      '/api/v1/ordenes/42/pago-local',
+      { medio: 'efectivo', monto: 185000.5, referencia: null },
+      'tok',
+    )
+  })
+
   it('pagada en el local muestra el medio y la fecha', () => {
     mostrar({ ...emitido, pagada: true, pago_medio: 'efectivo', pago_fecha: '2026-11-23T21:30:00' })
     expect(screen.getByText('Pagada en el taller (efectivo) · 23/11/2026, 18:30')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Registrar pago en el local' })).not.toBeInTheDocument()
+  })
+
+  it('montoDelServidor lee el Decimal del servidor y rechaza el formato argentino', () => {
+    expect(montoDelServidor('185000.50')).toBe(185000.5)
+    expect(montoDelServidor(185000.5)).toBe(185000.5)
+    expect(montoDelServidor('185000')).toBe(185000)
+    expect(montoDelServidor('185.000,50')).toBeNull()
+    expect(montoDelServidor('')).toBeNull()
+    expect(montoDelServidor(null)).toBeNull()
   })
 
   it('pagada online lo dice', () => {

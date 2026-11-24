@@ -4,14 +4,20 @@ Es dato de la plataforma sobre cada taller: se consulta en contexto plataforma
 (sin filtro automático) y cada fila trae el nombre del taller y de quien
 respondió. Nunca toca datos de clientes del taller.
 """
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.suscripcion import ZONA_ARGENTINA
 from app.models import EncuestaDemo, Taller, Usuario
 from app.schemas.encuesta import EncuestaDemoResponse, IntencionEncuesta
 from app.schemas.paginacion import ParametrosPagina, aplicar, contar
+
+
+def _inicio_del_dia(dia: date) -> datetime:
+    """Instante UTC en que empieza ``dia`` en Argentina (00:00 ART = 03:00 UTC)."""
+    return datetime.combine(dia, time.min, tzinfo=ZONA_ARGENTINA).astimezone(timezone.utc)
 
 
 def listar(
@@ -26,8 +32,11 @@ def listar(
 ) -> tuple[list[EncuestaDemoResponse], int]:
     """Encuestas filtradas y paginadas, más nuevas primero, con ``X-Total-Count``.
 
-    ``desde``/``hasta`` filtran por el día UTC de ``creado_en`` (las fechas se
-    guardan en UTC, ver app/db/tipos.py)."""
+    ``desde``/``hasta`` son días argentinos, ambos inclusive: ``creado_en`` se
+    guarda en UTC (app/db/tipos.py), así que se compara contra el intervalo
+    ``[00:00 ART de desde, 00:00 ART del día siguiente a hasta)`` pasado a UTC.
+    Comparar la columna directo (sin ``func.date``) no depende del día UTC ni de
+    la TimeZone de la sesión de Postgres."""
     stmt = select(EncuestaDemo).order_by(EncuestaDemo.id.desc())
     if intencion is not None:
         stmt = stmt.where(EncuestaDemo.intencion == intencion)
@@ -36,9 +45,11 @@ def listar(
     if puntaje_min is not None:
         stmt = stmt.where(EncuestaDemo.puntaje >= puntaje_min)
     if desde is not None:
-        stmt = stmt.where(func.date(EncuestaDemo.creado_en) >= desde)
+        stmt = stmt.where(EncuestaDemo.creado_en >= _inicio_del_dia(desde))
     if hasta is not None:
-        stmt = stmt.where(func.date(EncuestaDemo.creado_en) <= hasta)
+        stmt = stmt.where(
+            EncuestaDemo.creado_en < _inicio_del_dia(hasta + timedelta(days=1))
+        )
 
     total = contar(db, stmt)
     encuestas = list(db.scalars(aplicar(stmt, pagina)))

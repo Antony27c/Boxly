@@ -185,6 +185,35 @@ describe('SuscripcionTaller', () => {
     expect(screen.getByText(/Venció hace 12 días/)).toBeInTheDocument()
   })
 
+  it('muestra los límites de gracia y acceso que manda el backend', async () => {
+    suscripciones.obtenerSuscripcion.mockResolvedValue({
+      ...SUSCRIPCION,
+      estado: 'gracia',
+      tipo_acceso: 'pago',
+      dias_para_vencer: -4,
+      fin_gracia: '2026-12-01',
+      fin_acceso: '2026-12-20',
+    })
+    montar()
+    await esperarSuscripcion()
+
+    expect(screen.getByText(/Gracia hasta el 01\/12\/2026/)).toBeInTheDocument()
+    expect(screen.getByText(/Acceso hasta el 20\/12\/2026/)).toBeInTheDocument()
+  })
+
+  it('al día no muestra límites de gracia ni de acceso', async () => {
+    suscripciones.obtenerSuscripcion.mockResolvedValue({
+      ...SUSCRIPCION,
+      fin_gracia: '2026-12-22',
+      fin_acceso: '2027-01-14',
+    })
+    montar()
+    await esperarSuscripcion()
+
+    expect(screen.queryByText(/Gracia hasta el/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Acceso hasta el/)).not.toBeInTheDocument()
+  })
+
   it('cambiar plan llama al servicio con el código elegido', async () => {
     const onCambio = vi.fn()
     montar({ onCambio })
@@ -234,10 +263,10 @@ describe('SuscripcionTaller', () => {
     const dialogo = await screen.findByRole('dialog')
 
     const monto = within(dialogo).getByLabelText('Monto')
-    expect(monto).toHaveValue(79000) // 79.000 × 1 mes
+    expect(monto).toHaveValue('79.000') // 79.000 × 1 mes, formato argentino
 
     fireEvent.change(within(dialogo).getByLabelText('Meses'), { target: { value: '3' } })
-    expect(monto).toHaveValue(237000) // se recalcula la sugerencia
+    expect(monto).toHaveValue('237.000') // se recalcula la sugerencia
 
     fireEvent.change(within(dialogo).getByLabelText('Referencia'), {
       target: { value: 'Comprobante 778' },

@@ -19,6 +19,7 @@ lectura para elegir y pagar un plan y después queda suspendida.
 Las fechas de la suscripción se calculan en el día argentino (``hoy()``), no en
 el del servidor: en un contenedor en UTC el día se correría después de las 21.
 """
+import threading
 from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -67,16 +68,33 @@ def sumar_meses(fecha: date, meses: int) -> date:
     return date(anio, mes, min(fecha.day, monthrange(anio, mes)[1]))
 
 
+def _fin_de_un_mes(inicio: date) -> date:
+    """Último día del mes de suscripción que arranca en ``inicio``: el día
+    anterior al mismo día del mes siguiente. Si ese día no existe (arranca el
+    29, 30 o 31), el mes termina el último día del mes siguiente: 31/01 →
+    28/02 o 29/02, y no 27/02."""
+    siguiente = sumar_meses(inicio, 1)
+    if siguiente.day < inicio.day:
+        return siguiente
+    return siguiente - timedelta(days=1)
+
+
 def periodo_siguiente(
     vence_en: date | None, meses: int = 1, desde: date | None = None
 ) -> tuple[date, date]:
     """Período que cubre un pago (docs/Suscripciones.md):
     ``periodo_desde = max(vence_en + 1, desde o hoy)`` y
-    ``periodo_hasta = periodo_desde + meses - 1 día``."""
+    ``periodo_hasta = periodo_desde + meses - 1 día``.
+
+    Los meses se encadenan de a uno, así pagar varios juntos termina igual que
+    pagarlos de a uno: 31/01 + 1 mes termina el 28/02 y + 2 meses, el 31/03."""
     inicio = desde or hoy()
     if vence_en is not None:
         inicio = max(inicio, vence_en + timedelta(days=1))
-    return inicio, sumar_meses(inicio, meses) - timedelta(days=1)
+    hasta = inicio - timedelta(days=1)
+    for _ in range(meses):
+        hasta = _fin_de_un_mes(hasta + timedelta(days=1))
+    return inicio, hasta
 
 
 def dias_para_vencer(vence_en: date | None, hoy_: date | None = None) -> int:
@@ -133,3 +151,61 @@ def ruta_libre(ruta: str) -> bool:
     Sin la barra, ``/api/v1/suscripcionX`` también matcheaba ``startswith`` y
     quedaba libre por error (Q4)."""
     return any(ruta == p or ruta.startswith(p + "/") for p in PREFIJOS_LIBRES)
+
+
+# --- Cupo de personal ------------------------------------------------------------
+
+# Un lock por taller para el cupo en SQLite (ver reservar_cupo).
+_LOCKS_CUPO: dict[int, threading.Lock] = {}
+_LOCKS_CUPO_GUARDA = threading.Lock()
+_CLAVE_CUPOS = "cupos_reservados"
+
+
+def _lock_cupo(taller_id: int) -> threading.Lock:
+    with _LOCKS_CUPO_GUARDA:
+        return _LOCKS_CUPO.setdefault(taller_id, threading.Lock())
+
+
+def _liberar_cupos(session, transaccion) -> None:
+    # Solo al terminar la transacción de afuera (commit, rollback o close),
+    # no al cerrar un savepoint.
+    if transaccion.parent is not None:
+        return
+    for taller_id in session.info.pop(_CLAVE_CUPOS, set()):
+        _lock_cupo(taller_id).release()
+
+
+def reservar_cupo(db, taller_id: int):
+    """Reserva el cupo de personal del taller hasta que termine la transacción
+    de ``db`` y devuelve el taller releído.
+
+    Lo usan el alta y la reactivación de personal y el cambio de plan: sin esto,
+    un alta y una bajada de plan simultáneas cuentan las dos antes de que
+    ninguna escriba y el taller queda por encima del límite del plan nuevo.
+    - PostgreSQL: SELECT ... FOR UPDATE sobre la fila del taller. Vale entre
+      workers y procesos; lo libera el commit o el rollback.
+    - SQLite (dev y tests): no tiene FOR UPDATE; se usa un lock por taller en el
+      proceso (SQLite se usa con un solo proceso) que se suelta al terminar la
+      transacción, también si la request falla y la sesión se cierra.
+    El taller se relee después de tomar el lock (``populate_existing``): el que
+    ya estaba en la sesión puede tener el plan de antes del cambio.
+    """
+    from sqlalchemy import event, select
+
+    from app.models import Taller
+
+    if db.get_bind().dialect.name == "sqlite":
+        reservados = db.info.setdefault(_CLAVE_CUPOS, set())
+        if taller_id not in reservados:
+            if not event.contains(db, "after_transaction_end", _liberar_cupos):
+                event.listen(db, "after_transaction_end", _liberar_cupos)
+            _lock_cupo(taller_id).acquire()
+            reservados.add(taller_id)
+    stmt = (
+        select(Taller)
+        .where(Taller.id == taller_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return db.scalar(stmt)
+

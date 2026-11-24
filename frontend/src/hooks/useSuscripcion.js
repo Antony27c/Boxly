@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { ApiError, api } from '@/lib/api'
+import { CODIGOS_ERROR, alErrorDeAcceso, tieneCodigo } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { suscripcionService } from '@/services/suscripcion'
 import { ROLES_TALLER } from '@/routes/navegacion'
@@ -50,21 +50,17 @@ async function cargar(token, forzar = false) {
   }
 }
 
-const PATRON_SUSPENDIDA = /suscripción del taller está vencida/i
-
 function esSuspension(error) {
-  return error instanceof ApiError && error.status === 403 && PATRON_SUSPENDIDA.test(error.message)
+  return tieneCodigo(error, CODIGOS_ERROR.suscripcionSuspendida)
 }
 
-/* Los 403 de suscripción ("solo lectura por falta de pago" /
-   "suscripción del taller está vencida") significan que el estado cambió en
-   el servidor: hay que recargar la suscripción para que el aviso y el
-   bloqueo se actualicen. api.js no admite otro handler en esta tarea, así
-   que se envuelven una vez los métodos del cliente api (mismo patrón que
-   setUnauthorizedHandler). */
-const PATRON_BLOQUEO = /solo lectura por falta de pago|suscripción del taller está vencida/i
-let alBloquear = null
-let interceptorListo = false
+/* Los 403 de suscripción (códigos `suscripcion_solo_lectura` y
+   `suscripcion_suspendida`) significan que el estado cambió en el servidor:
+   hay que recargar la suscripción para que el aviso y el bloqueo se
+   actualicen. Se escuchan con alErrorDeAcceso de api.js. */
+function esBloqueo(error) {
+  return esSuspension(error) || tieneCodigo(error, CODIGOS_ERROR.suscripcionSoloLectura)
+}
 
 /* Sin estos dos cortes había un bucle: el GET /suscripcion de un taller
    suspendido también responde 403, que volvía a disparar la recarga, y cada
@@ -81,28 +77,13 @@ function bloqueoYaConocido(error) {
   return actual === 'solo_lectura' || actual === 'suspendida'
 }
 
-function instalarInterceptor() {
-  if (interceptorListo) return
-  interceptorListo = true
-  for (const nombre of ['get', 'post', 'put', 'patch', 'del', 'subir', 'getConTotal']) {
-    const original = api[nombre]
-    api[nombre] = async (...args) => {
-      try {
-        return await original(...args)
-      } catch (error) {
-        if (
-          error instanceof ApiError &&
-          error.status === 403 &&
-          PATRON_BLOQUEO.test(error.message) &&
-          alBloquear &&
-          !esDeLaSuscripcion(args[0]) &&
-          !bloqueoYaConocido(error)
-        ) {
-          alBloquear()
-        }
-        throw error
-      }
-    }
+/* Cada componente montado escucha los 403 con su propia forma de recargar.
+   Si hay varios, el primero pone `cargando` y los demás ven el bloqueo como
+   ya conocido: se recarga una sola vez. */
+function oyenteDeBloqueo(recargar) {
+  return (error, { ruta } = {}) => {
+    if (!esBloqueo(error) || esDeLaSuscripcion(ruta) || bloqueoYaConocido(error)) return
+    recargar()
   }
 }
 
@@ -112,13 +93,9 @@ export default function useSuscripcion() {
 
   useEffect(() => {
     if (!esPersonal || !token) return undefined
-    instalarInterceptor()
-    const disparar = () => cargar(tokenActual ?? token, true)
-    alBloquear = disparar
+    const desuscribir = alErrorDeAcceso(oyenteDeBloqueo(() => cargar(tokenActual ?? token, true)))
     void cargar(token)
-    return () => {
-      if (alBloquear === disparar) alBloquear = null
-    }
+    return desuscribir
   }, [esPersonal, token])
 
   const instantanea = useSyncExternalStore(suscribir, () => estado)

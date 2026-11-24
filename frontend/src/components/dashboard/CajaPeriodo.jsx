@@ -5,6 +5,22 @@ import TarjetaDash, { InsigniaVariacion, montoNumero } from '@/components/dashbo
 import Icono from '@/components/ui/Icono'
 import { pesos } from '@/utils/formato'
 
+const NOMBRES_MEDIO = {
+  mercadopago: 'Mercado Pago',
+  efectivo: 'Efectivo',
+  tarjeta: 'Tarjeta',
+  transferencia: 'Transferencia',
+  otro: 'Otro',
+}
+
+// "Mercado Pago $ 40.000 · Efectivo $ 20.000": solo los medios con cobros.
+function desgloseCobrado(porMedio) {
+  return Object.entries(porMedio ?? {})
+    .filter(([, monto]) => Number(monto) > 0)
+    .map(([medio, monto]) => `${NOMBRES_MEDIO[medio] ?? medio} ${pesos(monto)}`)
+    .join(' · ')
+}
+
 function Fila({ titulo, monto, detalle, children }) {
   return (
     <li className="px-1 py-2.5">
@@ -20,8 +36,8 @@ function Fila({ titulo, monto, detalle, children }) {
 
 /**
  * Tarjeta "Balance del periodo": el balance grande con su variación y un
- * desglose desplegable con ingresos (online / mostrador), egresos por
- * repuestos y lo que queda por cobrar.
+ * desglose desplegable con ingresos, lo cobrado por medio de pago, egresos
+ * por repuestos y lo que queda por cobrar.
  */
 export default function CajaPeriodo({ finanzas, ordenes, derivados, className = '', indice = 0 }) {
   const [abierta, setAbierta] = useState(true)
@@ -29,8 +45,6 @@ export default function CajaPeriodo({ finanzas, ordenes, derivados, className = 
   const porCobrar = derivados?.porCobrar ?? { monto: 0, cantidad: 0 }
   // El link a órdenes solo aparece cuando ese bloque cargó bien.
   const ordenesOk = ordenes && !ordenes.error ? ordenes.datos : null
-
-  const mostrador = datos ? Number(datos.ingresos ?? 0) - Number(datos.cobrado_online ?? 0) : 0
 
   return (
     <TarjetaDash
@@ -80,10 +94,11 @@ export default function CajaPeriodo({ finanzas, ordenes, derivados, className = 
 
           {abierta && (
             <ul className="mt-1 divide-y divide-graphite-700 rounded-box border border-graphite-700">
+              <Fila titulo="Ingresos" monto={pesos(datos.ingresos)} />
               <Fila
-                titulo="Ingresos"
-                monto={pesos(datos.ingresos)}
-                detalle={`Cobrado online ${pesos(datos.cobrado_online)} · En el mostrador ${pesos(mostrador)}`}
+                titulo="Cobrado"
+                monto={pesos(datos.cobrado)}
+                detalle={desgloseCobrado(datos.cobrado_por_medio) || 'Sin pagos registrados en el período'}
               />
               <Fila titulo="Egresos" monto={pesos(datos.egresos_repuestos)} detalle="Repuestos" />
               <li className="flex items-center justify-between gap-3 px-1 py-2.5">

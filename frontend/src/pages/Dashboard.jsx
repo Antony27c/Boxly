@@ -13,7 +13,7 @@ import TicketPromedio from '@/components/dashboard/TicketPromedio'
 import { useAuth } from '@/context/AuthContext'
 import useDashboard from '@/hooks/useDashboard'
 import { COLUMNAS_DASHBOARD, exportarCsv, filasDashboard } from '@/utils/exportarCsv'
-import { aISO } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
 import { PRESETS } from '@/utils/periodos'
 
 // Posición de cada tarjeta en la grilla de escritorio (lg). En celular y en
@@ -31,7 +31,7 @@ const POSICION = {
 
 export default function Dashboard() {
   const { usuario } = useAuth()
-  const [rango, setRango] = useState(() => PRESETS[0].rango(aISO(new Date())))
+  const [rango, setRango] = useState(() => PRESETS[0].rango(hoyAR()))
   const dashboard = useDashboard(rango)
   const { bloques, derivados } = dashboard
 

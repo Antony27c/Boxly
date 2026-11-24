@@ -19,7 +19,9 @@ CATALOGO = {
     "Peugeot": ["208", "2008", "308", "408", "3008", "Partner", "Expert"],
     "Renault": ["Sandero", "Logan", "Stepway", "Duster", "Kangoo", "Kwid", "Clio", "Alaskan"],
     "Toyota": ["Corolla", "Corolla Cross", "Etios", "Yaris", "Hilux", "Hilux SRV", "SW4", "RAV4"],
-    "Volkswagen": ["Gol", "Gol Trend", "Polo", "Virtus", "T-Cross", "Taos", "Amarok", "Saveiro", "Vento", "Up!"],
+    "Volkswagen": [
+        "Gol", "Gol Trend", "Polo", "Virtus", "T-Cross", "Taos", "Amarok", "Saveiro", "Vento", "Up!",
+    ],
 }
 
 

@@ -8,10 +8,9 @@ import Textarea from '@/components/ui/Textarea'
 import { useAuth } from '@/context/AuthContext'
 import { ROLES_MECANICO, tieneAcceso } from '@/routes/navegacion'
 import { DESCRIPCION_ESTADOS } from '@/services/ordenes'
-import { aISO } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
+import { formatearMontoAR } from '@/lib/montos'
 import { validarOrden } from '@/utils/validation'
-
-const HOY = aISO(new Date())
 
 function nombreCliente(cliente) {
   return cliente ? `${cliente.apellido}, ${cliente.nombre}` : ''
@@ -21,14 +20,18 @@ function nombreVehiculo(vehiculo) {
   return vehiculo ? `${vehiculo.patente} — ${vehiculo.marca} ${vehiculo.modelo}` : ''
 }
 
-const VACIO = {
-  cliente_id: '',
-  vehiculo_id: '',
-  fecha: HOY,
-  estado: 'Pendiente',
-  descripcion: '',
-  mecanico_id: '',
-  total: '0',
+// La fecha se calcula al abrir el formulario: con la pestaña abierta de un
+// día para el otro, una orden nueva sale con el día de hoy y no el de ayer.
+function vacio() {
+  return {
+    cliente_id: '',
+    vehiculo_id: '',
+    fecha: hoyAR(),
+    estado: 'Pendiente',
+    descripcion: '',
+    mecanico_id: '',
+    total: '0',
+  }
 }
 
 export default function FormularioOrden({
@@ -43,15 +46,18 @@ export default function FormularioOrden({
   // El mecánico no carga precios (S3): el presupuesto estimado no se le muestra.
   const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
   const [datos, setDatos] = useState(() => {
-    if (!orden) return VACIO
+    if (!orden) return vacio()
     const vehiculo = vehiculos.find((item) => item.id === orden.vehiculo_id)
     return {
-      ...VACIO,
+      ...vacio(),
       ...orden,
       cliente_id: vehiculo?.cliente_id ?? '',
       mecanico_id: orden.mecanico_id ?? '',
-      total: String(
-        orden.costo_estimado != null ? Number(orden.costo_estimado) : orden.costo_final == null ? orden.total ?? 0 : 0,
+      // Se precarga como se tipea ("185.000,50"); al guardar lo lee parsearMontoAR.
+      total: formatearMontoAR(
+        Number(
+          orden.costo_estimado != null ? orden.costo_estimado : orden.costo_final == null ? orden.total ?? 0 : 0,
+        ) || 0,
       ),
     }
   })
@@ -211,13 +217,13 @@ export default function FormularioOrden({
         {!esMecanico && (
           <Field
             label="Presupuesto estimado"
-            inputMode="numeric"
+            inputMode="decimal"
             value={datos.total}
             onChange={(e) => cambiar('total', e.target.value)}
             error={errores.total}
             ayuda="Poné 0 mientras no haya presupuesto. El monto a cobrar se emite desde «Cobro»."
             disabled={guardando}
-            placeholder="Ej.: 185000"
+            placeholder="Ej.: 185.000 o 185.000,50"
           />
         )}
       </div>

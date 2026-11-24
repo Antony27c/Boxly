@@ -1,18 +1,18 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-import jwt
 
 from app.core.config import get_settings
 from app.core.email import ResultadoEnvio
 from app.core.security import create_access_token, create_invitation_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
+from app.main import app
 from app.models import Cliente, Usuario
 from app.models.usuario import RolUsuario
-from app.main import app
 
 CLAVE = "Clave1234"
 
@@ -73,7 +73,10 @@ def test_flujo_completo_confirma_datos_y_entra(api, datos, envio):
     info = api.get("/api/v1/auth/activacion", params={"token": token}).json()
     assert info["nombre"] == "Juan" and info["email"] == "juan@x.com" and info["dni"] == "•••••678"
 
-    sesion = api.post("/api/v1/auth/activacion", json={"token": token, "password": CLAVE, "confirmo_datos": True})
+    sesion = api.post(
+        "/api/v1/auth/activacion",
+        json={"token": token, "password": CLAVE, "confirmo_datos": True},
+    )
     assert sesion.status_code == 201 and sesion.json()["usuario"]["rol"] == "cliente"
 
     login = api.post("/api/v1/auth/login", json={"email": "juan@x.com", "password": CLAVE})

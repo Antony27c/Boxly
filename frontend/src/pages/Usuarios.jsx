@@ -16,8 +16,8 @@ import { useAuth } from '@/context/AuthContext'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
 import { cuentasService } from '@/services/cuentas'
-import { esErrorDeLimite, limitePersonalService } from '@/services/limitePersonal'
-import { ROLES, usuariosService } from '@/services/usuarios'
+import { esErrorDeLimite, suscripcionService } from '@/services/suscripcion'
+import { ROLES_TALLER, usuariosService } from '@/services/usuarios'
 
 export default function Usuarios() {
   const { token, usuario: lector } = useAuth()
@@ -65,8 +65,23 @@ export default function Usuarios() {
   // Tope de personal del plan (docs/Suscripciones.md, S8): si la suscripción no
   // responde (por ejemplo el superadmin, que no tiene taller) no se muestra nada
   // y el servidor sigue siendo la última palabra con su 409.
-  const cargarLimite = useCallback((t) => limitePersonalService.obtener(t), [])
+  const cargarLimite = useCallback((t) => suscripcionService.obtener(t), [])
   const { datos: suscripcion, recargar: recargarLimite } = useRecurso(cargarLimite)
+
+  // Administradores activos del taller: con uno solo, su cuenta no se puede
+  // desactivar, eliminar ni pasar a otro rol (P1). Si no se puede saber, no se
+  // bloquea nada y el servidor sigue siendo la última palabra con su 409.
+  const cargarAdminsActivos = useCallback(
+    (t) => usuariosService.contarAdministradoresActivos(t),
+    [],
+  )
+  const { datos: adminsActivos, recargar: recargarAdminsActivos } =
+    useRecurso(cargarAdminsActivos)
+  const esUltimoAdmin = (usuario) =>
+    Boolean(usuario?.activo) &&
+    usuario.rol === 'administrador' &&
+    typeof adminsActivos === 'number' &&
+    adminsActivos <= 1
 
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase()
@@ -154,6 +169,7 @@ export default function Usuarios() {
     setEnEdicion(null)
     await recargar()
     await recargarLimite()
+    await recargarAdminsActivos()
   }
 
   async function alternarEstado(usuario) {
@@ -171,6 +187,7 @@ export default function Usuarios() {
       setAviso(usuario.activo ? 'Usuario desactivado.' : 'Usuario activado.')
       await recargar()
       await recargarLimite()
+      await recargarAdminsActivos()
     } catch (problema) {
       if (esErrorDeLimite(problema)) {
         setAvisoLimite(problema.message)
@@ -190,6 +207,7 @@ export default function Usuarios() {
       setAviso('Usuario eliminado.')
       await recargar()
       await recargarLimite()
+      await recargarAdminsActivos()
     } catch (problema) {
       setErrorEliminar(problema.message)
     } finally {
@@ -299,7 +317,7 @@ export default function Usuarios() {
           value={rolFiltro}
           data-lectura
           onChange={(e) => setRolFiltro(e.target.value)}
-          opciones={[{ valor: '', texto: 'Todos los roles' }, ...ROLES]}
+          opciones={[{ valor: '', texto: 'Todos los roles' }, ...ROLES_TALLER]}
         />
       </div>
 
@@ -364,6 +382,7 @@ export default function Usuarios() {
                 esPropio={esPropio}
                 soloSuperadmin={soloSuperadmin}
                 esSuperadmin={esSuperadmin}
+                ultimoAdmin={esUltimoAdmin(usuario)}
                 onEditar={() => {
                   setEnEdicion(usuario)
                   setErrorAccion('')
@@ -408,6 +427,7 @@ export default function Usuarios() {
       >
         <FormularioUsuario
           usuario={enEdicion}
+          ultimoAdmin={esUltimoAdmin(enEdicion)}
           onGuardar={guardar}
           onCancelar={() => setFormularioAbierto(false)}
         />

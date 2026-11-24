@@ -2,6 +2,8 @@
 // es-AR: separador ";", UTF-8 con BOM (para que las tildes se lean bien) y
 // números con punto decimal sin separador de miles.
 
+import { hoyAR } from '@/lib/fechas'
+
 const BOM = String.fromCharCode(0xfeff)
 const SEPARADOR = ';'
 const SALTO = '\r\n'
@@ -15,7 +17,8 @@ function escapar(valor) {
 
 function aTexto(valor) {
   if (valor === null || valor === undefined) return ''
-  if (valor instanceof Date) return valor.toISOString().slice(0, 10)
+  // El día del taller (hora de Argentina), no el día UTC.
+  if (valor instanceof Date) return hoyAR(valor)
   return String(valor)
 }
 
@@ -60,6 +63,30 @@ export const COLUMNAS_DASHBOARD = [
   { clave: 'detalle', titulo: 'Detalle' },
 ]
 
+// Medios de pago del desglose de lo cobrado, siempre en este orden para que
+// las filas no cambien de lugar entre un período y otro.
+const MEDIOS_PAGO = [
+  ['mercadopago', 'Mercado Pago'],
+  ['efectivo', 'Efectivo'],
+  ['tarjeta', 'Tarjeta'],
+  ['transferencia', 'Transferencia'],
+  ['otro', 'Otro'],
+]
+
+// Una fila por medio conocido (aunque sea 0) y, al final, los que lleguen y
+// no estén en la lista, con su nombre crudo.
+function filasPorMedio(porMedio) {
+  if (!porMedio) return []
+  const conocidos = new Set(MEDIOS_PAGO.map(([medio]) => medio))
+  const extras = Object.keys(porMedio).filter((medio) => !conocidos.has(medio))
+  return [...MEDIOS_PAGO, ...extras.map((medio) => [medio, medio])].map(([medio, nombre]) => ({
+    seccion: 'Resumen',
+    concepto: `Cobrado · ${nombre}`,
+    valor: texto(porMedio[medio], 0),
+    detalle: '',
+  }))
+}
+
 function texto(valor, respaldo = '') {
   return valor === null || valor === undefined || valor === '' ? respaldo : valor
 }
@@ -91,6 +118,13 @@ export function filasDashboard(dashboard) {
       detalle: '',
     },
     { seccion: 'Resumen', concepto: 'Balance', valor: texto(finanzas?.balance), detalle: '' },
+    {
+      seccion: 'Resumen',
+      concepto: 'Cobrado',
+      valor: texto(finanzas?.cobrado),
+      detalle: 'Total cobrado en el período, online y en el local',
+    },
+    ...filasPorMedio(finanzas?.cobrado_por_medio),
     {
       seccion: 'Resumen',
       concepto: 'Cobrado online',

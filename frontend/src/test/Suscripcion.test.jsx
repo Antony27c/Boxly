@@ -14,7 +14,10 @@ const servicio = vi.hoisted(() => ({
   activarCobro: vi.fn(),
   cancelarCobro: vi.fn(),
 }))
-vi.mock('@/services/suscripcion', () => ({ suscripcionService: servicio }))
+vi.mock('@/services/suscripcion', async (importOriginal) => ({
+  ...(await importOriginal()),
+  suscripcionService: servicio,
+}))
 
 const auth = vi.hoisted(() => ({
   value: {
@@ -207,7 +210,7 @@ describe('Suscripcion', () => {
 
   it('el 409 del cambio de plan se muestra dentro de la confirmación', async () => {
     servicio.cambiarPlan.mockRejectedValue(
-      Object.assign(new Error('Tu personal activo supera el límite de ese plan'), { status: 409 }),
+      new ApiError('Tu personal activo supera el límite de ese plan', 409, 'plan_personal_excedido'),
     )
     montar()
 
@@ -223,9 +226,7 @@ describe('Suscripcion', () => {
     servicio.obtener.mockResolvedValue(
       suscripcionCon('al_dia', { plan: PLANES[1], personal_activo: 4, max_personal: 10 }),
     )
-    servicio.cambiarPlan.mockRejectedValue(
-      Object.assign(new Error('Tu personal activo supera el límite de ese plan'), { status: 409 }),
-    )
+    servicio.cambiarPlan.mockRejectedValue(new ApiError('Otro texto cualquiera', 409, 'plan_personal_excedido'))
     montar()
 
     const botones = await screen.findAllByRole('button', { name: 'Pasar a este plan' })
@@ -304,8 +305,24 @@ describe('Suscripcion', () => {
     expect(within(tabla).getByText('Rechazado')).toBeInTheDocument()
   })
 
+  it('un 409 sin el código de plan muestra el mensaje del servidor tal cual', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', { plan: PLANES[1], personal_activo: 4, max_personal: 10 }),
+    )
+    servicio.cambiarPlan.mockRejectedValue(new ApiError('El plan cambió mientras tanto', 409))
+    montar()
+
+    const botones = await screen.findAllByRole('button', { name: 'Pasar a este plan' })
+    fireEvent.click(botones[0]) // Esencial
+    const dialogo = await screen.findByRole('dialog')
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Cambiar plan' }))
+
+    expect(await within(dialogo).findByText('El plan cambió mientras tanto')).toBeInTheDocument()
+    expect(within(dialogo).queryByText(/Tenés 4 personas activas/)).not.toBeInTheDocument()
+  })
+
   it('con la suscripción suspendida el 403 del GET la marca suspendida, sin recargar en bucle', async () => {
-    servicio.obtener.mockRejectedValue(new ApiError('La suscripción del taller está vencida', 403))
+    servicio.obtener.mockRejectedValue(new ApiError('Cualquier texto', 403, 'suscripcion_suspendida'))
     const { result } = renderHook(() => useSuscripcion())
 
     await waitFor(() => expect(result.current.suscripcion).toEqual({ estado: 'suspendida' }))
@@ -314,7 +331,10 @@ describe('Suscripcion', () => {
 
     // Otro 403 de suspensión (o el del propio GET) no vuelve a pedir la suscripción.
     fetchMock.mockResolvedValue(
-      respuestaJson({ detail: 'La suscripción del taller está vencida' }, { status: 403 }),
+      respuestaJson(
+        { detail: 'La suscripción del taller está vencida', codigo: 'suscripcion_suspendida' },
+        { status: 403 },
+      ),
     )
     await act(async () => {
       await api.get('/api/v1/ordenes', 'tok').catch(() => {})
@@ -330,7 +350,7 @@ describe('Suscripcion', () => {
 
     fetchMock.mockResolvedValueOnce(
       respuestaJson(
-        { detail: 'El taller está en solo lectura por falta de pago de la suscripción' },
+        { detail: 'El taller está en solo lectura por falta de pago de la suscripción', codigo: 'suscripcion_solo_lectura' },
         { status: 403 },
       ),
     )
@@ -339,5 +359,34 @@ describe('Suscripcion', () => {
     })
 
     await waitFor(() => expect(servicio.obtener).toHaveBeenCalledTimes(2))
+  })
+
+  it('un 403 con código suscripcion_suspendida recarga aunque el texto sea otro', async () => {
+    montar()
+    await screen.findByText('Al día hasta el 23/12')
+    expect(servicio.obtener).toHaveBeenCalledTimes(1)
+
+    fetchMock.mockResolvedValueOnce(
+      respuestaJson({ detail: 'Texto nuevo que nadie previó', codigo: 'suscripcion_suspendida' }, { status: 403 }),
+    )
+    await act(async () => {
+      await api.post('/api/v1/ordenes', {}, 'tok').catch(() => {})
+    })
+
+    await waitFor(() => expect(servicio.obtener).toHaveBeenCalledTimes(2))
+  })
+
+  it('un 403 sin código (permiso común) no recarga aunque el texto hable de la suscripción', async () => {
+    montar()
+    await screen.findByText('Al día hasta el 23/12')
+
+    fetchMock.mockResolvedValueOnce(
+      respuestaJson({ detail: 'La suscripción del taller está vencida' }, { status: 403 }),
+    )
+    await act(async () => {
+      await api.get('/api/v1/ordenes', 'tok').catch(() => {})
+    })
+
+    expect(servicio.obtener).toHaveBeenCalledTimes(1)
   })
 })

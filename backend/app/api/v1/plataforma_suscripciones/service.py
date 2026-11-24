@@ -63,9 +63,11 @@ def listar_adicionales(db: Session, taller_id: int) -> list[AdicionalResponse]:
     return adicionales.listar(db, taller_id)
 
 
-def activar_adicional(db: Session, taller_id: int, datos: AdicionalCreate) -> AdicionalResponse:
-    return adicionales.activar(db, taller_id, datos)
+def activar_adicional(
+    db: Session, taller_id: int, datos: AdicionalCreate, usuario: Usuario
+) -> AdicionalResponse:
+    return adicionales.activar(db, taller_id, datos, usuario)
 
 
-def desactivar_adicional(db: Session, taller_id: int, codigo: str) -> None:
-    adicionales.desactivar(db, taller_id, codigo)
+def desactivar_adicional(db: Session, taller_id: int, codigo: str, usuario: Usuario) -> None:
+    adicionales.desactivar(db, taller_id, codigo, usuario)

@@ -16,7 +16,7 @@ import { mecanicosService } from '@/services/mecanicos'
 import { ordenesService } from '@/services/ordenes'
 import { turnosService } from '@/services/turnos'
 import { vehiculosService } from '@/services/vehiculos'
-import { aISO } from '@/utils/fechas'
+import { hoyAR } from '@/lib/fechas'
 
 const PATENTE = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/
 const COMENTARIO_INGRESO = 'Auto recibido en el taller.'
@@ -71,7 +71,7 @@ export default function IngresoRapido({ abierto, onCerrar, onListo, inicial }) {
   const { token } = useAuth()
   const { avisar } = useToast()
   const navigate = useNavigate()
-  const hoy = aISO(new Date())
+  const hoy = hoyAR()
 
   const inicialRef = useRef(inicial)
   // El ref se sincroniza en un efecto para que el de carga de abajo

@@ -1,5 +1,6 @@
 import { api, urlArchivo } from '@/lib/api'
 import { diaServidor } from '@/lib/fechas'
+import { parsearMontoAR } from '@/lib/montos'
 
 const RECURSO = '/api/v1/ordenes'
 
@@ -14,6 +15,16 @@ const CODIGOS = {
 }
 
 export const ESTADOS_ORDEN = Object.keys(CODIGOS)
+
+/* Monto que manda el servidor → número exacto, o null si no es un monto.
+   Los Decimal llegan como texto con punto decimal ("185000.50") o como
+   número; el formato argentino ("185.000,50") es solo para mostrar y acá
+   se rechaza, para no confundir puntos de miles con decimales. */
+export function montoDelServidor(valor) {
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null
+  const texto = String(valor ?? '').trim()
+  return /^\d+(\.\d+)?$/.test(texto) ? Number(texto) : null
+}
 
 const TRANSICIONES = {
   Pendiente: ['Ingresado', 'Cancelado'],
@@ -240,7 +251,7 @@ export const ordenesService = {
           vehiculo_id: Number(orden.vehiculo_id),
           mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
           descripcion_ingreso: orden.descripcion,
-          costo_estimado: Number(orden.total) || null,
+          costo_estimado: parsearMontoAR(orden.total) || null,
         },
         token,
       )
@@ -258,7 +269,7 @@ export const ordenesService = {
     if (linea.precio_unitario !== undefined) {
       cuerpo.precio_unitario =
         linea.precio_unitario !== '' && linea.precio_unitario != null
-          ? Number(linea.precio_unitario)
+          ? parsearMontoAR(linea.precio_unitario)
           : null
     }
     return api.post(`${RECURSO}/${ordenId}/detalles`, cuerpo, token)
@@ -266,7 +277,11 @@ export const ordenesService = {
 
   // Cotizar o corregir el precio de una línea (administrador o recepción, S3).
   cotizarDetalle: (ordenId, detalleId, precio, token) =>
-    api.patch(`${RECURSO}/${ordenId}/detalles/${detalleId}`, { precio_unitario: Number(precio) }, token),
+    api.patch(
+      `${RECURSO}/${ordenId}/detalles/${detalleId}`,
+      { precio_unitario: parsearMontoAR(precio) },
+      token,
+    ),
 
   quitarDetalle: (ordenId, detalleId, token) =>
     api.del(`${RECURSO}/${ordenId}/detalles/${detalleId}`, token),
@@ -280,21 +295,30 @@ export const ordenesService = {
 
   enviarAviso: (id, token) => api.post(`${RECURSO}/${id}/notificaciones`, {}, token),
 
+  // Los montos tipeados llegan como texto en formato argentino ("185.000,50")
+  // o ya como número: parsearMontoAR resuelve los dos (lib/montos.js).
   emitirCobro: (id, monto, token) =>
-    api.post(`${RECURSO}/${id}/cobro`, { monto: Number(monto) }, token).then(desdeApi),
+    api.post(`${RECURSO}/${id}/cobro`, { monto: parsearMontoAR(monto) }, token).then(desdeApi),
 
-  registrarPagoLocal: (id, { medio, monto, referencia }, token) =>
-    api
+  // `monto` es el del cobro emitido tal como lo mandó el servidor
+  // (costo_final): se envía ese número exacto, nunca algo tipeado.
+  registrarPagoLocal: (id, { medio, monto, referencia }, token) => {
+    const exacto = montoDelServidor(monto)
+    if (exacto == null || exacto <= 0) {
+      return Promise.reject(new Error('La orden no tiene un cobro emitido con monto válido.'))
+    }
+    return api
       .post(
         `${RECURSO}/${id}/pago-local`,
-        { medio, monto: Number(monto), referencia: referencia?.trim() || null },
+        { medio, monto: exacto, referencia: referencia?.trim() || null },
         token,
       )
-      .then(desdeApi),
+      .then(desdeApi)
+  },
 
   aprobarCobro: (id, monto, token) =>
     api
-      .post(`${RECURSO}/${id}/cobro/aprobar`, monto ? { monto: Number(monto) } : {}, token)
+      .post(`${RECURSO}/${id}/cobro/aprobar`, monto ? { monto: parsearMontoAR(monto) } : {}, token)
       .then(desdeApi),
 
   actualizar: (id, orden, token) =>
@@ -305,7 +329,7 @@ export const ordenesService = {
           estado: CODIGOS[orden.estado],
           mecanico_id: orden.mecanico_id ? Number(orden.mecanico_id) : null,
           descripcion_ingreso: orden.descripcion,
-          costo_estimado: Number(orden.total) || 0,
+          costo_estimado: parsearMontoAR(orden.total) ?? 0,
         },
         token,
       )

@@ -17,8 +17,7 @@ import { repuestosService } from '@/services/repuestos'
 import { turnosService } from '@/services/turnos'
 import { clientesService } from '@/services/clientes'
 import { vehiculosService } from '@/services/vehiculos'
-import { formatearFechaLarga } from '@/lib/fechas'
-import { aISO } from '@/utils/fechas'
+import { formatearFechaLarga, hoyAR } from '@/lib/fechas'
 import { iniciales } from '@/utils/ficha'
 import { pesos } from '@/utils/formato'
 
@@ -231,7 +230,7 @@ function FilaRepuesto({ repuesto }) {
 
 // Recepción y administrador: el resumen del día del taller.
 function PanelTaller({ usuario }) {
-  const hoy = aISO(new Date())
+  const hoy = hoyAR()
   const esAdmin = tieneAcceso(ROLES_ADMIN, usuario?.rol)
   const rol = usuario?.rol
 

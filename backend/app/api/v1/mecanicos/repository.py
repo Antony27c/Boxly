@@ -1,10 +1,11 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import select
 from typing import List, Optional
- 
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.models.horario_mecanico import HorarioMecanico
- 
- 
+
+
 class MecanicosRepository:
     def listar_horarios(self, db: Session, mecanico_id: int) -> List[HorarioMecanico]:
         stmt = select(HorarioMecanico).where(HorarioMecanico.mecanico_id == mecanico_id).order_by(

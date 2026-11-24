@@ -3,11 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.v1.vehiculos import service
-from app.core.dependencies import PersonalUser, DbSession, filtro_mecanico, require_roles
+from app.core.dependencies import DbSession, PersonalUser, filtro_mecanico, require_roles
 from app.models.usuario import RolUsuario, Usuario
+from app.schemas.orden import OrdenResponse
 from app.schemas.paginacion import PaginaParams
 from app.schemas.usuario import MessageResponse
-from app.schemas.orden import OrdenResponse
 from app.schemas.vehiculo import VehiculoCreate, VehiculoResponse, VehiculoUpdate
 
 router = APIRouter(prefix="/vehiculos", tags=["Vehículos"])

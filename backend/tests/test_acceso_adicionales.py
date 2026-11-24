@@ -201,7 +201,11 @@ def test_convertir_demo_a_pago(api, datos, sa):
     assert cuerpo["tipo_acceso"] == "pago"
     assert cuerpo["plan"]["codigo"] == "esencial"
     assert cuerpo["vence_en"] == vence.isoformat()
-    assert _detalles_de_acceso(datos["demo_id"]) == []  # sin motivo, nada extra
+    demo_vence = (date.today() + timedelta(days=5)).isoformat()
+    assert _detalles_de_acceso(datos["demo_id"]) == [
+        f"Acceso demo → pago. Plan pro → esencial. Vence {demo_vence} → {vence.isoformat()}. "
+        "Motivo: sin motivo"
+    ]
     # Queda en el listado de la plataforma.
     talleres = api.get("/api/v1/plataforma/talleres", headers=sa).json()
     assert {t["id"]: t["tipo_acceso"] for t in talleres}[datos["demo_id"]] == "pago"
@@ -217,8 +221,10 @@ def test_convertir_a_piloto_guarda_el_motivo(api, datos, sa):
     )
     assert r.status_code == 200, r.text
     assert r.json()["tipo_acceso"] == "piloto"
+    demo_vence = (date.today() + timedelta(days=5)).isoformat()
     assert _detalles_de_acceso(datos["demo_id"]) == [
-        f"Acceso piloto, plan pro, vence {vence.isoformat()}. Motivo: Feria del automotor"
+        f"Acceso demo → piloto. Plan pro → pro. Vence {demo_vence} → {vence.isoformat()}. "
+        "Motivo: Feria del automotor"
     ]
 
 

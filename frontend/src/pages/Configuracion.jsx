@@ -170,6 +170,7 @@ export default function Configuracion() {
             <button
               type="button"
               role="switch"
+              data-lectura
               aria-checked={reducirMovimiento}
               aria-labelledby={idReducir}
               onClick={alternarMovimiento}
@@ -196,6 +197,7 @@ export default function Configuracion() {
             </p>
             <div
               role="radiogroup"
+              data-lectura
               aria-labelledby={idTamano}
               className="grid max-w-xs grid-cols-2 gap-1 rounded-box bg-graphite-700 p-1"
             >
@@ -260,7 +262,7 @@ export default function Configuracion() {
           </h2>
           <p className="mt-1 text-sm text-muted">Opciones que solo ve el administrador.</p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <Button variante="secundario" onClick={volverAMostrarPrimerosPasos}>
+            <Button variante="secundario" onClick={volverAMostrarPrimerosPasos} data-lectura>
               Volver a mostrar Primeros pasos
             </Button>
             <Link to="/usuarios" className={BOTON_SECUNDARIO}>

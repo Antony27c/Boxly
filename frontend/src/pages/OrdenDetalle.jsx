@@ -19,9 +19,9 @@ import Patente from '@/components/ui/Patente'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
-import { formatearFechaLarga } from '@/lib/fechas'
+import { formatearFechaHora, formatearFechaLarga } from '@/lib/fechas'
 import { ROLES_ADMIN, ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { accionVisible, estadoCobro, ordenesService, proximosEstados } from '@/services/ordenes'
+import { accionVisible, estadoCobro, ordenesService, proximosEstados, textoPagada } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 const TONOS = {
@@ -325,7 +325,10 @@ export default function OrdenDetalle() {
           className="mt-6 rounded-box border border-graphite-700 bg-graphite-800 p-5"
         >
           {estadoCobro(orden) === 'pagada' ? (
-            <p className="text-sm text-ok">El cliente ya pagó {pesos(orden.costo_final)}.</p>
+            <p className="text-sm text-ok">
+              {textoPagada(orden.pago_medio)}: {pesos(orden.costo_final)}
+              {orden.pago_fecha && ` · ${formatearFechaHora(orden.pago_fecha)}`}
+            </p>
           ) : (
             <BannerCobro orden={orden} esMostrador={esMostrador} onAbrir={() => setConCobro(orden)} />
           )}

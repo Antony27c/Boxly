@@ -13,19 +13,15 @@ export function nombreRol(rol) {
   return ROLES.find((item) => item.valor === rol)?.texto ?? rol
 }
 
-/* Roles que puede asignar quien está logueado: el superadmin puede con todos;
-   cualquier otro rol (administrador) solo con recepción y mecánico. El backend
-   responde 403 si un administrador intenta gestionar cuentas de admin, así que
-   la lista ya viene recortada para no ofrecer lo que va a fallar. */
-export function rolesAsignables(rol) {
-  if (rol === 'superadmin') return ROLES
-  return ROLES.filter((item) => item.valor !== 'superadmin' && item.valor !== 'administrador')
-}
+/* Roles del personal de un taller (docs/Plataforma.md, P1). "superadmin" no es
+   un rol del taller: no se ofrece para asignar ni para filtrar. */
+export const ROLES_TALLER = ROLES.filter((item) => item.valor !== 'superadmin')
 
-/* true si la cuenta es de un administrador o superadmin: solo la gestiona el
-   superadmin (el resto recibe 403 del servidor). */
-export function requiereSuperadmin(rol) {
-  return rol === 'administrador' || rol === 'admin' || rol === 'superadmin'
+/* Roles que se pueden asignar desde la pantalla de Usuarios: el administrador
+   gestiona todo el personal de su taller, incluidos otros administradores, y
+   nunca puede crear ni asignar superadmin (el servidor responde 403). */
+export function rolesAsignables() {
+  return ROLES_TALLER
 }
 
 /* Arma la query de un listado paginado: limit/offset más filtros extra.
@@ -46,6 +42,15 @@ export const usuariosService = {
   listarPaginado: (params = {}, token) => {
     const consulta = aParamsPaginacion(params).toString()
     return api.getConTotal(`${RECURSO}${consulta ? `?${consulta}` : ''}`, token)
+  },
+
+  /* Administradores activos del taller: solo interesa el total, así que se pide
+     una página de un elemento y se lee X-Total-Count. Con uno solo, el servidor
+     no deja desactivarlo, quitarle el rol ni eliminarlo (409, P1). */
+  contarAdministradoresActivos: async (token) => {
+    const consulta = aParamsPaginacion({ rol: 'administrador', solo_activos: true, limit: 1 })
+    const { total } = await api.getConTotal(`${RECURSO}?${consulta.toString()}`, token)
+    return total
   },
 
   crear: (usuario, token) => api.post(RECURSO, usuario, token),

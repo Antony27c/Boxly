@@ -7,6 +7,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.errores import (
+    SOPORTE_SIN_ACCESO,
+    SOPORTE_SOLO_LECTURA,
+    SUSCRIPCION_SOLO_LECTURA,
+    SUSCRIPCION_SUSPENDIDA,
+    TALLER_SUSPENDIDO,
+    ErrorConCodigo,
+)
 from app.core.security import decode_access_token
 from app.core.suscripcion import AL_DIA, GRACIA, SUSPENDIDA, estado_suscripcion, ruta_libre
 from app.db.session import SIN_FILTRO_TALLER, SessionLocal, fijar_taller
@@ -74,14 +82,16 @@ def _taller_soporte(request: Request, db: Session, user: Usuario) -> int | None:
     except ValueError:
         taller_id = -1
     if not _acceso_vigente(db, taller_id):
-        raise HTTPException(
+        raise ErrorConCodigo(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="El taller no te dio acceso de soporte",
+            codigo=SOPORTE_SIN_ACCESO,
         )
     if request.method not in _METODOS_SOPORTE:
-        raise HTTPException(
+        raise ErrorConCodigo(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="El modo soporte es de solo lectura",
+            codigo=SOPORTE_SOLO_LECTURA,
         )
     return taller_id
 
@@ -113,9 +123,10 @@ def get_current_user(
     if user.taller_id is not None:
         taller = db.get(Taller, user.taller_id)
         if taller is None or not taller.activo:
-            raise HTTPException(
+            raise ErrorConCodigo(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="El taller está suspendido. Comunicate con Boxly.",
+                codigo=TALLER_SUSPENDIDO,
             )
         _verificar_suscripcion(request, user, taller)
     # Modo soporte: el superadmin opera DENTRO del taller que le dio acceso
@@ -134,6 +145,45 @@ def get_current_user(
 _METODOS_LECTURA = {"GET", "HEAD", "OPTIONS"}
 
 
+# Detalle de cada 403 del bloqueo por suscripción: no cambia (el frontend lo
+# sigue mostrando igual); el código estable viaja aparte en ``codigo`` (Q4).
+_DETALLE_BLOQUEO = {
+    SUSCRIPCION_SUSPENDIDA: "La suscripción del taller está vencida",
+    SUSCRIPCION_SOLO_LECTURA: (
+        "El taller está en solo lectura por falta de pago de la suscripción"
+    ),
+}
+
+
+def _es_ruta_auth(ruta: str) -> bool:
+    """``/api/v1/auth`` exacto o colgando de él (login, me, logout)."""
+    return ruta == "/api/v1/auth" or ruta.startswith("/api/v1/auth/")
+
+
+def _decision_suscripcion(
+    estado: str, *, libre: bool, es_admin: bool, es_lectura: bool
+) -> str | None:
+    """Tabla de decisión del bloqueo por suscripción (docs/Suscripciones.md
+    y docs/Oferta.md). Devuelve el código del 403 o None si la request pasa.
+
+    | estado        | ruta libre | admin | método    | resultado   |
+    | -------------- | ---------- | ----- | --------- | ----------- |
+    | al_dia/gracia  | cualquiera | *     | *         | pasa        |
+    | suspendida     | sí         | sí    | *         | pasa        |
+    | suspendida     | sí         | no    | *         | suspendida  |
+    | suspendida     | no         | *     | *         | suspendida  |
+    | solo_lectura   | sí         | *     | *         | pasa        |
+    | solo_lectura   | no         | *     | lectura   | pasa        |
+    | solo_lectura   | no         | *     | escritura | solo_lectura|
+    """
+    if estado in (AL_DIA, GRACIA):
+        return None
+    if estado == SUSPENDIDA:
+        return None if (libre and es_admin) else SUSCRIPCION_SUSPENDIDA
+    # Queda solo_lectura: las rutas libres y las lecturas pasan; el resto corta.
+    return None if (libre or es_lectura) else SUSCRIPCION_SOLO_LECTURA
+
+
 def _verificar_suscripcion(request: Request, user: Usuario, taller: Taller) -> None:
     """Corta según el estado de pago de la suscripción (docs/Suscripciones.md
     y docs/Oferta.md).
@@ -143,28 +193,23 @@ def _verificar_suscripcion(request: Request, user: Usuario, taller: Taller) -> N
     """
     # Login, /auth/me y logout andan siempre: si no, el frontend desloguea al
     # personal del taller suspendido en cada recarga.
-    if request.url.path.startswith("/api/v1/auth"):
+    if _es_ruta_auth(request.url.path):
         return
-    estado = estado_suscripcion(
-        taller.suscripcion_vence_en, tipo_acceso=taller.tipo_acceso
+    codigo = _decision_suscripcion(
+        estado_suscripcion(
+            taller.suscripcion_vence_en, tipo_acceso=taller.tipo_acceso
+        ),
+        libre=ruta_libre(request.url.path),
+        es_admin=user.rol == RolUsuario.administrador,
+        es_lectura=request.method in _METODOS_LECTURA,
     )
-    if estado in (AL_DIA, GRACIA) or ruta_libre(request.url.path):
-        if estado == SUSPENDIDA and user.rol != RolUsuario.administrador:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="La suscripción del taller está vencida",
-            )
+    if codigo is None:
         return
-    if estado == SUSPENDIDA:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="La suscripción del taller está vencida",
-        )
-    if request.method not in _METODOS_LECTURA:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="El taller está en solo lectura por falta de pago de la suscripción",
-        )
+    raise ErrorConCodigo(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=_DETALLE_BLOQUEO[codigo],
+        codigo=codigo,
+    )
 
 
 CurrentUser = Annotated[Usuario, Depends(get_current_user)]

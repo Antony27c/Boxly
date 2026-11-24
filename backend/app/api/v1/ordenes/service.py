@@ -1,32 +1,38 @@
+import uuid
+from datetime import datetime, timezone
+from typing import List, Optional
+
+import anyio
+from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from fastapi import BackgroundTasks, HTTPException, UploadFile
-from typing import List, Optional
-from datetime import datetime, timezone
 
-from app.core.config import UPLOADS_DIR
+from app.api.v1.pagos.service import marcar_aprobado
 from app.core import imagenes
-import anyio
-
+from app.core.config import UPLOADS_DIR
 from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
 from app.db.session import SessionLocal, fijar_taller
-from app.schemas.orden import (
-    ESTADOS_ORDEN, EstadoOrdenResponse, HistorialResponse, NotificacionResponse,
-    OrdenCreate, OrdenUpdate, PagoLocalRequest,
-)
-from app.api.v1.pagos.service import marcar_aprobado
+from app.models.detalle_orden import DetalleOrden
+from app.models.imagen_orden import ImagenOrden
 from app.models.orden import Orden
 from app.models.pago import Pago
+from app.models.repuesto import Repuesto
 from app.models.usuario import RolUsuario, Usuario, es_admin
 from app.models.vehiculo import Vehiculo
-from app.models.detalle_orden import DetalleOrden
-from app.models.repuesto import Repuesto
 from app.schemas.detalle_orden import DetalleOrdenCreate, DetalleOrdenResponse, DetallePrecioUpdate
-from .repository import orden_repository 
-from app.models.imagen_orden import ImagenOrden
 from app.schemas.imagen_orden import ImagenOrdenResponse
-import uuid
+from app.schemas.orden import (
+    ESTADOS_ORDEN,
+    EstadoOrdenResponse,
+    HistorialResponse,
+    NotificacionResponse,
+    OrdenCreate,
+    OrdenUpdate,
+    PagoLocalRequest,
+)
+
+from .repository import orden_repository
 
 MAX_BYTES_IMAGEN = 5 * 1024 * 1024
 
@@ -63,9 +69,12 @@ class OrdenService:
 
     def _validar_cobrable(self, orden: Orden) -> None:
         if orden.estado not in ESTADOS_COBRABLES:
-            raise HTTPException(status_code=400, detail="El cobro se emite cuando la orden está lista o entregada")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El cobro se emite cuando la orden está lista o entregada",
+            )
         if orden.pagada:
-            raise HTTPException(status_code=409, detail="La orden ya está pagada")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La orden ya está pagada")
 
     def _aprobar_cobro(self, orden: Orden, monto, usuario_id: int) -> None:
         orden.costo_final = monto
@@ -83,13 +92,15 @@ class OrdenService:
         background_tasks: BackgroundTasks | None = None,
     ) -> Orden:
         if usuario.rol == RolUsuario.mecanico:
-            raise HTTPException(status_code=403, detail="El mecánico no emite cobros")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El mecánico no emite cobros")
         orden = self.obtener_detalle_orden(db, orden_id)
         self._validar_cobrable(orden)
         if any(d.precio_unitario is None for d in orden.detalles):
-            raise HTTPException(status_code=409, detail="Hay trabajos sin cotizar")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Hay trabajos sin cotizar")
         if monto is None:
-            raise HTTPException(status_code=422, detail="Indicá el monto a cobrar")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Indicá el monto a cobrar",
+            )
         self._aprobar_cobro(orden, monto, usuario.id)
         orden = orden_repository.guardar_cambios(db, orden)
         self._avisar_cobro(orden, background_tasks)
@@ -103,7 +114,9 @@ class OrdenService:
         self._validar_cobrable(orden)
         monto = monto or orden.monto_propuesto
         if not monto:
-            raise HTTPException(status_code=400, detail="No hay un cobro propuesto para aprobar")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="No hay un cobro propuesto para aprobar",
+            )
         self._aprobar_cobro(orden, monto, usuario_id)
         orden = orden_repository.guardar_cambios(db, orden)
         self._avisar_cobro(orden, background_tasks)
@@ -117,18 +130,19 @@ class OrdenService:
         """
         # Lock de la orden: dos registros simultáneos no pueden pagarla dos veces.
         if db.scalar(select(Orden.id).where(Orden.id == orden_id).with_for_update()) is None:
-            raise HTTPException(status_code=404, detail="Orden no encontrada")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
         orden = self.obtener_detalle_orden(db, orden_id)
         if orden.pagada:
-            raise HTTPException(status_code=409, detail="La orden ya está pagada")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La orden ya está pagada")
         if orden.cobro_estado != "aprobado" or orden.costo_final is None:
             raise HTTPException(
-                status_code=409, detail="La orden no tiene un cobro emitido para registrar el pago"
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La orden no tiene un cobro emitido para registrar el pago",
             )
         # Sin pagos parciales por ahora: se registra el cobro completo.
         if datos.monto != orden.costo_final:
             raise HTTPException(
-                status_code=422,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"El monto tiene que ser el del cobro emitido: $ {orden.costo_final:,.2f}",
             )
         # Un intento de pago online que quedó abierto no puede cobrarse después.
@@ -158,7 +172,9 @@ class OrdenService:
             for codigo, (nombre, descripcion) in ESTADOS_ORDEN.items()
         ]
     
-    def obtener_lista_ordenes(self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None) -> List[Orden]:
+    def obtener_lista_ordenes(
+        self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None
+    ) -> List[Orden]:
         
         return orden_repository.obtener_ordenes(db, estado, mecanico_id)
 
@@ -166,33 +182,41 @@ class OrdenService:
         orden = orden_repository.obtener_por_id(db, orden_id)
         if not orden or (mecanico_id is not None and orden.mecanico_id != mecanico_id):
             
-            raise HTTPException(status_code=404, detail="Orden no encontrada")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
         return orden
 
-    def validar_edicion_mecanico(self, db: Session, orden_id: int, datos: OrdenUpdate, mecanico_id: Optional[int]) -> None:
+    def validar_edicion_mecanico(
+        self, db: Session, orden_id: int, datos: OrdenUpdate, mecanico_id: Optional[int]
+    ) -> None:
         if mecanico_id is None:
             return
         self.obtener_detalle_orden(db, orden_id, mecanico_id)
         if datos.mecanico_id is not None and datos.mecanico_id != mecanico_id:
-            raise HTTPException(status_code=403, detail="No podés reasignar la orden a otro mecánico")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="No podés reasignar la orden a otro mecánico",
+            )
         if datos.costo_final is not None:
             raise HTTPException(
-                status_code=403,
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail="El monto final a cobrar lo fija administración o recepción",
             )
 
     def _validar_mecanico(self, db:Session, mecanico_id: int)-> None:
         mecanico = db.get(Usuario, mecanico_id)
         if mecanico is None:
-            raise HTTPException(status_code=404, detail="El mecanico asignado no existe")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="El mecanico asignado no existe",
+            )
         if mecanico.rol != RolUsuario.mecanico or not mecanico.activo:
-            raise HTTPException(status_code=400, detail="El usuario asignado no es un mecanico activo",
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El usuario asignado no es un mecanico activo",
             )
 
     def crear_orden(self, db:Session, datos:OrdenCreate, creado_por_id:int)-> Orden:
         vehiculo = db.get(Vehiculo, datos.vehiculo_id)
         if vehiculo is None:
-            raise HTTPException(status_code=404, detail= "vehiculo no encontrado")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "vehiculo no encontrado")
         if datos.mecanico_id is not None:
             self._validar_mecanico(db, datos.mecanico_id)
 
@@ -244,7 +268,7 @@ class OrdenService:
             comentario = (datos.comentario_cambio or "").strip()
             if campos or not comentario:
                 raise HTTPException(
-                    status_code=400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Orden cerrada: no se puede modificar",
                 )
             orden_repository.guardar_historial(
@@ -263,7 +287,7 @@ class OrdenService:
             self._validar_cobrable(orden)
             if any(pago.estado in ("pendiente", "aprobado") for pago in orden.pagos):
                 raise HTTPException(
-                    status_code=409,
+                    status_code=status.HTTP_409_CONFLICT,
                     detail="La orden tiene un pago pendiente o aprobado; no se puede cambiar el costo final",
                 )
         if datos.mecanico_id is not None:
@@ -272,17 +296,20 @@ class OrdenService:
         if datos.estado and datos.estado != orden.estado:
             if datos.estado not in ESTADOS_ORDEN:
                 raise HTTPException(
-                    status_code=422, 
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, 
                     detail=f"Estado desconocido: '{datos.estado}'"
                 )
             estados_permitidos = TRANSICIONES_VALIDAS.get(orden.estado, [])
 
             if datos.estado not in estados_permitidos:
-                raise HTTPException(status_code=400, detail=f"Transicion invalida. No se puede pasar de '{orden.estado}' a '{datos.estado}'")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Transicion invalida. No se puede pasar de '{orden.estado}' a '{datos.estado}'",
+                )
 
             if not datos.comentario_cambio or not datos.comentario_cambio.strip():
                 raise HTTPException(
-                    status_code=422,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail= "El comentario es obligatorio al cambiar de estado",
                 )
             orden_repository.guardar_historial(
@@ -377,7 +404,9 @@ class OrdenService:
     def reenviar_aviso(self, db: Session, orden_id: int, usuario_id: int) -> NotificacionResponse:
         orden = self.obtener_detalle_orden(db, orden_id)
         if not orden.cliente or not orden.cliente.email:
-            raise HTTPException(status_code=400, detail="El cliente no tiene un email cargado")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente no tiene un email cargado",
+            )
         historial = orden_repository.obtener_historial(db, orden_id)
         comentario = (historial[-1].comentario if historial else None) or "Aviso reenviado por el taller"
         return self.enviar_y_registrar_aviso(orden_id, comentario, usuario_id)
@@ -403,7 +432,7 @@ class OrdenService:
         orden = self.obtener_detalle_orden(db, orden_id)
         if orden.estado != "pendiente":
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Solo se pueden eliminar órdenes pendientes. Para las demás, pasala a 'cancelado'.",
             )
         urls = [imagen.url for imagen in orden.imagenes]
@@ -416,7 +445,7 @@ class OrdenService:
     def _validar_orden_editable(self, orden: Orden) -> None:
         if orden.estado in ("entregado", "cancelado"):
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No se puede modificar lineas de una orden cerrada",
             )
 
@@ -465,21 +494,31 @@ class OrdenService:
         self._validar_orden_editable(orden)
         es_mecanico = usuario.rol == RolUsuario.mecanico
         if es_mecanico and datos.precio_unitario is not None:
-            raise HTTPException(status_code=403, detail="El mecánico no carga precios")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El mecánico no carga precios")
 
         repuesto= None
         if datos.repuesto_id is not None:
             repuesto = db.get(Repuesto, datos.repuesto_id)
             if repuesto is None or not repuesto.activo:
-                raise HTTPException(status_code=404, detail="Repuesto no encontrado o inactivo")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Repuesto no encontrado o inactivo",
+                )
         descripcion = datos.descripcion or (repuesto.nombre if repuesto else None)
         if not descripcion:
-            raise HTTPException(status_code=422, detail="Las lineas de mano de obra necesitan descripcion",)
-        precio = datos.precio_unitario if datos.precio_unitario is not None else (repuesto.precio if repuesto else None)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Las lineas de mano de obra necesitan descripcion",
+            )
+        precio = datos.precio_unitario
+        if precio is None and repuesto is not None:
+            precio = repuesto.precio
         # La mano de obra del mecánico queda sin precio ("a cotizar"); recepción
         # y administración la siguen cargando con precio obligatorio.
         if precio is None and not (es_mecanico and repuesto is None):
-            raise HTTPException(status_code=422, detail="las lineas de mano de obra necesitan precio unitario",)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="las lineas de mano de obra necesitan precio unitario",
+            )
         if repuesto is not None:
             descuento = db.execute(
                 update(Repuesto)
@@ -489,7 +528,7 @@ class OrdenService:
             if descuento.rowcount == 0:
                 db.refresh(repuesto)
                 raise HTTPException(
-                    status_code=409,
+                    status_code=status.HTTP_409_CONFLICT,
                     detail=f"Stock insuficiente: quedan {repuesto.stock} de {repuesto.nombre}",
                 )
         detalle = DetalleOrden(
@@ -518,7 +557,9 @@ class OrdenService:
         self._validar_orden_editable(orden)
         detalle = orden_repository.obtener_detalle(db, orden_id, detalle_id)
         if detalle is None:
-            raise HTTPException(status_code=404, detail="Linea no encontrada en esta Orden")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Linea no encontrada en esta Orden",
+            )
         detalle.precio_unitario = datos.precio_unitario
         orden_repository.guardar_historial(
             db,
@@ -539,7 +580,9 @@ class OrdenService:
 
         detalle = orden_repository.obtener_detalle(db, orden_id, detalle_id)
         if detalle is None:
-            raise HTTPException(status_code=404, detail="Linea no encontrada en esta Orden")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Linea no encontrada en esta Orden",
+            )
         if detalle.repuesto_id is not None:
             db.execute(
                 update(Repuesto)
@@ -561,11 +604,15 @@ class OrdenService:
             ImagenOrdenResponse.model_validate(img)
             for img in orden_repository.listar_imagenes(db, orden_id)
         ]
-    def agregar_imagen(self, db: Session, orden_id:int, archivo:UploadFile, etapa: Optional[str], usuario_id: int) -> ImagenOrdenResponse:
+    def agregar_imagen(
+        self, db: Session, orden_id: int, archivo: UploadFile, etapa: Optional[str], usuario_id: int
+    ) -> ImagenOrdenResponse:
         orden = self.obtener_detalle_orden(db, orden_id)
         etapa = etapa or orden.estado
         if etapa not in ESTADOS_ORDEN:
-            raise HTTPException(status_code=422, detail=f"Etapa desconocida: '{etapa}'")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Etapa desconocida: '{etapa}'",
+            )
 
         contenido = archivo.file.read(MAX_BYTES_IMAGEN + 1)
         contenido, extension = imagenes.procesar(contenido)
@@ -594,9 +641,12 @@ class OrdenService:
         self.obtener_detalle_orden(db, orden_id)
         imagen= orden_repository.obtener_imagen(db, imagen_id)
         if imagen is None or imagen.orden_id != orden_id:
-            raise HTTPException(status_code=404, detail="Imagen no encontrada")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imagen no encontrada")
         if not es_admin(usuario) and imagen.usuario_id != usuario.id:
-            raise HTTPException(status_code=403, detail="Solo el administrador o quien subió la foto puede borrarla")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el administrador o quien subió la foto puede borrarla",
+            )
         _borrar_archivo(imagen.url)
         orden_repository.eliminar_imagen(db, imagen)
 orden_service = OrdenService()

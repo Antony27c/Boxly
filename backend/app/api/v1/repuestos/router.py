@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.v1.repuestos import service
-from app.core.dependencies import PersonalUser, DbSession, require_roles
+from app.core.dependencies import DbSession, PersonalUser, require_roles
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.paginacion import PaginaParams
 from app.schemas.repuesto import IngresoStockRequest, RepuestoCreate, RepuestoResponse, RepuestoUpdate

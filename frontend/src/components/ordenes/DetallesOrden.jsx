@@ -8,6 +8,7 @@ import Loader from '@/components/ui/Loader'
 import Select from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
+import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
 import { ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
 import { lineaACotizar, ordenesService, sePuedeEditarDetalle } from '@/services/ordenes'
 import { repuestosService } from '@/services/repuestos'
@@ -75,7 +76,7 @@ export default function DetallesOrden({ orden, onCambio }) {
       const siguiente = { ...previo, [campo]: valor }
       if (campo === 'repuesto_id') {
         const repuesto = (repuestos ?? []).find((item) => item.id === Number(valor))
-        siguiente.precio_unitario = repuesto ? String(repuesto.precio) : ''
+        siguiente.precio_unitario = repuesto ? formatearMontoAR(repuesto.precio) : ''
       }
       return siguiente
     })
@@ -99,8 +100,8 @@ export default function DetallesOrden({ orden, onCambio }) {
     if (!esMecanico) {
       if (String(datos.precio_unitario).trim() === '') {
         encontrados.precio_unitario = 'Ingresá el precio.'
-      } else if (Number.isNaN(Number(datos.precio_unitario)) || Number(datos.precio_unitario) < 0) {
-        encontrados.precio_unitario = 'El precio debe ser un número mayor o igual a 0.'
+      } else if (parsearMontoAR(datos.precio_unitario) === null) {
+        encontrados.precio_unitario = MENSAJE_MONTO_INVALIDO
       }
     }
     return encontrados
@@ -121,7 +122,7 @@ export default function DetallesOrden({ orden, onCambio }) {
           repuesto_id: datos.tipo === 'repuesto' ? datos.repuesto_id : null,
           descripcion: datos.tipo === 'trabajo' ? datos.descripcion : '',
           cantidad: datos.cantidad,
-          ...(esMecanico ? {} : { precio_unitario: datos.precio_unitario }),
+          ...(esMecanico ? {} : { precio_unitario: parsearMontoAR(datos.precio_unitario) }),
         },
         token,
       )
@@ -158,9 +159,9 @@ export default function DetallesOrden({ orden, onCambio }) {
 
   async function cotizar(evento, detalle) {
     evento.preventDefault()
-    const precio = Number(precioCotizar)
-    if (precioCotizar.trim() === '' || Number.isNaN(precio) || precio < 0) {
-      setErrorApi('Ingresá un precio válido (un número mayor o igual a 0).')
+    const precio = parsearMontoAR(precioCotizar)
+    if (precio === null) {
+      setErrorApi(precioCotizar.trim() ? MENSAJE_MONTO_INVALIDO : 'Ingresá el precio.')
       return
     }
     setGuardandoCotizar(detalle.id)
@@ -256,7 +257,7 @@ export default function DetallesOrden({ orden, onCambio }) {
                       value={precioCotizar}
                       onChange={(e) => setPrecioCotizar(e.target.value)}
                       disabled={guardandoCotizar === item.id}
-                      placeholder="15000"
+                      placeholder="15.000"
                       className="w-full sm:w-44"
                     />
                     <Button type="submit" cargando={guardandoCotizar === item.id}>
@@ -350,7 +351,7 @@ export default function DetallesOrden({ orden, onCambio }) {
                 error={errores.precio_unitario}
                 disabled={guardando}
                 ayuda={datos.tipo === 'repuesto' ? 'Se completa solo; podés cambiarlo.' : undefined}
-                placeholder="15000"
+                placeholder="15.000"
               />
             )}
           </div>

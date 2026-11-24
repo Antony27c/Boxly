@@ -5,5 +5,12 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Los parámetros de FastAPI (Query, Body, File, Form, Depends) se declaran como
+# default de la función: es el uso documentado, no un default mutable.
+extend-immutable-calls = [
+    "fastapi.Body", "fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Query",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

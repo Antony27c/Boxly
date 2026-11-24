@@ -137,7 +137,10 @@ ORDENES = [
             ("listo", 80, "Service y frenos terminados."),
             ("entregado", 96, "Retirado. Pagó en el taller."),
         ],
-        detalles=[("REP-004", 2), ("REP-001", 1), ("REP-002", 2), (None, "Mano de obra service completo", 1, 110000)],
+        detalles=[
+            ("REP-004", 2), ("REP-001", 1), ("REP-002", 2),
+            (None, "Mano de obra service completo", 1, 110000),
+        ],
         pagos=[],
     ),
     dict(
@@ -396,7 +399,10 @@ def main() -> int:
         clientes = {
             dni: obtener_o_crear(
                 db, Cliente, [Cliente.dni == dni],
-                dict(nombre=nombre, apellido=apellido, dni=dni, telefono=telefono, email=email, direccion=direccion),
+                dict(
+                    nombre=nombre, apellido=apellido, dni=dni, telefono=telefono,
+                    email=email, direccion=direccion,
+                ),
             )
             for nombre, apellido, dni, telefono, email, direccion in CLIENTES
         }
@@ -415,14 +421,20 @@ def main() -> int:
         vehiculos = {
             patente: obtener_o_crear(
                 db, Vehiculo, [Vehiculo.patente == patente],
-                dict(cliente_id=clientes[dni].id, patente=patente, marca=marca, modelo=modelo, anio=anio, color=color),
+                dict(
+                    cliente_id=clientes[dni].id, patente=patente, marca=marca, modelo=modelo,
+                    anio=anio, color=color,
+                ),
             )
             for dni, patente, marca, modelo, anio, color in VEHICULOS
         }
         repuestos = {
             codigo: obtener_o_crear(
                 db, Repuesto, [Repuesto.codigo == codigo],
-                dict(codigo=codigo, nombre=nombre, precio=precio, stock=stock, stock_minimo=minimo, activo=True),
+                dict(
+                    codigo=codigo, nombre=nombre, precio=precio, stock=stock,
+                    stock_minimo=minimo, activo=True,
+                ),
             )
             for codigo, nombre, precio, stock, minimo in REPUESTOS
         }
@@ -470,7 +482,10 @@ def main() -> int:
         creadas = 0
         for datos in ORDENES:
             if db.scalar(select(Orden).where(Orden.codigo == datos["codigo"])) is None:
-                crear_orden(db, datos, ahora=ahora, vehiculos=vehiculos, usuarios=usuarios, repuestos=repuestos, recepcion=recepcion)
+                crear_orden(
+                    db, datos, ahora=ahora, vehiculos=vehiculos, usuarios=usuarios,
+                    repuestos=repuestos, recepcion=recepcion,
+                )
                 creadas += 1
 
         # Materializa el taller_id=1 de todo lo pendiente antes de cambiar de taller.

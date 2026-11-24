@@ -107,6 +107,7 @@ describe('filasDashboard', () => {
       'Ingresos',
       'Egresos por repuestos',
       'Balance',
+      'Cobrado',
       'Cobrado online',
       'Por cobrar',
       'Ticket promedio',
@@ -114,8 +115,8 @@ describe('filasDashboard', () => {
     ])
     expect(resumen[0].valor).toBe('2026-11-01 a 2026-11-17')
     expect(resumen[1].valor).toBe(185000)
-    expect(resumen[5].valor).toBe(30000)
-    expect(resumen[5].detalle).toBe('2 cobros aprobados')
+    expect(resumen[6].valor).toBe(30000)
+    expect(resumen[6].detalle).toBe('2 cobros aprobados')
 
     expect(equipo).toHaveLength(2)
     expect(equipo[0].concepto).toBe('Pérez, Juan')
@@ -131,8 +132,39 @@ describe('filasDashboard', () => {
 
   it('tolera datos faltantes', () => {
     const filas = filasDashboard({})
-    expect(filas).toHaveLength(8)
+    expect(filas).toHaveLength(9)
     expect(filas.every((f) => f.seccion === 'Resumen')).toBe(true)
+  })
+
+  it('suma el cobrado total y una fila por medio de pago, sin sacar Cobrado online', () => {
+    const conMedios = {
+      ...dashboard,
+      bloques: {
+        ...dashboard.bloques,
+        finanzas: {
+          datos: {
+            ...dashboard.bloques.finanzas.datos,
+            cobrado: 200000.5,
+            cobrado_por_medio: { mercadopago: 120000, efectivo: 80000.5, cripto: 0 },
+          },
+        },
+      },
+    }
+    const resumen = filasDashboard(conMedios).filter((f) => f.seccion === 'Resumen')
+    const porConcepto = Object.fromEntries(resumen.map((f) => [f.concepto, f.valor]))
+
+    expect(porConcepto.Cobrado).toBe(200000.5)
+    expect(porConcepto['Cobrado · Mercado Pago']).toBe(120000)
+    expect(porConcepto['Cobrado · Efectivo']).toBe(80000.5)
+    // Los medios sin cobros salen en 0 y los desconocidos con su nombre crudo.
+    expect(porConcepto['Cobrado · Tarjeta']).toBe(0)
+    expect(porConcepto['Cobrado · Transferencia']).toBe(0)
+    expect(porConcepto['Cobrado · Otro']).toBe(0)
+    expect(porConcepto['Cobrado · cripto']).toBe(0)
+    expect(porConcepto['Cobrado online']).toBe(120000)
+
+    const csv = exportarCsv('dashboard.csv', COLUMNAS_DASHBOARD, filasDashboard(conMedios))
+    expect(csv).toContain('Resumen;Cobrado · Efectivo;80000.5;')
   })
 
   it('el CSV final se genera con las columnas del dashboard', () => {

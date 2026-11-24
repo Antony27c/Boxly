@@ -14,11 +14,17 @@ router = APIRouter(prefix="/terminos", tags=["Términos"])
 AdminTallerUser = Annotated[Usuario, Depends(require_roles(RolUsuario.administrador))]
 
 
-@router.get("", response_model=TerminosResponse, summary="Términos vigentes y estado de aceptación del taller")
+@router.get(
+    "", response_model=TerminosResponse, summary="Términos vigentes y estado de aceptación del taller"
+)
 def obtener_terminos(db: DbSession, usuario: PersonalUser) -> dict:
     return service.obtener(db, usuario)
 
 
-@router.post("/aceptar", response_model=TerminosResponse, summary="Aceptar los términos vigentes en nombre del taller")
+@router.post(
+    "/aceptar",
+    response_model=TerminosResponse,
+    summary="Aceptar los términos vigentes en nombre del taller",
+)
 def aceptar_terminos(db: DbSession, usuario: AdminTallerUser) -> dict:
     return service.aceptar(db, usuario)

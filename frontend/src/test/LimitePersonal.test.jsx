@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api'
 import Usuarios from '@/pages/Usuarios'
 
 const usuarios = vi.hoisted(() => ({
@@ -28,9 +29,9 @@ vi.mock('@/services/usuarios', async (importOriginal) => {
   const real = await importOriginal()
   return { ...real, usuariosService: usuarios }
 })
-vi.mock('@/services/limitePersonal', async (importOriginal) => {
+vi.mock('@/services/suscripcion', async (importOriginal) => {
   const real = await importOriginal()
-  return { ...real, limitePersonalService: limite }
+  return { ...real, suscripcionService: limite }
 })
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
@@ -64,10 +65,12 @@ const USUARIO_INACTIVO = {
   activo: false,
 }
 
-const ERROR_409_LIMITE = {
-  status: 409,
-  message: 'Tu plan permite hasta 3 usuarios del personal. Pasá a un plan mayor para sumar más.',
-}
+// Se reconoce por el código, no por el texto: el mensaje se muestra tal cual.
+const ERROR_409_LIMITE = new ApiError(
+  'Tu plan permite hasta 3 usuarios del personal. Pasá a un plan mayor para sumar más.',
+  409,
+  'limite_personal',
+)
 
 function montar() {
   return render(
@@ -214,4 +217,35 @@ describe('Usuarios — límite de personal del plan', () => {
     )
     expect(await screen.findByText('Personal: 2 de 3 en tu plan Esencial')).toBeInTheDocument()
   })
+
+  it('reconoce el 409 del límite por el código aunque el texto cambie', async () => {
+    usuarios.crear.mockRejectedValue(new ApiError('Sin lugar en el plan', 409, 'limite_personal'))
+    montar()
+    await completarAlta()
+
+    expect(await screen.findByText('Sin lugar en el plan')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver planes' })).toHaveAttribute('href', '/suscripcion')
+  })
+
+  it('un 409 sin el código (correo repetido) queda en el formulario, sin aviso de plan', async () => {
+    usuarios.crear.mockRejectedValue(new ApiError('Tu plan permite hasta 3 usuarios del personal', 409))
+    montar()
+    const dialogo = await completarAlta()
+
+    expect(await within(dialogo).findByText('Tu plan permite hasta 3 usuarios del personal')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Ver planes' })).not.toBeInTheDocument()
+  })
 })
+
+async function completarAlta() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Nuevo usuario' }))
+  const dialogo = await screen.findByRole('dialog')
+  fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
+  fireEvent.change(within(dialogo).getByLabelText('Apellido'), { target: { value: 'User' } })
+  fireEvent.change(within(dialogo).getByLabelText('Correo'), { target: { value: 'nuevo@taller.com' } })
+  fireEvent.change(within(dialogo).getByLabelText('Contraseña'), { target: { value: 'Clave1234' } })
+  fireEvent.click(within(dialogo).getByRole('button', { name: 'Guardar usuario' }))
+  await waitFor(() => expect(usuarios.crear).toHaveBeenCalled())
+  return dialogo
+}

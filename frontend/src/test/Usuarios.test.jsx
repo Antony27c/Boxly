@@ -7,6 +7,7 @@ import { rolesAsignables } from '@/services/usuarios'
 const usuarios = vi.hoisted(() => ({
   listar: vi.fn(),
   listarPaginado: vi.fn(),
+  contarAdministradoresActivos: vi.fn(),
   crear: vi.fn(),
   actualizar: vi.fn(),
   cambiarEstado: vi.fn(),
@@ -34,9 +35,9 @@ vi.mock('@/services/usuarios', async (importOriginal) => {
   return { ...real, usuariosService: usuarios }
 })
 vi.mock('@/services/cuentas', () => ({ cuentasService: cuentas }))
-vi.mock('@/services/limitePersonal', async (importOriginal) => {
+vi.mock('@/services/suscripcion', async (importOriginal) => {
   const real = await importOriginal()
-  return { ...real, limitePersonalService: limite }
+  return { ...real, suscripcionService: limite }
 })
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
@@ -100,17 +101,9 @@ function tarjetaDe(titulo) {
 }
 
 describe('rolesAsignables', () => {
-  it('el superadmin puede asignar todos los roles', () => {
-    expect(rolesAsignables('superadmin').map((rol) => rol.valor)).toEqual([
-      'superadmin',
+  it('ofrece administrador, recepción y mecánico, nunca superadmin', () => {
+    expect(rolesAsignables().map((rol) => rol.valor)).toEqual([
       'administrador',
-      'recepcion',
-      'mecanico',
-    ])
-  })
-
-  it('el administrador solo puede asignar recepción y mecánico', () => {
-    expect(rolesAsignables('administrador').map((rol) => rol.valor)).toEqual([
       'recepcion',
       'mecanico',
     ])
@@ -123,6 +116,7 @@ describe('Usuarios', () => {
     auth.usuario = LECTOR_ADMIN
     usuarios.listarPaginado.mockResolvedValue({ items: [USUARIO_ADMIN, USUARIO_MECANICO], total: 2 })
     usuarios.listar.mockResolvedValue([USUARIO_ADMIN, USUARIO_MECANICO])
+    usuarios.contarAdministradoresActivos.mockResolvedValue(2)
     cuentas.restablecerPassword.mockResolvedValue({ password_temporal: 'Tmp1234ab' })
     cuentas.cerrarSesiones.mockResolvedValue({
       detail: 'Se cerraron las sesiones de nico@taller.com',
@@ -170,7 +164,8 @@ describe('Usuarios', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('el formulario de nuevo usuario solo ofrece los roles que el admin puede asignar', async () => {
+  it('un administrador puede elegir administrador al crear un usuario', async () => {
+    usuarios.crear.mockResolvedValue({ id: 20 })
     montar()
     fireEvent.click(await screen.findByRole('button', { name: 'Nuevo usuario' }))
 
@@ -179,10 +174,66 @@ describe('Usuarios', () => {
     const textos = within(select)
       .getAllByRole('option')
       .map((opcion) => opcion.textContent)
-    expect(textos).toEqual(['Recepcionista', 'Mecánico'])
+    expect(textos).toEqual(['Administrador', 'Recepcionista', 'Mecánico'])
+
+    fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Bruno' } })
+    fireEvent.change(within(dialogo).getByLabelText('Apellido'), { target: { value: 'Díaz' } })
+    fireEvent.change(within(dialogo).getByLabelText('Correo'), {
+      target: { value: 'bruno@taller.com' },
+    })
+    fireEvent.change(select, { target: { value: 'administrador' } })
+    fireEvent.change(within(dialogo).getByLabelText('Contraseña'), {
+      target: { value: 'Clave1234' },
+    })
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Guardar usuario' }))
+
+    await waitFor(() =>
+      expect(usuarios.crear).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'bruno@taller.com', rol: 'administrador' }),
+        'tok',
+      ),
+    )
   })
 
-  it('siendo superadmin el formulario ofrece todos los roles', async () => {
+  it('el filtro de rol no ofrece Superadmin', async () => {
+    montar()
+    await screen.findByRole('heading', { name: 'Min, Ada' })
+    const filtro = screen.getByLabelText('Rol')
+    const textos = within(filtro)
+      .getAllByRole('option')
+      .map((opcion) => opcion.textContent)
+    expect(textos).toEqual(['Todos los roles', 'Administrador', 'Recepcionista', 'Mecánico'])
+  })
+
+  it('el único administrador activo no se puede desactivar, eliminar ni cambiar de rol', async () => {
+    usuarios.contarAdministradoresActivos.mockResolvedValue(1)
+    montar()
+    await screen.findByText(/único administrador activo/)
+
+    const admin = tarjetaDe('Min, Ada')
+    expect(within(admin).getByRole('button', { name: 'Desactivar' })).toBeDisabled()
+    expect(within(admin).getByRole('button', { name: 'Eliminar' })).toBeDisabled()
+    expect(within(admin).getByText(/único administrador activo/)).toBeInTheDocument()
+
+    // El mecánico sigue con sus acciones.
+    const mecanico = tarjetaDe('Nico, Meca')
+    expect(within(mecanico).getByRole('button', { name: 'Desactivar' })).toBeEnabled()
+
+    fireEvent.click(within(admin).getByRole('button', { name: 'Editar' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByLabelText('Rol')).toBeDisabled()
+  })
+
+  it('con más de un administrador activo se pueden desactivar', async () => {
+    montar()
+    await screen.findByRole('heading', { name: 'Min, Ada' })
+    await waitFor(() => expect(usuarios.contarAdministradoresActivos).toHaveBeenCalled())
+    const admin = tarjetaDe('Min, Ada')
+    expect(within(admin).getByRole('button', { name: 'Desactivar' })).toBeEnabled()
+    expect(within(admin).queryByText(/único administrador activo/)).not.toBeInTheDocument()
+  })
+
+  it('siendo superadmin el formulario tampoco ofrece superadmin', async () => {
     auth.usuario = LECTOR_SUPER
     usuarios.listarPaginado.mockResolvedValue({ items: [USUARIO_SUPER], total: 1 })
     montar()
@@ -193,7 +244,7 @@ describe('Usuarios', () => {
     const textos = within(select)
       .getAllByRole('option')
       .map((opcion) => opcion.textContent)
-    expect(textos).toEqual(['Superadmin', 'Administrador', 'Recepcionista', 'Mecánico'])
+    expect(textos).toEqual(['Administrador', 'Recepcionista', 'Mecánico'])
   })
 
   it('el superadmin restablece la contraseña, ve la temporal una vez y la copia', async () => {

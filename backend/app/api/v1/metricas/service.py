@@ -1,10 +1,12 @@
-from datetime import date, datetime, time, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.suscripcion import ZONA_ARGENTINA, hoy
+from app.models.pago import MEDIOS_PAGO
 from app.schemas.metricas import (
     BalanceMensualResponse,
     FinanzasResponse,
@@ -13,6 +15,7 @@ from app.schemas.metricas import (
     MecanicoMetricasResponse,
     MejorMecanicoResponse,
 )
+
 from .repository import metricas_repository
 
 CERO = Decimal("0.00")
@@ -27,10 +30,22 @@ def _pesos(valor) -> Decimal:
     return Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def _inicio_del_dia(dia: date) -> datetime:
+    """00:00 de ``dia`` en Argentina como UTC naive, igual que se guardan
+    ``Orden.fecha_entrega`` y ``Pago.fecha_pago`` (DateTime sin zona, en UTC)."""
+    inicio = datetime.combine(dia, time.min, tzinfo=ZONA_ARGENTINA)
+    return inicio.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _limites(desde: date, hasta: date) -> tuple[datetime, datetime]:
+    """Intervalo ``[inicio, fin)`` en UTC que cubre los días argentinos
+    ``desde`` a ``hasta``, ambos inclusive."""
     if desde > hasta:
-        raise HTTPException(status_code=400, detail="La fecha 'desde' no puede ser posterior a 'hasta'")
-    return datetime.combine(desde, time.min), datetime.combine(hasta + timedelta(days=1), time.min)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La fecha 'desde' no puede ser posterior a 'hasta'",
+        )
+    return _inicio_del_dia(desde), _inicio_del_dia(hasta + timedelta(days=1))
 
 
 def _meses(desde: date, hasta: date) -> List[str]:
@@ -50,9 +65,9 @@ def _dias(desde: date, hasta: date) -> List[date]:
 
 
 def _trimestre(trimestre: Optional[str]) -> tuple[str, date, date]:
-    hoy = date.today()
     if trimestre is None:
-        trimestre = f"{hoy.year}-Q{(hoy.month - 1) // 3 + 1}"
+        actual = hoy()
+        trimestre = f"{actual.year}-Q{(actual.month - 1) // 3 + 1}"
     anio, numero = int(trimestre[:4]), int(trimestre[-1])
     inicio = date(anio, 3 * (numero - 1) + 1, 1)
     siguiente = date(anio + 1, 1, 1) if numero == 4 else date(anio, inicio.month + 3, 1)
@@ -60,8 +75,10 @@ def _trimestre(trimestre: Optional[str]) -> tuple[str, date, date]:
 
 
 class MetricasService:
-    def metricas_mecanicos(self, db: Session, desde: Optional[date] = None, hasta: Optional[date] = None) -> List[MecanicoMetricasResponse]:
-        hasta = hasta or date.today()
+    def metricas_mecanicos(
+        self, db: Session, desde: Optional[date] = None, hasta: Optional[date] = None
+    ) -> List[MecanicoMetricasResponse]:
+        hasta = hasta or hoy()
         desde = desde or hasta - timedelta(days=29)
         inicio, fin = _limites(desde, hasta)
 
@@ -89,13 +106,13 @@ class MetricasService:
         hasta: Optional[date] = None,
         agrupar: str = "mes",
     ) -> FinanzasResponse:
-        hasta = hasta or date.today()
+        hasta = hasta or hoy()
         if desde is None:
             mes = hasta.month - 5
             desde = date(hasta.year + (mes - 1) // 12, (mes - 1) % 12 + 1, 1)
         if agrupar == "dia" and (hasta - desde).days + 1 > MAX_DIAS_DIARIO:
             raise HTTPException(
-                status_code=422,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"La agrupación por día admite rangos de hasta {MAX_DIAS_DIARIO} días",
             )
         inicio, fin = _limites(desde, hasta)
@@ -106,7 +123,9 @@ class MetricasService:
         egresos = dict.fromkeys(ingresos, CERO)
         for mes, total in metricas_repository.resumen_egresos_por_mes(db, inicio, fin).items():
             egresos[mes] = _pesos(total)
-        cobrado = _pesos(metricas_repository.total_cobrado(db, inicio, fin))
+        cobrado_por_medio = dict.fromkeys(MEDIOS_PAGO, CERO)
+        for medio, total in metricas_repository.cobrado_por_medio(db, inicio, fin).items():
+            cobrado_por_medio[medio] = _pesos(total)
 
         diario: List[IngresoDiarioResponse] = []
         if agrupar == "dia":
@@ -124,11 +143,15 @@ class MetricasService:
             desde=desde,
             hasta=hasta,
             ingresos=total_ingresos,
-            cobrado_online=cobrado,
+            cobrado=sum(cobrado_por_medio.values(), CERO),
+            cobrado_por_medio=cobrado_por_medio,
             egresos_repuestos=total_egresos,
             balance=total_ingresos - total_egresos,
             mensual=[
-                BalanceMensualResponse(mes=mes, ingresos=ingresos[mes], egresos=egresos[mes], balance=ingresos[mes] - egresos[mes])
+                BalanceMensualResponse(
+                    mes=mes, ingresos=ingresos[mes], egresos=egresos[mes],
+                    balance=ingresos[mes] - egresos[mes],
+                )
                 for mes in ingresos
             ],
             diario=diario,
@@ -144,7 +167,10 @@ class MetricasService:
             desde=desde,
             hasta=hasta,
             criterio=CRITERIO,
-            mecanico=MecanicoDestacadoResponse(**mejor.model_dump(exclude={"ordenes_en_curso"})) if mejor else None,
+            mecanico=(
+                MecanicoDestacadoResponse(**mejor.model_dump(exclude={"ordenes_en_curso"}))
+                if mejor else None
+            ),
         )
 
 

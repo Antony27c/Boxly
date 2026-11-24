@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import { parsearMontoAR } from '@/lib/montos'
 
 const RECURSO = '/api/v1/repuestos'
 
@@ -14,7 +15,7 @@ function aPayloadApi(repuesto) {
     descripcion: String(repuesto.descripcion ?? '').trim(),
     stock: Number(repuesto.stock),
     stock_minimo: Number(repuesto.stock_minimo),
-    precio: Number(String(repuesto.precio).replace(',', '.')),
+    precio: parsearMontoAR(repuesto.precio),
   }
 }
 
