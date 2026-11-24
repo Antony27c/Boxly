@@ -22,7 +22,8 @@ export function validarLogin({ email, password }) {
   return errores
 }
 
-const PATENTE = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/
+export const PATENTE = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/
+export const TELEFONO = /^[\d\s()+-]{6,20}$/
 
 export function validarCliente({ nombre, apellido, dni, telefono, email }) {
   const errores = {}
@@ -38,7 +39,7 @@ export function validarCliente({ nombre, apellido, dni, telefono, email }) {
 
   const tel = telefono.trim()
   if (!tel) errores.telefono = 'Ingresá un teléfono de contacto.'
-  else if (!/^[\d\s()+-]{6,20}$/.test(tel)) errores.telefono = 'El teléfono no tiene un formato válido.'
+  else if (!TELEFONO.test(tel)) errores.telefono = 'El teléfono no tiene un formato válido.'
 
   const correo = email.trim()
   if (correo && !EMAIL.test(correo)) errores.email = 'El correo no tiene un formato válido.'

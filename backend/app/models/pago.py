@@ -11,7 +11,7 @@ from app.models.taller import TallerMixin
 if TYPE_CHECKING:
     from app.models.orden import Orden
 
-ESTADOS_PAGO = ("pendiente", "aprobado", "rechazado")
+ESTADOS_PAGO = ("pendiente", "aprobado", "rechazado", "duplicado")
 # "mercadopago" es el cobro online; los demás, el pago registrado en el local.
 MEDIOS_PAGO = ("mercadopago", "efectivo", "tarjeta", "transferencia", "otro")
 MEDIOS_PAGO_LOCAL = MEDIOS_PAGO[1:]
@@ -24,7 +24,7 @@ class Pago(TallerMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "estado IN ('pendiente', 'aprobado', 'rechazado', 'reembolsado')",
+            "estado IN ('pendiente', 'aprobado', 'rechazado', 'reembolsado', 'duplicado')",
             name="ck_pagos_estado_valido",
         ),
         CheckConstraint(

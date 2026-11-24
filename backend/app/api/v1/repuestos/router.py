@@ -46,6 +46,33 @@ def listar_stock_bajo(db: DbSession, _: PersonalUser) -> list[RepuestoResponse]:
     return service.list_stock_bajo(db)
 
 
+@router.get(
+    "/avisos",
+    response_model=list[service.AvisoStockResponse],
+    summary="Avisos internos del taller (stock mínimo)",
+)
+def listar_avisos(
+    db: DbSession,
+    _: MostradorUser,
+    solo_no_leidas: bool = Query(default=False),
+) -> list[service.AvisoStockResponse]:
+    return service.list_avisos(db, solo_no_leidas=solo_no_leidas)
+
+
+@router.post(
+    "/avisos/{aviso_id}/leer",
+    response_model=MessageResponse,
+    summary="Marcar un aviso interno como leído",
+)
+def marcar_aviso_leido(
+    aviso_id: int,
+    db: DbSession,
+    usuario: MostradorUser,
+) -> MessageResponse:
+    service.marcar_aviso_leido(db, aviso_id, usuario)
+    return MessageResponse(detail="Aviso marcado como leído")
+
+
 @router.post(
     "",
     response_model=RepuestoResponse,

@@ -78,7 +78,7 @@ describe('Ayuda', () => {
     expect(
       screen.queryByRole('button', { name: /agendo un turno/i }),
     ).not.toBeInTheDocument()
-    expect(preguntas()).toHaveLength(3)
+    expect(preguntas()).toHaveLength(4)
 
     // "Todas" vuelve a mostrar todo.
     fireEvent.click(screen.getByRole('button', { name: 'Todas' }))
@@ -205,16 +205,26 @@ describe('Ayuda', () => {
     expect(idxGeneral).toBeGreaterThan(idxPersonal)
   })
 
-  it('no quedan textos de la oferta vieja: ni "30 días" de prueba ni transferencias', () => {
+  it('no quedan textos de la oferta vieja: ni "30 días" de prueba ni transferencias para el abono', () => {
     // "Últimos 30 días" es un período del Dashboard, no la prueba vieja.
     const textos = PREGUNTAS.flatMap((p) => [p.pregunta, ...p.respuesta]).map((t) =>
       t.replace(/últimos 30 días/gi, ''),
     )
     for (const texto of textos) {
       expect(texto).not.toMatch(/30 días/i)
-      expect(texto).not.toMatch(/transferencia/i)
       expect(texto).not.toMatch(/Básico|Taller\+|taller_plus/)
     }
+    // El abono de Boxly no se paga por transferencia; el pago en el local del
+    // cliente del taller sí puede ser por transferencia.
+    const delAbono = PREGUNTAS.map((p) => [p.pregunta, ...p.respuesta].join(' ')).filter((t) =>
+      /suscripci|abono|\bplan(es)?\b|demo|piloto/i.test(t),
+    )
+    expect(delAbono.length).toBeGreaterThan(0)
+    for (const texto of delAbono) {
+      expect(texto).not.toMatch(/transferencia/i)
+    }
+    const pagoLocal = PREGUNTAS.find((p) => p.id === 'pago-local')
+    expect(pagoLocal.respuesta.join(' ')).toMatch(/efectivo, tarjeta, transferencia u otro/)
   })
 
   it('explica la demo de 14 días del plan Pro y el débito automático de Mercado Pago', () => {

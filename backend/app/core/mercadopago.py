@@ -15,6 +15,7 @@ import json
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -47,6 +48,16 @@ def request(method: str, path: str, token: str, body: dict | None = None) -> dic
             return json.loads(response.read())
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         raise MercadoPagoError(str(exc)) from exc
+
+
+def listar_preapprovals(token: str, *, limite: int = 50, offset: int = 0) -> dict[str, Any]:
+    """Una página de ``GET /preapproval/search`` de la cuenta dueña del token.
+
+    La búsqueda no filtra por ``external_reference`` (no es un parámetro
+    documentado de la API): el llamador filtra los ``results`` que devuelve.
+    """
+    query = urllib.parse.urlencode({"limit": limite, "offset": offset})
+    return request("GET", f"/preapproval/search?{query}", token)
 
 
 def _ts_fresco(ts: str, ventana_seg: int) -> bool:

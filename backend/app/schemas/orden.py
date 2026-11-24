@@ -4,6 +4,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.pago import PagoResponse
+
 ESTADOS_ORDEN = {
     "pendiente": ("Pendiente", "La orden está abierta pero el vehículo todavía no entró al taller."),
     "ingresado": ("Ingresado", "El vehículo ya está en el taller y espera que lo revise un mecánico."),
@@ -90,6 +92,11 @@ class OrdenResponse(OrdenBase):
     # Medio y fecha del pago aprobado (online o en el local); null si no está pagada.
     pago_medio: Optional[str] = None
     pago_fecha: Optional[datetime] = None
+    # Los pagos de la orden (con montos) solo se exponen cuando el service marcó
+    # `_pagos_visibles` (administración y recepción): el mecánico y otras
+    # serializaciones (p. ej. el historial del vehículo) reciben la lista vacía.
+    pagos: list[PagoResponse] = Field(default=[], validation_alias="_pagos_response")
+    tiene_pago_duplicado: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -105,12 +112,25 @@ class OrdenResponse(OrdenBase):
     @model_validator(mode="before")
     @classmethod
     def _datos_del_pago(cls, data):
-        """Medio y fecha del pago aprobado; `pagos` viene eager-loaded."""
+        """Medio y fecha del pago aprobado; `pagos` viene eager-loaded.
+
+        Los pagos solo se exponen si el service marcó `_pagos_visibles`
+        (administración y recepción): para el mecánico —y para serializados
+        que no la marcan, como el historial del vehículo— la lista va vacía.
+        Se pasa por `_pagos_response` para no tocar la colección del ORM.
+        """
         pagos = getattr(data, "pagos", None)
-        if pagos is not None:
-            aprobado = next((p for p in pagos if p.estado == "aprobado"), None)
-            data.pago_medio = aprobado.medio if aprobado else None
-            data.pago_fecha = aprobado.fecha_pago if aprobado else None
+        if pagos is None:
+            return data
+        aprobado = next((p for p in pagos if p.estado == "aprobado"), None)
+        data.pago_medio = aprobado.medio if aprobado else None
+        data.pago_fecha = aprobado.fecha_pago if aprobado else None
+        if getattr(data, "_pagos_visibles", False):
+            data._pagos_response = list(pagos)
+            data.tiene_pago_duplicado = any(p.estado == "duplicado" for p in pagos)
+        else:
+            data._pagos_response = []
+            data.tiene_pago_duplicado = False
         return data
 
 class HistorialResponse(BaseModel):

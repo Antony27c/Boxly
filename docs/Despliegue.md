@@ -136,12 +136,25 @@ gunicorn app.main:app -k uvicorn.workers.UvicornWorker --forwarded-allow-ips="10
    Docker Desktop alcanza con confirmar que la IP auditada **no** es `172.28.0.10` ni
    la falsa.
 
-## Pendientes conocidos
+## Mercado Pago: preapprovals huérfanas
 
-- **Preapproval huérfana en Mercado Pago** (`activar_cobro`,
-  `app/api/v1/suscripcion_mp/service.py`): si la respuesta de MP se pierde después
-  de crear la suscripción (timeout o corte de red), el reintento crea otra
-  preapproval y la primera queda viva en MP sin referencia local
-  (`taller.mp_preapproval_id` solo guarda la última). No cobra nada por sí sola
-  hasta que el pagador la autorice, pero conviene un barrido periódico que liste
-  las preapprovals de la cuenta de Boxly y cancele las que no estén en la base.
+`activar_cobro` (`app/api/v1/suscripcion_mp/service.py`) crea la preapproval
+de la suscripción de cada taller en la cuenta de Boxly. Si la respuesta de MP
+se pierde después de crearla (timeout o corte de red), el reintento ya no crea
+otra: antes de crear busca en `/preapproval/search` una preapproval viva
+(`pending` o `authorized`) con el mismo `external_reference` (`taller-<id>`)
+y la reutiliza — la API no filtra por `external_reference`, así que la
+búsqueda es local sobre los resultados.
+
+Para limpiar las que hayan quedado de antes (o de cualquier otro corte),
+correr el barrido (dry-run por defecto):
+
+```sh
+docker compose exec api python -m scripts.barrer_preapprovals            # solo muestra
+docker compose exec api python -m scripts.barrer_preapprovals --aplicar  # cancela en MP
+```
+
+El barrido lista las preapprovals `pending`/`authorized` de la cuenta de
+Boxly con referencia `taller-*` y cancela las que no sean el
+`mp_preapproval_id` de ningún taller. Conviene correrlo cada tanto (por
+ejemplo, una vez por semana o después de incidentes de red).

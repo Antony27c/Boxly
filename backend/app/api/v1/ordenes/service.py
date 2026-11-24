@@ -4,11 +4,12 @@ from typing import List, Optional
 
 import anyio
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1.pagos.service import marcar_aprobado
+from app.api.v1.repuestos.service import registrar_movimiento_stock
 from app.core import imagenes
 from app.core.config import UPLOADS_DIR
 from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
@@ -103,6 +104,7 @@ class OrdenService:
             )
         self._aprobar_cobro(orden, monto, usuario.id)
         orden = orden_repository.guardar_cambios(db, orden)
+        orden._pagos_visibles = True
         self._avisar_cobro(orden, background_tasks)
         return orden
 
@@ -119,6 +121,7 @@ class OrdenService:
             )
         self._aprobar_cobro(orden, monto, usuario_id)
         orden = orden_repository.guardar_cambios(db, orden)
+        orden._pagos_visibles = True
         self._avisar_cobro(orden, background_tasks)
         return orden
 
@@ -175,14 +178,20 @@ class OrdenService:
     def obtener_lista_ordenes(
         self, db: Session, estado: Optional[str] = None, mecanico_id: Optional[int] = None
     ) -> List[Orden]:
-        
-        return orden_repository.obtener_ordenes(db, estado, mecanico_id)
+
+        ordenes = orden_repository.obtener_ordenes(db, estado, mecanico_id)
+        # `pagos` (con montos) solo va a administración y recepción: cuando el
+        # llamador es el mecánico (mecanico_id propio) la lista va vacía.
+        for orden in ordenes:
+            orden._pagos_visibles = mecanico_id is None
+        return ordenes
 
     def obtener_detalle_orden(self, db: Session, orden_id: int, mecanico_id: Optional[int] = None) -> Orden:
         orden = orden_repository.obtener_por_id(db, orden_id)
         if not orden or (mecanico_id is not None and orden.mecanico_id != mecanico_id):
-            
+
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+        orden._pagos_visibles = mecanico_id is None
         return orden
 
     def validar_edicion_mecanico(
@@ -245,18 +254,25 @@ class OrdenService:
                     estado_nuevo="pendiente",
                     comentario="Orden creada",
                 )
-                return orden_repository.guardar_cambios(db, orden)
+                orden = orden_repository.guardar_cambios(db, orden)
+                orden._pagos_visibles = True
+                return orden
             except IntegrityError as exc:
                 db.rollback()
                 if intento == 2 or "codigo" not in str(exc).lower():
                     raise
-    
+
     def editar_orden(
         self, db: Session, orden_id: int, datos: OrdenUpdate, usuario_id: int,
         background_tasks: BackgroundTasks | None = None,
     ) -> Orden:
        
         orden = self.obtener_detalle_orden(db, orden_id)
+        # El PATCH también lo puede hacer el mecánico: la exposición de pagos
+        # va por rol (administración y recepción sí los ven).
+        orden._pagos_visibles = (
+            db.get(Usuario, usuario_id).rol != RolUsuario.mecanico
+        )
 
         if orden.estado in ("entregado", "cancelado"):
             # La orden está cerrada: no admite cambios de datos. La única
@@ -462,11 +478,9 @@ class OrdenService:
                     cantidades.get(detalle.repuesto_id, 0) + detalle.cantidad
                 )
         for repuesto_id, cantidad in cantidades.items():
-            db.execute(
-                update(Repuesto)
-                .where(Repuesto.id == repuesto_id)
-                .values(stock=Repuesto.stock + cantidad)
-            )
+            repuesto = db.get(Repuesto, repuesto_id)
+            if repuesto is not None:
+                registrar_movimiento_stock(db, repuesto, cantidad)
         return bool(cantidades)
 
     def _a_response_detalle(self, detalle:DetalleOrden) -> DetalleOrdenResponse:
@@ -519,18 +533,14 @@ class OrdenService:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="las lineas de mano de obra necesitan precio unitario",
             )
-        if repuesto is not None:
-            descuento = db.execute(
-                update(Repuesto)
-                .where(Repuesto.id == repuesto.id, Repuesto.stock >= datos.cantidad)
-                .values(stock=Repuesto.stock - datos.cantidad)
+        if repuesto is not None and not registrar_movimiento_stock(
+            db, repuesto, -datos.cantidad
+        ):
+            db.refresh(repuesto)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Stock insuficiente: quedan {repuesto.stock} de {repuesto.nombre}",
             )
-            if descuento.rowcount == 0:
-                db.refresh(repuesto)
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Stock insuficiente: quedan {repuesto.stock} de {repuesto.nombre}",
-                )
         detalle = DetalleOrden(
             orden_id=orden.id,
             repuesto_id=datos.repuesto_id,
@@ -584,11 +594,9 @@ class OrdenService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Linea no encontrada en esta Orden",
             )
         if detalle.repuesto_id is not None:
-            db.execute(
-                update(Repuesto)
-                .where(Repuesto.id == detalle.repuesto_id)
-                .values(stock=Repuesto.stock + detalle.cantidad)
-            )
+            repuesto = db.get(Repuesto, detalle.repuesto_id)
+            if repuesto is not None:
+                registrar_movimiento_stock(db, repuesto, detalle.cantidad)
         orden_repository.guardar_historial(
             db,
             orden_id=orden.id,

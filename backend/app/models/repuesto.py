@@ -27,6 +27,11 @@ class Repuesto(TallerMixin, Base):
     descripcion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     stock: Mapped[int] = mapped_column(nullable=False, default=0)
     stock_minimo: Mapped[int] = mapped_column(nullable=False, default=0)
+    # True mientras el aviso de stock mínimo ya fue enviado y el stock no
+    # volvió a superar el mínimo (se rearma solo, docs/Oferta.md 4b W3).
+    alerta_stock_enviada: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     precio: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

@@ -31,7 +31,7 @@ Cada persona del taller tiene un rol, y el rol define qué puede hacer:
 | **Administrador** | Todo lo del taller, más: alta de personal, métricas del negocio, panel del taller (datos, auditoría, respaldo), acceso de soporte y suscripción. |
 | **Recepción** | El mostrador: clientes, vehículos, turnos, órdenes, inventario, horarios y cobros. |
 | **Mecánico** | "Mi trabajo": sus órdenes asignadas, cambios de etapa, carga de trabajos y repuestos (sin precio), fotos, propuesta de cobro y su horario. |
-| **Cliente** | No es del taller: es tu cliente. Entra a su portal para ver el estado de sus autos y pagar online. |
+| **Cliente** | No es del taller: es tu cliente. Entra a su portal para ver el estado de sus autos y, si el taller tiene el cobro online habilitado, pagar online. |
 
 El menú de cada persona solo muestra lo que su rol puede usar. Si algo no
 aparece, probablemente no es tu rol: hablalo con el administrador.
@@ -70,7 +70,8 @@ aparece, probablemente no es tu rol: hablalo con el administrador.
 - Si el DNI o el teléfono ya existen, Boxly avisa y te deja usar ese cliente en
   vez de cargarlo dos veces.
 - **Vehículos**: buscás por patente o modelo, filtrás por cliente y con "Ver
-  ficha" ves todos los datos y el historial de reparaciones del auto.
+  ficha" ves todos los datos y el historial de órdenes del vehículo (las
+  órdenes de ese auto con su fecha, etapa y total).
 
 ### Turnos
 
@@ -102,10 +103,61 @@ cotizar, el cobro no se puede emitir.
 ### Cobrar y entregar
 
 1. Cuando la orden está **Listo**, emitís el cobro desde la pestaña **Cobro**
-   de la orden ("Emitir cobro").
-2. El cliente lo ve en su portal y paga online con Mercado Pago.
-3. Cuando el pago se acredita, la orden queda **Pagada** y el auto se entrega:
-   "Cambiar etapa → Entregado".
+   de la orden ("Emitir cobro"). Si quedó pendiente, el administrador lo
+   aprueba.
+2. Con el cobro aprobado, el cliente paga en el local y vos **registrás el
+   pago** (ver abajo). Si tu taller tiene el cobro online habilitado, también
+   puede pagarlo desde su portal con Mercado Pago.
+3. Con el pago registrado o acreditado, la orden queda **Pagada** y el auto se
+   entrega: "Cambiar etapa → Entregado".
+
+### Registrar un pago en el local
+
+Cuando el cliente paga en el mostrador (recepción o administrador):
+
+1. En la pestaña **Cobro** de la orden, con el cobro aprobado, tocá
+   **"Registrar pago en el local"**.
+2. Elegí el **medio de pago**: efectivo, tarjeta, transferencia u otro. El
+   monto es el del cobro aprobado.
+3. Si querés, anotá una **referencia** (por ejemplo el número de operación o
+   de comprobante) y confirmá con **"Registrar pago"**.
+
+La orden queda **Pagada** y dice cómo se pagó (por ejemplo "Pagada en el
+taller (efectivo)"). El mecánico no registra pagos.
+
+### Mensajes de WhatsApp
+
+Boxly arma el mensaje y vos lo mandás desde tu WhatsApp: el botón
+**WhatsApp** abre WhatsApp (la app o WhatsApp Web) con el texto ya escrito
+para el teléfono del cliente. Lo revisás y tocás enviar; Boxly no manda nada
+solo.
+
+- **En la orden**: el mensaje cambia según la etapa — auto recibido, trabajos
+  a cotizar o auto listo para retirar —, con el enlace al portal.
+- **En Turnos**: confirmación del turno si está pendiente y recordatorio si ya
+  está confirmado.
+- **En Clientes**: un saludo del taller para escribirle lo que necesites.
+
+Lo usan recepción y el administrador. Si el cliente no tiene teléfono o le
+falta el código de área, el botón queda apagado y explica por qué: corregí el
+teléfono en los datos del cliente.
+
+### Avisos de stock mínimo
+
+Cuando un repuesto baja a su **stock mínimo** o menos (al usarlo en una orden
+o al corregir el stock), Boxly deja un aviso dentro de la app para recepción y
+el administrador:
+
+- En **Hoy**, arriba de todo, aparece **"Avisos de stock mínimo"** con el
+  repuesto, el stock que quedó y la fecha. Tocá **"Entendido"** para marcarlo
+  como leído.
+- En **Inventario**, un indicador muestra cuántos avisos hay sin leer y abre
+  la misma lista.
+
+Hay un solo aviso cada vez que el repuesto cruza el mínimo: cuando ingresás
+mercadería y vuelve a superarlo, el próximo cruce avisa de nuevo. Con el
+mínimo en 0 no hay avisos. El aviso es solo dentro de Boxly: no llega por
+correo ni por WhatsApp. El mecánico no lo ve.
 
 ## 4. Mecánico: el trabajo en el taller
 
@@ -196,12 +248,12 @@ los superiores suman automatización.
 
 | Plan | Qué trae |
 | --- | --- |
-| **Esencial** | Clientes, vehículos, turnos, órdenes con fotos e historial, inventario con alerta de stock mínimo, registro de cobros, métricas básicas, portal del cliente, avisos por email y WhatsApp manual (Boxly arma el mensaje y el taller lo manda desde su teléfono). |
-| **Pro** | Todo Esencial, más avisos automáticos por WhatsApp de turnos y estados (*próximamente*) y facturas electrónicas ARCA emitidas desde Boxly (*próximamente*), las dos con cupo mensual. |
-| **Profesional** | Todo Pro, con cupos mayores, más recordatorios automáticos de service (*próximamente*) y personalización de marca (*próximamente*). |
+| **Esencial** | Clientes, vehículos, turnos, órdenes con fotos, historial de órdenes del vehículo, inventario con avisos de stock mínimo, cobros con registro del pago en el local, métricas básicas, portal del cliente, avisos por email y WhatsApp manual (Boxly arma el mensaje y el taller lo manda desde su teléfono). |
+| **Pro** | Todo Esencial, más avisos automáticos por WhatsApp de turnos y estados (*próximamente*) y facturas electrónicas ARCA emitidas desde Boxly (*próximamente*). |
+| **Profesional** | Todo Pro, más recordatorios automáticos de service (*próximamente*) y personalización de marca (*próximamente*). |
 
 **Adicional ARCA** (*próximamente*): en Esencial, la facturación electrónica
-ARCA se va a poder sumar como adicional mensual con cupo. Sirve para emitir la
+ARCA se va a poder sumar como adicional mensual. Sirve para emitir la
 factura de una reparación con una acción y tu confirmación; no es para cargar
 facturas de proveedores ni para facturar sin que nadie intervenga.
 
@@ -245,10 +297,11 @@ Cuando Mercado Pago aprueba el pago, el estado se actualiza solo. Si una pantall
   cada etapa, con la descripción y las fotos que subió el taller.
 - **Mis vehículos**: el estado de cada auto; si tiene un trabajo en curso te
   lleva directo al seguimiento.
-- **Pagar**: cuando el taller termina y emite el cobro, la orden aparece en
-  "Listas para pagar" con el botón **Pagar** y el monto. Pagás de forma segura
-  con Mercado Pago; si el pago se rechaza podés reintentar. Cuando se acredita,
-  el taller te entrega el auto.
+- **Pagar**: si el taller tiene el cobro online habilitado, cuando termina y
+  emite el cobro la orden aparece en "Listas para pagar" con el botón
+  **Pagar** y el monto. Pagás de forma segura con Mercado Pago; si el pago se
+  rechaza podés reintentar. Cuando se acredita, el taller te entrega el auto.
+  Si no, pagás en el taller como siempre.
 
 ## 7. Preguntas frecuentes
 
@@ -279,17 +332,18 @@ aprueba la solicitud, tu taller usa el plan Pro durante 14 días.
 
 **¿Qué trae cada plan?**
 Los planes no tienen las mismas funciones. **Esencial** cubre la gestión
-diaria: clientes, vehículos, turnos, órdenes, inventario, cobros, métricas
-básicas, portal del cliente y avisos por email y WhatsApp manual. **Pro** suma
-avisos automáticos por WhatsApp y facturas electrónicas ARCA (los dos
-*próximamente*). **Profesional** suma cupos mayores, recordatorios automáticos
-de service y personalización de marca (*próximamente*). El detalle está en la
+diaria: clientes, vehículos, turnos, órdenes, inventario con avisos de stock
+mínimo, cobros con registro del pago en el local, métricas básicas, portal del
+cliente y avisos por email y WhatsApp manual. **Pro** suma avisos automáticos
+por WhatsApp y facturas electrónicas ARCA (los dos *próximamente*).
+**Profesional** suma recordatorios automáticos de service y personalización de
+marca (*próximamente*). El detalle está en la
 sección Suscripción.
 
 **¿Qué es el adicional ARCA?**
 *Próximamente.* Es la facturación electrónica ARCA para emitir la factura de
-una reparación desde Boxly, con tu confirmación. Pro y Profesional la incluyen
-con cupo; en Esencial se va a poder sumar como adicional mensual.
+una reparación desde Boxly, con tu confirmación. Pro y Profesional la van a
+incluir; en Esencial se va a poder sumar como adicional mensual.
 
 **¿Qué es un piloto?**
 Un acceso sin cargo que Boxly da a talleres elegidos, con el plan y la fecha
@@ -335,9 +389,20 @@ quedó pendiente, en Clientes está "Reenviar correo de verificación"). Le lleg
 un correo con el enlace para que elija su contraseña.
 
 **¿El cliente puede pagar online?**
-Sí: cuando el taller emite el cobro, el cliente lo ve en su portal y paga con
-Mercado Pago. Si tu taller todavía no tiene habilitado el cobro online, el
-cliente paga en el taller como siempre.
+Solo si tu taller tiene habilitado el cobro online, que todavía no está
+disponible para todos los talleres: en ese caso ve el cobro en su portal y paga
+con Mercado Pago. Si no, el cliente paga en el taller como siempre y vos
+registrás el pago en la orden con su medio de pago.
+
+**¿Cómo le mando un WhatsApp al cliente?**
+Con el botón **WhatsApp** de la orden, del turno o de la tarjeta del cliente:
+Boxly arma el mensaje y se abre tu WhatsApp con el texto listo para enviar. Lo
+mandás vos desde tu teléfono; los avisos automáticos por WhatsApp todavía no
+existen.
+
+**¿Cómo me entero de que se está acabando un repuesto?**
+Cuando un repuesto baja a su stock mínimo, aparece un aviso en Hoy (y el
+contador en Inventario). Tocá "Entendido" para marcarlo como leído.
 
 **¿Puedo usar Boxly desde el celular?**
 Sí, se adapta sola: abajo aparece una barra con las secciones principales y "Más"

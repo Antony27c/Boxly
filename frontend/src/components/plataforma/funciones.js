@@ -3,7 +3,7 @@
    solo se traduce a la etiqueta legible que ve el superadmin. */
 export const FUNCIONES = {
   gestion: 'Gestión del taller',
-  whatsapp_manual: 'Avisos por WhatsApp manual',
+  whatsapp_manual: 'Mensajes de WhatsApp armados (envío manual)',
   whatsapp_automatico: 'Avisos automáticos por WhatsApp',
   arca: 'Facturación electrónica ARCA',
   recordatorios_service: 'Recordatorios automáticos de service',

@@ -13,7 +13,7 @@ const ROLES_LANDING = [
       {
         icono: 'turnos',
         titulo: 'Turnos sin superposiciones',
-        texto: 'Agenda de lunes a sábado con un auto por horario. Cuando el cliente llega, "Recibir auto" abre la orden con todo cargado.',
+        texto: 'Agenda de lunes a sábado con un auto por horario y el WhatsApp para confirmar o recordar el turno, ya armado. Cuando el cliente llega, "Recibir auto" abre la orden.',
       },
       {
         icono: 'clientes',
@@ -28,12 +28,12 @@ const ROLES_LANDING = [
       {
         icono: 'dinero',
         titulo: 'Cotizar y cobrar',
-        texto: 'Le ponés precio a las líneas "a cotizar" y emitís el cobro. Con el cobro online habilitado, el cliente lo paga desde su portal.',
+        texto: 'Le ponés precio a las líneas "a cotizar", emitís el cobro y, cuando el cliente paga en el local, registrás el pago con su medio: efectivo, tarjeta, transferencia u otro.',
       },
       {
         icono: 'inventario',
         titulo: 'Repuestos con stock',
-        texto: 'Inventario de repuestos con su precio y su stock, y aviso de stock bajo en la pantalla de hoy.',
+        texto: 'Inventario de repuestos con su precio y su stock. Cuando un repuesto llega al mínimo, aparece un aviso en la pantalla de hoy.',
       },
     ],
   },
@@ -116,7 +116,7 @@ const ROLES_LANDING = [
       {
         icono: 'dinero',
         titulo: 'Pago online',
-        texto: 'Paga el cobro con Mercado Pago desde el portal, si el taller tiene el cobro online habilitado.',
+        texto: 'Paga el cobro con Mercado Pago desde el portal, en los talleres con el cobro online habilitado. Todavía no está disponible para todos: consultanos.',
       },
     ],
   },

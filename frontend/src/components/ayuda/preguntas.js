@@ -78,7 +78,7 @@ export const PREGUNTAS = [
     pregunta: '¿Cómo busco un cliente o un vehículo?',
     respuesta: [
       'En Clientes hay un buscador por nombre, DNI, teléfono o correo. Con la búsqueda activa revisa todo el listado, no solo la página visible.',
-      'En Vehículos buscás por patente o modelo y podés filtrar por cliente con el desplegable. Cada tarjeta tiene "Ver ficha" para ver toda la información y el historial de reparaciones.',
+      'En Vehículos buscás por patente o modelo y podés filtrar por cliente con el desplegable. Cada tarjeta tiene "Ver ficha" para ver toda la información y el historial de órdenes del vehículo.',
     ],
     enlace: { a: '/vehiculos', texto: 'Vehículos' },
   },
@@ -108,12 +108,24 @@ export const PREGUNTAS = [
     id: 'ficha-vehiculo',
     categoria: 'recepcion',
     roles: ['mostrador', 'mecanico'],
-    pregunta: '¿Dónde veo la ficha y el historial de un vehículo?',
+    pregunta: '¿Dónde veo la ficha y el historial de órdenes de un vehículo?',
     respuesta: [
       'En Vehículos, el botón "Ver ficha" de cada tarjeta muestra patente, marca, modelo, año, color, VIN, observaciones y quién es el titular.',
-      'Más abajo está el "Historial de reparaciones": las órdenes de ese auto con su fecha, etapa y total.',
+      'Más abajo está el historial de órdenes del vehículo: las órdenes de ese auto con su fecha, etapa y total.',
     ],
     enlace: { a: '/vehiculos', texto: 'Vehículos' },
+  },
+  {
+    id: 'whatsapp-manual',
+    categoria: 'recepcion',
+    roles: ['mostrador'],
+    pregunta: '¿Cómo le mando un WhatsApp al cliente?',
+    respuesta: [
+      'Con el botón "WhatsApp": Boxly arma el mensaje y abre tu WhatsApp (la app o WhatsApp Web) con el texto listo para el teléfono del cliente. Lo revisás y lo mandás vos; Boxly no manda nada solo.',
+      'En la orden, el mensaje cambia según la etapa: auto recibido, trabajos a cotizar o auto listo para retirar, con el enlace al portal. En Turnos es la confirmación si el turno está pendiente o el recordatorio si ya está confirmado. En Clientes es un saludo del taller para escribir lo que necesites.',
+      'Si el cliente no tiene teléfono o le falta el código de área, el botón queda apagado y explica por qué: corregí el teléfono en los datos del cliente. Los avisos automáticos por WhatsApp todavía no existen.',
+    ],
+    enlace: { a: '/turnos', texto: 'Turnos' },
   },
 
   // ---------- Órdenes y etapas ----------
@@ -206,7 +218,7 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Qué es la pantalla Hoy?',
     respuesta: [
-      'Para recepción y administración es el resumen del día: los turnos de hoy, los autos listos para entregar, los que no tienen mecánico asignado, los cobros por aprobar (solo administrador) y los repuestos con stock bajo. Desde acá también están los botones "Recibir un auto" y "Cliente nuevo".',
+      'Para recepción y administración es el resumen del día: los turnos de hoy, los autos listos para entregar, los que no tienen mecánico asignado, los cobros por aprobar (solo administrador), los avisos de stock mínimo sin leer y los repuestos con stock bajo. Desde acá también están los botones "Recibir un auto" y "Cliente nuevo".',
       'Para el mecánico la misma pantalla es "Mi trabajo": solo ve sus órdenes abiertas, ordenadas por lo que hay que hacer primero, con el botón de la acción que le toca.',
     ],
     enlace: { a: '/hoy', texto: 'Hoy' },
@@ -267,7 +279,18 @@ export const PREGUNTAS = [
     respuesta: [
       'La pestaña "Cobro" de la orden muestra el estado y el monto. Recepción lo emite con "Emitir cobro" o "Enviar cobro al cliente"; si quedó pendiente, administración lo aprueba con "Aprobar cobro".',
       'El mecánico no propone ni emite cobros. Las líneas de trabajo que quedaron "A cotizar" las cotiza recepción con el botón "Cotizar" de la pestaña "Trabajo", y mientras haya alguna el cobro no se puede emitir.',
-      'Cuando el cobro está aprobado, el cliente lo ve en su portal y paga online con Mercado Pago.',
+      'Cuando el cobro está aprobado, el cliente paga en el local y recepción registra el pago con su medio. Si el taller tiene el cobro online habilitado, el cliente también puede pagarlo desde su portal con Mercado Pago.',
+    ],
+    enlace: { a: '/ordenes', texto: 'Órdenes' },
+  },
+  {
+    id: 'pago-local',
+    categoria: 'cobros',
+    roles: ['mostrador'],
+    pregunta: '¿Cómo registro un pago en el local?',
+    respuesta: [
+      'En la pestaña "Cobro" de la orden, con el cobro aprobado, tocá "Registrar pago en el local". Elegí el medio de pago (efectivo, tarjeta, transferencia u otro); el monto es el del cobro aprobado.',
+      'Si querés, anotá una referencia —por ejemplo el número de operación o de comprobante— y confirmá con "Registrar pago". La orden queda "Pagada" y dice cómo se pagó, por ejemplo "Pagada en el taller (efectivo)".',
     ],
     enlace: { a: '/ordenes', texto: 'Órdenes' },
   },
@@ -397,6 +420,18 @@ export const PREGUNTAS = [
     enlace: { a: '/inventario', texto: 'Inventario' },
   },
   {
+    id: 'avisos-stock',
+    categoria: 'inventario',
+    roles: ['mostrador'],
+    pregunta: '¿Qué son los avisos de stock mínimo?',
+    respuesta: [
+      'Cuando un repuesto baja a su stock mínimo o menos —al usarlo en una orden o al corregir el stock—, Boxly deja un aviso con el repuesto, el stock que quedó y la fecha. Aparece en Hoy, arriba de todo, y en Inventario un indicador muestra cuántos hay sin leer.',
+      'Tocá "Entendido" para marcarlo como leído. Hay un solo aviso cada vez que el repuesto cruza el mínimo: cuando vuelve a superarlo, el próximo cruce avisa de nuevo. Con el mínimo en 0 no hay avisos.',
+      'El aviso es solo dentro de Boxly (no llega por correo ni por WhatsApp) y lo ven recepción y el administrador.',
+    ],
+    enlace: { a: '/hoy', texto: 'Hoy' },
+  },
+  {
     id: 'desactivar-repuesto',
     categoria: 'inventario',
     roles: ['mostrador'],
@@ -474,9 +509,9 @@ export const PREGUNTAS = [
     pregunta: '¿Qué trae cada plan?',
     respuesta: [
       'Los planes no tienen las mismas funciones: Esencial cubre la gestión diaria y los superiores suman automatización. Además, cada plan define cuánto personal entra.',
-      'Esencial: clientes, vehículos, turnos, órdenes con fotos e historial, inventario con alerta de stock mínimo, registro de cobros, métricas básicas, portal del cliente, avisos por email y WhatsApp manual (Boxly arma el mensaje y el taller lo manda desde su teléfono).',
-      'Pro: todo Esencial, más avisos automáticos por WhatsApp de turnos y estados (próximamente) y facturas electrónicas ARCA emitidas desde Boxly (próximamente), las dos con cupo mensual.',
-      'Profesional: todo Pro, con cupos mayores, más recordatorios automáticos de service (próximamente) y personalización de marca (próximamente).',
+      'Esencial: clientes, vehículos, turnos, órdenes con fotos, historial de órdenes del vehículo, inventario con avisos de stock mínimo, cobros con registro del pago en el local, métricas básicas, portal del cliente, avisos por email y WhatsApp manual (Boxly arma el mensaje y el taller lo manda desde su teléfono).',
+      'Pro: todo Esencial, más avisos automáticos por WhatsApp de turnos y estados (próximamente) y facturas electrónicas ARCA emitidas desde Boxly (próximamente).',
+      'Profesional: todo Pro, más recordatorios automáticos de service (próximamente) y personalización de marca (próximamente).',
       'Los precios de cada plan los ves en Suscripción.',
     ],
     enlace: { a: '/suscripcion', texto: 'Suscripción' },
@@ -489,7 +524,7 @@ export const PREGUNTAS = [
     respuesta: [
       'Próximamente: la facturación electrónica ARCA todavía no está disponible.',
       'Va a servir para emitir la factura de una reparación desde Boxly, con una acción y tu confirmación. No es para cargar facturas de proveedores ni para emitir facturas sin que nadie intervenga.',
-      'Pro y Profesional la incluyen con un cupo mensual. En Esencial se va a poder sumar como adicional mensual, también con cupo; el precio todavía no está definido.',
+      'Pro y Profesional la van a incluir. En Esencial se va a poder sumar como adicional mensual; el precio todavía no está definido.',
     ],
   },
   {

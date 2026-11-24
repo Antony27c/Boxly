@@ -256,4 +256,30 @@ describe('TarjetaOrden', () => {
     expect(screen.getByText('Sin asignar')).toHaveClass('text-amber-texto')
     expect(screen.getByText('A presupuestar')).toBeInTheDocument()
   })
+
+  it('marca la orden con el chip Pago duplicado cuando hay un cobro duplicado', () => {
+    montar({
+      usuario: RECEPCION,
+      orden: orden({
+        estado: 'Listo',
+        pagada: true,
+        pagos: [
+          { id: 9, estado: 'aprobado', monto: 185000 },
+          { id: 10, estado: 'duplicado', monto: 185000, payment_id: '1319283712' },
+        ],
+      }),
+    })
+
+    expect(screen.getByText('Pago duplicado')).toBeInTheDocument()
+    expect(screen.getByText('Pagada')).toBeInTheDocument()
+  })
+
+  it('sin pagos duplicados no muestra el chip', () => {
+    montar({
+      usuario: RECEPCION,
+      orden: orden({ pagos: [{ id: 9, estado: 'aprobado', monto: 185000 }] }),
+    })
+
+    expect(screen.queryByText('Pago duplicado')).not.toBeInTheDocument()
+  })
 })

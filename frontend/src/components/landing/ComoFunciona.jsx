@@ -26,12 +26,12 @@ const PASOS_RECORRIDO = [
   {
     icono: 'dinero',
     titulo: 'Cobro',
-    texto: 'Con la orden lista se emite el cobro. El cliente paga en el taller o, con el cobro online habilitado, con Mercado Pago.',
+    texto: 'Con la orden lista se emite el cobro. El cliente paga en el taller y registrás el pago con su medio: efectivo, tarjeta, transferencia u otro.',
   },
   {
     icono: 'check',
     titulo: 'Entrega',
-    texto: 'Con el pago acreditado entregás el auto: la orden pasa a Entregado y queda en el historial del vehículo.',
+    texto: 'Con el pago registrado entregás el auto: la orden pasa a Entregado y queda en el historial de órdenes del vehículo.',
   },
 ]
 

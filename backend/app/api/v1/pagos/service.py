@@ -11,6 +11,7 @@ from app.api.v1.pagos import mercadopago
 from app.core.config import get_settings
 from app.core.mercadopago import VENTANA_FIRMA_SEG, firma_valida
 from app.db.session import SIN_FILTRO_TALLER, fijar_taller
+from app.models.auditoria import Auditoria
 from app.models.orden import Orden
 from app.models.pago import Pago
 from app.models.taller import TALLER_PRINCIPAL_ID
@@ -72,8 +73,9 @@ def _pago_bloqueado(db: Session, pago_id: int, *, sin_filtro: bool = False) -> P
 
 def _aplicar_estado(pago: Pago, estado: str, payment_id: str | None) -> None:
     # "aprobado" no vuelve atrás, salvo un reembolso; "reembolsado" es terminal
-    # y solo tiene sentido sobre un pago que llegó a cobrarse.
-    if pago.estado == "reembolsado":
+    # y solo tiene sentido sobre un pago que llegó a cobrarse. "duplicado"
+    # también es terminal: el cobro existe en MP pero la orden ya estaba paga.
+    if pago.estado in ("reembolsado", "duplicado"):
         return
     if pago.estado == "aprobado" and estado != "reembolsado":
         return
@@ -220,7 +222,45 @@ def _consultar_mp(token: str, payment_id: str) -> dict:
         ) from None
 
 
-def _actualizar_desde_mp(pago: Pago, info: dict, payment_id: str) -> None:
+def _marcar_duplicado(db: Session, pago: Pago, orden: Orden, mp_id: str, origen: str) -> None:
+    """El cobro online llegó aprobado pero la orden ya estaba paga (p. ej. el
+    cliente pagó en el local): no se aprueba — queda 'duplicado' para que el
+    taller devuelva la plata a mano, con una fila en su auditoría."""
+    logger.error(
+        "Pago %s de la orden %s: Mercado Pago aprobó el cobro %s pero la orden "
+        "ya estaba paga; queda 'duplicado' para devolución manual",
+        pago.id,
+        orden.id,
+        mp_id,
+    )
+    pago.estado = "duplicado"
+    pago.payment_id = mp_id or pago.payment_id
+    ruta = (
+        "/api/v1/pagos/webhook"
+        if origen == "webhook"
+        else f"/api/v1/pagos/{pago.id}/confirmar"
+    )
+    db.add(
+        Auditoria(
+            taller_id=pago.taller_id,
+            soporte=False,
+            metodo="POST",
+            ruta=ruta,
+            entidad="pago",
+            entidad_id=pago.id,
+            estado_http=200,
+            detalle=(
+                f"Pago online {mp_id} aprobado en Mercado Pago pero la orden "
+                f"{orden.codigo} ya estaba paga: marcado 'duplicado' para "
+                "devolución manual"
+            )[:500],
+        )
+    )
+
+
+def _actualizar_desde_mp(
+    db: Session, pago: Pago, info: dict, payment_id: str, *, origen: str
+) -> None:
     estado = ESTADOS_MP.get(info.get("status"), "pendiente")
     try:
         cobrado = Decimal(str(info.get("transaction_amount")))
@@ -237,7 +277,20 @@ def _actualizar_desde_mp(pago: Pago, info: dict, payment_id: str) -> None:
             esperado,
         )
         estado = "rechazado"
-    _aplicar_estado(pago, estado, str(info.get("id") or payment_id))
+    mp_id = str(info.get("id") or payment_id)
+    if estado == "aprobado" and pago.estado in ("pendiente", "rechazado"):
+        # Lock de la orden: el chequeo de "ya está paga" queda serializado con
+        # el pago local y con otros webhooks de la misma orden (en Postgres;
+        # en SQLite el FOR UPDATE se ignora).
+        orden = db.scalar(
+            select(Orden).where(Orden.id == pago.orden_id).with_for_update()
+        )
+        if orden is not None and any(
+            p.estado == "aprobado" for p in orden.pagos if p.id != pago.id
+        ):
+            _marcar_duplicado(db, pago, orden, mp_id, origen)
+            return
+    _aplicar_estado(pago, estado, mp_id)
 
 
 def _payment_id_ajeno(db: Session, pago: Pago, mp_id: str) -> bool:
@@ -311,7 +364,7 @@ def procesar_notificacion(db: Session, tipo: str | None, payment_id: str | None)
             mp_id,
         )
         return
-    _actualizar_desde_mp(pago, info, payment_id)
+    _actualizar_desde_mp(db, pago, info, payment_id, origen="webhook")
     db.commit()
 
 
@@ -334,7 +387,7 @@ def confirmar_pago(db: Session, usuario: Usuario, pago_id: int, payment_id: str)
                 mp_id,
             )
         else:
-            _actualizar_desde_mp(pago, info, payment_id)
+            _actualizar_desde_mp(db, pago, info, payment_id, origen="confirmar")
             db.commit()
             db.refresh(pago)
     return PagoResponse.model_validate(pago)

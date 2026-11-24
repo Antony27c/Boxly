@@ -32,7 +32,7 @@ const PREGUNTAS = [
   {
     pregunta: '¿Qué diferencia hay entre los planes?',
     respuesta: [
-      'Esencial trae la gestión diaria: clientes, vehículos, turnos, órdenes con fotos, inventario, cobros, métricas básicas, portal del cliente, avisos por email y mensajes de WhatsApp armados para que los mandes desde tu teléfono.',
+      'Esencial trae la gestión diaria: clientes, vehículos, turnos, órdenes con fotos, inventario con avisos de stock mínimo, cobros con registro del pago en el local, métricas básicas, portal del cliente, avisos por email y mensajes de WhatsApp armados para que los mandes desde tu teléfono.',
       'Pro suma los avisos automáticos por WhatsApp y la facturación electrónica ARCA. Profesional suma recordatorios automáticos de service y personalización de marca. Esas funciones están en desarrollo: en la sección Planes las marcamos como "Próximamente".',
       'Además, cada plan tiene un límite de personas del equipo.',
     ],
@@ -41,7 +41,7 @@ const PREGUNTAS = [
     pregunta: '¿Puedo facturar con ARCA desde Boxly?',
     respuesta: [
       'Todavía no: está en desarrollo. Cuando esté, vas a poder emitir la factura electrónica de una reparación con una acción y tu confirmación.',
-      'Viene incluida, con un cupo mensual, en los planes Pro y Profesional. En Esencial se va a poder sumar como adicional.',
+      'Va a venir incluida en los planes Pro y Profesional. En Esencial se va a poder sumar como adicional.',
     ],
   },
   {
@@ -88,7 +88,7 @@ const PREGUNTAS = [
   {
     pregunta: '¿Mis clientes tienen que instalar algo?',
     respuesta: [
-      'No. Tus clientes entran a su portal desde el navegador con su correo y una contraseña que eligen ellos. Ahí ven el estado de su auto, las fotos del trabajo y pagan online si tu taller lo tiene habilitado.',
+      'No. Tus clientes entran a su portal desde el navegador con su correo y una contraseña que eligen ellos. Ahí ven el estado de su auto y las fotos del trabajo. El pago online con Mercado Pago todavía no está disponible para todos los talleres: si no lo tenés, el cliente paga en el taller y registrás el pago en la orden.',
       'Si un cliente no quiere usar el portal, no pasa nada: lo atendés como siempre.',
     ],
   },

@@ -236,3 +236,30 @@ describe('Registrar pago en el local', () => {
     expect(screen.getByText('Pagada online (Mercado Pago)')).toBeInTheDocument()
   })
 })
+
+describe('Pago online duplicado', () => {
+  const duplicado = {
+    id: 12,
+    orden_id: 42,
+    monto: '185000.00',
+    estado: 'duplicado',
+    medio: 'mercadopago',
+    payment_id: '1319283712',
+    creado_en: '2026-11-23T21:30:00',
+    fecha_pago: '2026-11-23T21:30:00',
+  }
+
+  it('muestra el aviso de devolución con monto, fecha y referencia', () => {
+    mostrar({ ...base, pagada: true, pagos: [duplicado] })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Esta orden recibió un pago online de $ 185.000 el 23/11/2026, 18:30 cuando ya estaba pagada. Devolvelo desde tu cuenta de Mercado Pago. Referencia del pago: 1319283712.',
+    )
+  })
+
+  it('sin pagos duplicados no muestra el aviso', () => {
+    mostrar({ ...base, pagos: [{ ...duplicado, estado: 'aprobado' }] })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    mostrar({ ...base })
+    expect(screen.queryAllByRole('alert')).toHaveLength(0)
+  })
+})

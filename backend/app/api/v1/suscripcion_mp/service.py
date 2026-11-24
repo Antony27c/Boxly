@@ -13,10 +13,12 @@ from decimal import Decimal, InvalidOperation
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1.suscripcion import service as suscripcion
 from app.api.v1.suscripcion_mp import cliente_mp
+from app.core import mercadopago
 from app.core.config import get_settings
 from app.core.mercadopago import ID_SEGURO, VENTANA_FIRMA_SEG, firma_valida
 from app.db.session import SIN_FILTRO_TALLER, fijar_taller
@@ -64,6 +66,65 @@ def _razon_cobro(plan: Plan, taller: Taller) -> str:
     return f"Boxly · plan {plan.nombre} · {taller.nombre}"
 
 
+# Estados de preapproval que siguen vivos en MP: pueden llegar a cobrar.
+_ESTADOS_VIVOS_PREAPPROVAL = {"pending", "authorized"}
+_PREFIJO_REFERENCIA = "taller-"
+_LIMITE_PAGINA_MP = 50
+# Red de seguridad del paginado: con una página vacía o repetida se corta
+# antes, esto solo evita un loop infinito si MP ignora offset.
+_MAX_PAGINAS_MP = 200
+
+
+def _preapprovals_mp(token: str) -> list[dict]:
+    """Todas las preapprovals de la cuenta de Boxly, página a página.
+
+    ``/preapproval/search`` no acepta ``external_reference`` como filtro (no
+    es un parámetro documentado): se traen todas y se filtra del lado nuestro.
+    """
+    todas: list[dict] = []
+    vistas: set[str] = set()
+    for pagina in range(_MAX_PAGINAS_MP):
+        datos = mercadopago.listar_preapprovals(
+            token, limite=_LIMITE_PAGINA_MP, offset=pagina * _LIMITE_PAGINA_MP
+        )
+        resultados = datos.get("results") or []
+        nuevas = [p for p in resultados if str(p.get("id")) not in vistas]
+        if not nuevas:
+            break
+        todas.extend(nuevas)
+        vistas.update(str(p.get("id")) for p in nuevas)
+        total = (datos.get("paging") or {}).get("total")
+        if isinstance(total, int):
+            if len(todas) >= total:
+                break
+        elif not resultados or len(resultados) < _LIMITE_PAGINA_MP:
+            break
+    return todas
+
+
+def _referencia_taller(taller_id: int) -> str:
+    return f"{_PREFIJO_REFERENCIA}{taller_id}"
+
+
+def _preapproval_vigente_mp(token: str, taller: Taller) -> dict | None:
+    """Preapproval viva en MP que ya referencia a este taller, si existe.
+
+    Cubre el intento anterior cuya respuesta se perdió: el reintento la
+    encuentra y la reutiliza en vez de crear otra (la primera quedaría viva
+    en MP sin referencia local).
+    """
+    referencia = _referencia_taller(taller.id)
+    for preapproval in _preapprovals_mp(token):
+        if str(preapproval.get("external_reference") or "") != referencia:
+            continue
+        if str(preapproval.get("status") or "") not in _ESTADOS_VIVOS_PREAPPROVAL:
+            continue
+        if not str(preapproval.get("id") or ""):
+            continue
+        return preapproval
+    return None
+
+
 def _token_boxly() -> str:
     token = get_settings().boxly_mp_access_token
     if not token:
@@ -85,21 +146,54 @@ def activar_cobro(db: Session, usuario: Usuario) -> CobroAutomaticoResponse:
             status.HTTP_409_CONFLICT, "El taller ya tiene el cobro automático activo"
         )
     back_url = f"{settings.frontend_url.rstrip('/')}/suscripcion"
-    # Pendiente conocido: si la respuesta de MP se pierde después de crear la
-    # preapproval (timeout, corte de red), un reintento crea OTRA en MP y la
-    # primera queda huérfana (existe en MP pero no en taller.mp_preapproval_id).
-    # No se resuelve acá; ver docs/Despliegue.md, "Pendientes conocidos".
+    # Si un intento anterior creó la preapproval pero se perdió la respuesta
+    # (timeout, corte de red), MP ya la tiene viva: la reutilizamos en vez de
+    # crear otra, que quedaría huérfana sin referencia local (P5, ver
+    # docs/Despliegue.md). Si la búsqueda falla se crea igual: el barrido de
+    # scripts/barrer_preapprovals es la red de seguridad para ese caso.
     try:
-        preapproval = cliente_mp.crear_preapproval(
-            token,
-            reason=_razon_cobro(plan, taller),
-            monto=plan.precio_mensual,
-            back_url=back_url,
-            external_reference=f"taller-{taller.id}",
-            payer_email=usuario.email,
+        vigente = _preapproval_vigente_mp(token, taller)
+    except mercadopago.MercadoPagoError as exc:
+        logger.warning(
+            "No se pudo buscar preapprovals en MP para el taller %s: %s",
+            taller.id,
+            exc,
         )
-    except cliente_mp.MercadoPagoError:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, DETALLE_MP) from None
+        vigente = None
+    if vigente is not None:
+        preapproval_id = str(vigente["id"])
+        try:
+            # Traemos el objeto completo: el search no siempre trae init_point.
+            preapproval = cliente_mp.obtener_preapproval(token, preapproval_id)
+        except cliente_mp.MercadoPagoError:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, DETALLE_MP) from None
+        # La preapproval puede ser de un plan anterior: se alinea monto y
+        # motivo. Si MP falla acá la preapproval sigue sirviendo igual.
+        try:
+            cliente_mp.actualizar_preapproval(
+                token,
+                preapproval_id,
+                monto=plan.precio_mensual,
+                reason=_razon_cobro(plan, taller),
+            )
+        except cliente_mp.MercadoPagoError as exc:
+            logger.warning(
+                "No se pudo actualizar la preapproval reutilizada %s: %s",
+                preapproval_id,
+                exc,
+            )
+    else:
+        try:
+            preapproval = cliente_mp.crear_preapproval(
+                token,
+                reason=_razon_cobro(plan, taller),
+                monto=plan.precio_mensual,
+                back_url=back_url,
+                external_reference=_referencia_taller(taller.id),
+                payer_email=usuario.email,
+            )
+        except cliente_mp.MercadoPagoError:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, DETALLE_MP) from None
     taller.mp_preapproval_id = str(preapproval.get("id") or "") or None
     # Solo queda activo cuando MP la autoriza (avisa por webhook).
     taller.cobro_automatico = preapproval.get("status") == "authorized"
@@ -124,6 +218,58 @@ def cancelar_cobro(db: Session, usuario: Usuario) -> None:
     taller.cobro_automatico = False
     taller.mp_preapproval_id = None
     db.commit()
+
+
+# --- Barrido de preapprovals huérfanas (script de mantenimiento, P5) ----------
+
+
+def barrer_preapprovals_huerfanas(
+    db: Session, *, token: str, dry_run: bool = True
+) -> dict:
+    """Cancela en MP las preapprovals vivas que ningún taller referencia.
+
+    Recorre las preapprovals de la cuenta de Boxly en estado ``pending`` o
+    ``authorized`` con ``external_reference`` ``taller-<id>`` y cancela las que
+    no sean el ``mp_preapproval_id`` de ningún taller (huérfanas: quedaron en
+    MP cuando se perdió la respuesta de creación). Con ``dry_run`` solo
+    informa, no cancela. Devuelve ``{"huerfanas": [...], "canceladas": [...]}``.
+    """
+    ids_vivos = {
+        pid
+        for pid in db.scalars(
+            select(Taller.mp_preapproval_id)
+            .where(Taller.mp_preapproval_id.is_not(None))
+            .execution_options(**{SIN_FILTRO_TALLER: True})
+        )
+    }
+    huerfanas = []
+    for preapproval in _preapprovals_mp(token):
+        pid = str(preapproval.get("id") or "")
+        if not pid or pid in ids_vivos:
+            continue
+        ref = str(preapproval.get("external_reference") or "")
+        estado = str(preapproval.get("status") or "")
+        if not ref.startswith(_PREFIJO_REFERENCIA):
+            continue
+        if estado not in _ESTADOS_VIVOS_PREAPPROVAL:
+            continue
+        huerfanas.append(
+            {"id": pid, "external_reference": ref, "status": estado}
+        )
+    canceladas = []
+    if not dry_run:
+        for h in huerfanas:
+            try:
+                cliente_mp.cancelar_preapproval(token, h["id"])
+            except cliente_mp.MercadoPagoError as exc:
+                logger.warning(
+                    "No se pudo cancelar la preapproval huérfana %s: %s",
+                    h["id"],
+                    exc,
+                )
+                continue
+            canceladas.append(h["id"])
+    return {"huerfanas": huerfanas, "canceladas": canceladas}
 
 
 # --- Webhook (sin usuario) ------------------------------------------------------
@@ -246,6 +392,50 @@ def _registrar_cobro(
     )
 
 
+def _adoptar_fila_programada(
+    db: Session, taller: Taller, *, data_id: str, mp_payment_id: str
+) -> None:
+    """MP avisa el mismo cobro en dos pasos: "scheduled" (todavía sin
+    ``payment.id``: la fila queda con ``mp_payment_id`` = id del
+    authorized_payment) y "processed" (con el id real del pago). Cuando aparece
+    el id real, la fila pendiente de este authorized_payment ES este cobro: se
+    le asigna el id real (se flushea sola en la próxima query) y sigue el cauce
+    normal — así no quedan dos filas ni un pendiente eterno. Un reintento
+    rechazado -> aprobado trae OTRO ``payment.id`` y la fila final no se toca:
+    eso sí es otro cobro."""
+    # Si el id real ya está registrado, no hay placeholder que adoptar: el
+    # cauce normal de registrar_pago lo encuentra por mp_payment_id.
+    if (
+        db.scalar(
+            select(PagoSuscripcion.id).where(
+                PagoSuscripcion.mp_payment_id == mp_payment_id
+            )
+        )
+        is not None
+    ):
+        return
+    fila = db.scalar(
+        select(PagoSuscripcion).where(
+            PagoSuscripcion.taller_id == taller.id,
+            PagoSuscripcion.referencia == f"authorized_payment:{data_id}",
+            PagoSuscripcion.estado == EstadoPagoSuscripcion.pendiente,
+            PagoSuscripcion.mp_payment_id != mp_payment_id,
+        )
+    )
+    if fila is None:
+        return
+    fila.mp_payment_id = mp_payment_id
+    try:
+        # autoflush está apagado: hay que flushear a mano para que
+        # registrar_pago encuentre la fila por el id real del pago.
+        db.flush()
+    except IntegrityError:
+        # Otro request registró ese payment.id en el medio: el cauce normal
+        # lo encuentra y no hay placeholder que adoptar.
+        db.rollback()
+        fijar_taller(db, taller.id)
+
+
 def _procesar_cobro(db: Session, token: str, data_id: str) -> None:
     try:
         info = cliente_mp.obtener_pago_autorizado(token, data_id)
@@ -266,6 +456,10 @@ def _procesar_cobro(db: Session, token: str, data_id: str) -> None:
     mp_payment_id = str(
         pago_mp.get("id") or info.get("payment_id") or info.get("id") or data_id
     )
+    if pago_mp.get("id") or info.get("payment_id"):
+        # Ya se conoce el id real del pago: puede existir la fila que se creó
+        # cuando el cobro estaba "scheduled" sin payment.id.
+        _adoptar_fila_programada(db, taller, data_id=data_id, mp_payment_id=mp_payment_id)
     estado_mp = str(pago_mp.get("status") or "").lower()
     if not estado_mp:
         # Sin pago anidado, el estado del authorized_payment manda:

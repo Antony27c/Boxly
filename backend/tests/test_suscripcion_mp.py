@@ -12,13 +12,17 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
+from app.api.v1.suscripcion import service as sus_service
 from app.api.v1.suscripcion_mp import cliente_mp, service
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models import PagoSuscripcion, Taller, Usuario
+from app.models.suscripcion import EstadoPagoSuscripcion, MedioPagoSuscripcion
 from app.models.usuario import RolUsuario
 
 SECRETO = "secreto-boxly-test"
@@ -491,3 +495,175 @@ def test_cobro_aprobado_luego_rechazado_no_desfaz(api, datos, monkeypatch):
         taller = _taller(db)
         assert taller.suscripcion_vence_en == pagos[0].periodo_hasta
         assert taller.suscripcion_vence_en > date.today()
+
+
+# --- scheduled -> processed: un solo cobro, una sola fila (R2, bug 6) ------------
+
+
+def test_cobro_scheduled_y_processed_comparten_fila(api, datos, monkeypatch):
+    """MP avisa el authorized_payment primero "scheduled" (sin payment.id: la
+    fila queda con mp_payment_id = id del authorized_payment) y después
+    "processed" (con el id real del pago). Es UN solo cobro: la fila placeholder
+    adopta el id real y cambia de estado — no quedan dos filas."""
+    _settings(monkeypatch, boxly_mp_access_token="tok-boxly")
+    with SessionLocal() as db:
+        _prepara_taller_vencido(db)
+    programado = {
+        "id": 9101, "preapproval_id": "pre-1", "status": "scheduled",
+        "external_reference": "taller-1",
+    }
+    procesado = {
+        "id": 9101, "preapproval_id": "pre-1", "status": "processed",
+        "payment": {"id": 566001, "status": "approved",
+                    "transaction_amount": 15000.0},
+    }
+    respuestas = iter([programado, procesado])
+    monkeypatch.setattr(cliente_mp, "obtener_pago_autorizado",
+                        lambda *a, **k: next(respuestas))
+
+    _webhook(api, "authorized_payment", "9101")
+    with SessionLocal() as db:
+        pagos = _pagos(db, taller_id=1)
+        assert len(pagos) == 1
+        assert pagos[0].estado == "pendiente"
+        assert pagos[0].mp_payment_id == "9101"
+        assert pagos[0].referencia == "authorized_payment:9101"
+        # Todavía no extendió: el cobro no está aprobado.
+        assert _taller(db).suscripcion_vence_en == date.today() - timedelta(days=10)
+
+    _webhook(api, "authorized_payment", "9101")
+    with SessionLocal() as db:
+        pagos = _pagos(db, taller_id=1)
+        assert len(pagos) == 1
+        assert pagos[0].estado == "aprobado"
+        assert pagos[0].mp_payment_id == "566001"
+        taller = _taller(db)
+        assert taller.suscripcion_vence_en == pagos[0].periodo_hasta
+        assert taller.suscripcion_vence_en > date.today()
+
+
+def test_reintento_rechazado_aprobado_son_dos_cobros(api, datos, monkeypatch):
+    """El mismo authorized_payment con OTRO payment.id es otro intento de
+    cobro: el rechazo y el aprobado dejan dos filas (el pendiente no se
+    "adopta" un pago que ya está en estado final)."""
+    _settings(monkeypatch, boxly_mp_access_token="tok-boxly")
+    with SessionLocal() as db:
+        _prepara_taller_vencido(db)
+    respuestas = iter([
+        {"id": 9102, "preapproval_id": "pre-1", "status": "processed",
+         "payment": {"id": 566010, "status": "rejected",
+                     "transaction_amount": 15000.0}},
+        {"id": 9102, "preapproval_id": "pre-1", "status": "processed",
+         "payment": {"id": 566011, "status": "approved",
+                     "transaction_amount": 15000.0}},
+    ])
+    monkeypatch.setattr(cliente_mp, "obtener_pago_autorizado",
+                        lambda *a, **k: next(respuestas))
+
+    _webhook(api, "authorized_payment", "9102")
+    _webhook(api, "authorized_payment", "9102")
+    with SessionLocal() as db:
+        pagos = _pagos(db, taller_id=1)
+        assert len(pagos) == 2
+        estados = {p.mp_payment_id: p.estado for p in pagos}
+        assert estados == {"566010": "rechazado", "566011": "aprobado"}
+        taller = _taller(db)
+        # El vencimiento se extendió una sola vez, por el aprobado.
+        assert taller.suscripcion_vence_en == max(
+            p.periodo_hasta for p in pagos if p.estado == "aprobado"
+        )
+        assert taller.suscripcion_vence_en > date.today()
+
+
+# --- Carrera pendiente/aprobado: el IntegrityError no pierde el aprobado (R2, bug 7)
+
+
+def _forzar_carrera_integrity(monkeypatch):
+    """Simula la carrera: el primer lookup no ve la fila (como si el otro
+    request no hubiera commiteado todavía) y el INSERT choca con el UNIQUE de
+    mp_payment_id. El segundo lookup (el reintento post-rollback) sí la ve."""
+    real_lookup = sus_service._pago_por_mp_id
+    llamadas = {"n": 0}
+
+    def lookup_que_falla(db_, taller_id, mp_id):
+        llamadas["n"] += 1
+        return None if llamadas["n"] == 1 else real_lookup(db_, taller_id, mp_id)
+
+    monkeypatch.setattr(sus_service, "_pago_por_mp_id", lookup_que_falla)
+
+    real_flush = Session.flush
+    fallo = {"disparado": False}
+
+    def flush_que_falla(self, *args, **kwargs):
+        if not fallo["disparado"] and any(
+            isinstance(o, PagoSuscripcion) for o in self.new
+        ):
+            fallo["disparado"] = True
+            raise IntegrityError(
+                "INSERT INTO pagos_suscripcion", {}, Exception("UNIQUE constraint failed")
+            )
+        return real_flush(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "flush", flush_que_falla)
+
+
+def _registrar(db, estado, mp_id="777777", referencia="authorized_payment:9103"):
+    return sus_service.registrar_pago(
+        db,
+        db.get(Taller, 1),
+        monto=Decimal("15000.00"),
+        medio=MedioPagoSuscripcion.mercadopago,
+        estado=estado,
+        mp_payment_id=mp_id,
+        referencia=referencia,
+    )
+
+
+def test_aprobado_que_choca_con_el_insert_no_se_pierde(datos, monkeypatch):
+    """R2-7: el pendiente commiteó primero y el aprobado chocó con el UNIQUE.
+    Antes devolvía None y MP no reintentaba (el pago quedaba pendiente para
+    siempre). Ahora se relee la fila y se le aplica la transición: el aprobado
+    gana y el vencimiento se extiende."""
+    with SessionLocal() as db:
+        _prepara_taller_vencido(db)
+        primero = _registrar(db, EstadoPagoSuscripcion.pendiente)
+        db.commit()
+        primero_id = primero.id
+        vence_antes = _taller(db).suscripcion_vence_en
+
+    _forzar_carrera_integrity(monkeypatch)
+    with SessionLocal() as db:
+        pago = _registrar(db, EstadoPagoSuscripcion.aprobado)
+        assert pago is not None and pago.id == primero_id
+        assert pago.estado == "aprobado"
+        hasta = pago.periodo_hasta
+        db.commit()
+
+    with SessionLocal() as db:
+        assert len(_pagos(db, taller_id=1)) == 1
+        taller = _taller(db)
+        assert taller.suscripcion_vence_en != vence_antes
+        assert taller.suscripcion_vence_en == hasta
+        assert taller.suscripcion_vence_en > date.today()
+
+
+def test_integrity_error_con_estado_final_devuelve_none(datos, monkeypatch):
+    """Si la fila que ganó la carrera ya está en estado final, el aviso
+    contradictorio se descarta (None): un rechazado no deshace un aprobado."""
+    with SessionLocal() as db:
+        _prepara_taller_vencido(db)
+        primero = _registrar(db, EstadoPagoSuscripcion.aprobado, mp_id="888888")
+        db.commit()
+        primero_id = primero.id
+        vence_antes = _taller(db).suscripcion_vence_en
+
+    _forzar_carrera_integrity(monkeypatch)
+    with SessionLocal() as db:
+        pago = _registrar(db, EstadoPagoSuscripcion.rechazado, mp_id="888888")
+        db.commit()
+
+    assert pago is None
+    with SessionLocal() as db:
+        fila = db.get(PagoSuscripcion, primero_id)
+        assert fila.estado == "aprobado"
+        assert _taller(db).suscripcion_vence_en == vence_antes

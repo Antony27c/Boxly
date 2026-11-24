@@ -125,7 +125,7 @@ function TarjetaPlan({ plan, anterior, destacado, sinPrecio, cargando }) {
         )}
         {sinArca && (
           <Item proximamente={esProximamente('arca')}>
-            Facturación ARCA disponible como adicional
+            Facturación ARCA como adicional
           </Item>
         )}
       </ul>
@@ -200,8 +200,7 @@ export default function Planes() {
           <p className="font-medium text-ink">Precios de referencia, sujetos a cambios.</p>
           <p>
             Precios finales en pesos argentinos. El pago es mensual, con débito automático de
-            Mercado Pago. Los avisos automáticos por WhatsApp y las facturas ARCA tienen un cupo
-            mensual según el plan. Podés cambiar de plan cuando quieras desde la app.
+            Mercado Pago. Podés cambiar de plan cuando quieras desde la app.
           </p>
         </div>
       </div>

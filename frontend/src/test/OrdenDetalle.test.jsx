@@ -177,4 +177,77 @@ describe('OrdenDetalle', () => {
       /23\/11\/2026, 18:30$/,
     )
   })
+
+  it('avisa al mostrador cuando un pago online quedó duplicado', async () => {
+    sesion.rol = 'recepcion'
+    ordenes.obtener.mockResolvedValue({
+      ...ORDEN,
+      estado: 'Listo',
+      pagada: true,
+      pagos: [
+        {
+          id: 11,
+          orden_id: 7,
+          monto: '185000.00',
+          estado: 'aprobado',
+          medio: 'efectivo',
+          payment_id: null,
+          creado_en: '2026-11-20T15:00:00',
+          fecha_pago: '2026-11-20T15:00:00',
+        },
+        {
+          id: 12,
+          orden_id: 7,
+          monto: '185000.00',
+          estado: 'duplicado',
+          medio: 'mercadopago',
+          payment_id: '1319283712',
+          creado_en: '2026-11-23T21:30:00',
+          fecha_pago: '2026-11-23T21:30:00',
+        },
+      ],
+    })
+    montar()
+
+    const aviso = await screen.findByRole('alert')
+    expect(aviso).toHaveTextContent(
+      'Esta orden recibió un pago online de $ 185.000 el 23/11/2026, 18:30 cuando ya estaba pagada. Devolvelo desde tu cuenta de Mercado Pago. Referencia del pago: 1319283712.',
+    )
+  })
+
+  it('el administrador también ve el aviso de pago duplicado', async () => {
+    sesion.rol = 'administrador'
+    ordenes.obtener.mockResolvedValue({
+      ...ORDEN,
+      pagos: [{ id: 12, estado: 'duplicado', monto: 50000, creado_en: '2026-11-23T21:30:00' }],
+    })
+    montar()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/pago online de \$ 50\.000/)
+  })
+
+  it('el mecánico no ve el aviso de pago duplicado', async () => {
+    sesion.rol = 'mecanico'
+    ordenes.obtener.mockResolvedValue({
+      ...ORDEN,
+      pagos: [{ id: 12, estado: 'duplicado', monto: 50000, creado_en: '2026-11-23T21:30:00' }],
+    })
+    montar()
+
+    expect(await screen.findByText('En diagnóstico')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/pago online/)).not.toBeInTheDocument()
+  })
+
+  it('sin pagos duplicados no muestra el aviso', async () => {
+    sesion.rol = 'recepcion'
+    ordenes.obtener.mockResolvedValue({
+      ...ORDEN,
+      pagos: [{ id: 11, estado: 'aprobado', monto: 50000, creado_en: '2026-11-23T21:30:00' }],
+    })
+    montar()
+
+    expect(await screen.findByText('En diagnóstico')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
 })

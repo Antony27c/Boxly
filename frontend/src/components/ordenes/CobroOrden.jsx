@@ -8,7 +8,15 @@ import { useAuth } from '@/context/AuthContext'
 import useTaller from '@/hooks/useTaller'
 import { formatearFechaHora } from '@/lib/fechas'
 import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
-import { estadoCobro, MEDIOS_PAGO_LOCAL, montoDelServidor, ordenesService, textoPagada } from '@/services/ordenes'
+import {
+  estadoCobro,
+  MEDIOS_PAGO_LOCAL,
+  montoDelServidor,
+  ordenesService,
+  pagosDuplicados,
+  textoPagada,
+  textoPagoDuplicado,
+} from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 import '@/styles/ticket.css'
 
@@ -109,6 +117,8 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
   const hayACotizar = Number(orden.lineas_a_cotizar ?? 0) > 0
   // Recepción y el administrador registran el pago presencial de un cobro emitido.
   const puedeRegistrarPago = esMostrador && situacion === 'aprobado' && !hayACotizar
+  // Cobros online duplicados (Q1): plata cobrada dos veces, a devolver a mano.
+  const duplicados = pagosDuplicados(orden)
 
   // Línea del total del ticket según en qué quedó el cobro (sin cobro no hay total).
   const total =
@@ -225,6 +235,12 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
             </div>
           )}
         </div>
+
+        {duplicados.map((pago, indice) => (
+          <Alert key={pago.id ?? pago.payment_id ?? indice} tipo="warning">
+            {textoPagoDuplicado(pago)}
+          </Alert>
+        ))}
 
         {error && <Alert>{error}</Alert>}
 

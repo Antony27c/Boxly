@@ -11,6 +11,7 @@ from app.main import app
 from app.models.cliente import Cliente
 from app.models.detalle_orden import DetalleOrden
 from app.models.orden import Orden
+from app.models.pago import Pago
 from app.models.repuesto import Repuesto
 from app.models.taller import Taller
 from app.models.usuario import RolUsuario, Usuario
@@ -317,3 +318,27 @@ def test_metricas_no_falla_con_precios_nulos(api, datos):
     _mano_obra_mecanico(api, datos)
     r = api.get("/api/v1/metricas/finanzas", headers=datos["admin"])
     assert r.status_code == 200, r.text
+
+
+def test_mecanico_no_ve_pagos_ni_sus_montos(api, datos):
+    """La orden no expone `pagos` al mecánico: montos y datos del cobro son
+    del mostrador (administración y recepción sí los ven)."""
+    with SessionLocal() as db:
+        db.add(
+            Pago(
+                orden_id=datos["orden"], monto=Decimal("1500.00"),
+                estado="duplicado", medio="mercadopago", payment_id="999888",
+            )
+        )
+        db.commit()
+
+    r = api.get(f"/api/v1/ordenes/{datos['orden']}", headers=datos["mecanico"])
+    assert r.status_code == 200, r.text
+    assert r.json()["pagos"] == []
+    assert r.json()["tiene_pago_duplicado"] is False
+
+    # Recepción sí los ve, con el estado 'duplicado' incluido.
+    r = api.get(f"/api/v1/ordenes/{datos['orden']}", headers=datos["recepcion"])
+    assert r.status_code == 200
+    assert r.json()["pagos"][0]["estado"] == "duplicado"
+    assert r.json()["tiene_pago_duplicado"] is True

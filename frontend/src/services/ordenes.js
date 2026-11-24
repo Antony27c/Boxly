@@ -1,6 +1,6 @@
 import { api, urlArchivo } from '@/lib/api'
-import { diaServidor } from '@/lib/fechas'
-import { parsearMontoAR } from '@/lib/montos'
+import { diaServidor, formatearFechaHora } from '@/lib/fechas'
+import { formatearMontoAR, parsearMontoAR } from '@/lib/montos'
 
 const RECURSO = '/api/v1/ordenes'
 
@@ -81,6 +81,25 @@ export function textoPagada(medio) {
   if (medio === 'mercadopago') return 'Pagada online (Mercado Pago)'
   const local = MEDIOS_PAGO_LOCAL.find((opcion) => opcion.valor === medio)
   return local ? `Pagada en el taller (${local.texto.toLowerCase()})` : 'Pagada'
+}
+
+/* Pago duplicado (Q1): un cobro online aprobado que llegó cuando la orden ya
+   estaba paga — la plata está cobrada dos veces y el taller la devuelve a
+   mano por Mercado Pago. El backend los expone en orden.pagos (PagoResponse);
+   si el campo no viene, la lista queda vacía y no se muestra nada. */
+export function pagosDuplicados(orden) {
+  const pagos = orden?.pagos
+  if (!Array.isArray(pagos)) return []
+  return pagos.filter((pago) => pago?.estado === 'duplicado')
+}
+
+// Texto del aviso de devolución: monto, fecha del cobro y la referencia de
+// Mercado Pago cuando viene.
+export function textoPagoDuplicado(pago) {
+  const monto = formatearMontoAR(pago?.monto)
+  const cuando = formatearFechaHora(pago?.fecha_pago ?? pago?.creado_en)
+  const referencia = pago?.payment_id ? ` Referencia del pago: ${pago.payment_id}.` : ''
+  return `Esta orden recibió un pago online${monto ? ` de $ ${monto}` : ''} el ${cuando} cuando ya estaba pagada. Devolvelo desde tu cuenta de Mercado Pago.${referencia}`
 }
 
 const ROL_ADMIN = ['admin', 'administrador']

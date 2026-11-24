@@ -14,7 +14,7 @@ const BENEFICIOS = [
   {
     icono: 'inventario',
     titulo: 'Repuestos y números bajo control',
-    texto: 'Inventario con stock mínimo, cobros y métricas del taller.',
+    texto: 'Inventario con avisos de stock mínimo, cobros y métricas del taller.',
   },
 ]
 

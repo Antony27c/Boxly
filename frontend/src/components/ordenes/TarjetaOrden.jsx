@@ -5,7 +5,7 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { BOTON_PIE, Chip, Chips, Ficha, FichaCabecera, FichaPersona, FichaPie, FichaSeccion } from '@/components/ui/Ficha'
 import Patente from '@/components/ui/Patente'
-import { MOTIVO_A_COTIZAR, accionEjecutable, estadoCobro } from '@/services/ordenes'
+import { MOTIVO_A_COTIZAR, accionEjecutable, estadoCobro, pagosDuplicados } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 const TONOS = {
@@ -103,6 +103,8 @@ export default function TarjetaOrden({
   const accion = accionEjecutable(orden, usuario?.rol)
   const codigo = orden.codigo ?? `#${orden.id}`
   const cobro = COBROS[estadoCobro(orden)]
+  // Cobro online duplicado (Q1): la orden ya estaba paga, hay que devolver.
+  const duplicado = pagosDuplicados(orden).length > 0
 
   function accionar(evento, destino) {
     evento.stopPropagation()
@@ -152,6 +154,7 @@ export default function TarjetaOrden({
         <Chips>
           <Chip mono={Boolean(orden.total)}>{orden.total ? pesos(orden.total) : 'A presupuestar'}</Chip>
           {cobro && <Chip tono={cobro.tono}>{cobro.texto}</Chip>}
+          {duplicado && <Chip tono="peligro">Pago duplicado</Chip>}
         </Chips>
       </FichaCabecera>
 

@@ -81,16 +81,16 @@ describe('Planes de la landing', () => {
 
     const esencial = tarjeta('Esencial')
     expect(within(esencial).getByText('Gestión diaria del taller:')).toBeInTheDocument()
-    expect(within(esencial).getByText('Órdenes con fotos e historial')).toBeInTheDocument()
-    expect(item(esencial, 'Avisos por WhatsApp manual')).not.toHaveTextContent('Próximamente')
-    expect(item(esencial, /ARCA disponible como adicional/)).toHaveTextContent('Próximamente')
+    expect(within(esencial).getByText('Órdenes con fotos e historial de órdenes del vehículo')).toBeInTheDocument()
+    expect(item(esencial, 'Mensajes de WhatsApp armados (envío manual)')).not.toHaveTextContent('Próximamente')
+    expect(item(esencial, /Facturación ARCA como adicional/)).toHaveTextContent('Próximamente')
 
     const pro = tarjeta('Pro')
     expect(within(pro).getByText('Todo Esencial, más:')).toBeInTheDocument()
     expect(item(pro, 'Avisos automáticos por WhatsApp')).toHaveTextContent('Próximamente')
     expect(item(pro, 'Facturación electrónica ARCA')).toHaveTextContent('Próximamente')
     // Lo de Esencial no se repite.
-    expect(within(pro).queryByText('Avisos por WhatsApp manual')).not.toBeInTheDocument()
+    expect(within(pro).queryByText('Mensajes de WhatsApp armados (envío manual)')).not.toBeInTheDocument()
     expect(within(pro).queryByText(/como adicional/)).not.toBeInTheDocument()
 
     const profesional = tarjeta('Profesional')

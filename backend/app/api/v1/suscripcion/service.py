@@ -297,6 +297,18 @@ def _actualizar_estado(
     return pago
 
 
+def _taller_bloqueado(db: Session, taller_id: int) -> Taller | None:
+    """La fila del taller con lock (FOR UPDATE; se ignora en SQLite) y datos
+    frescos: la extensión del vencimiento se calcula siempre sobre el valor
+    confirmado, nunca sobre una copia leída antes de la carrera."""
+    return db.scalar(
+        select(Taller)
+        .where(Taller.id == taller_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
 def registrar_pago(
     db: Session,
     taller: Taller,
@@ -315,15 +327,20 @@ def registrar_pago(
 
     Período: ``periodo_siguiente(vencimiento, meses, fecha)``. Con
     ``mp_payment_id`` es idempotente: si el cobro ya existe se actualiza su
-    estado (``_actualizar_estado``), y si otro request ganó la carrera con el
-    mismo id (UNIQUE) devuelve None."""
+    estado (``_actualizar_estado``). La fila del taller queda bloqueada
+    (``_taller_bloqueado``) para que dos pagos simultáneos no calculen el
+    período sobre el mismo vencimiento. Si el INSERT choca con el UNIQUE de
+    ``mp_payment_id`` (otro request ganó la carrera), se relee la fila y se le
+    aplica la transición: el aviso aprobado no se pierde."""
+    taller_id = taller.id
+    taller = _taller_bloqueado(db, taller_id) or taller
     if mp_payment_id is not None:
-        existente = _pago_por_mp_id(db, taller.id, mp_payment_id)
+        existente = _pago_por_mp_id(db, taller_id, mp_payment_id)
         if existente is not None:
             return _actualizar_estado(taller, existente, estado, meses)
     desde, hasta = periodo_siguiente(taller.suscripcion_vence_en, meses, fecha)
     pago = PagoSuscripcion(
-        taller_id=taller.id,
+        taller_id=taller_id,
         monto=monto,
         periodo_desde=desde,
         periodo_hasta=hasta,
@@ -340,7 +357,18 @@ def registrar_pago(
     except IntegrityError:
         db.rollback()
         fijar_taller(db, taller_de_la_sesion)
-        return None
+        if mp_payment_id is None:
+            return None
+        # Otro request registró el mismo cobro en el medio: la fila existe y
+        # hay que aplicarle la transición (un pendiente -> aprobado no se
+        # pierde). Se relee el taller con lock porque su vencimiento pudo
+        # cambiar con ese otro pago.
+        existente = _pago_por_mp_id(db, taller_id, mp_payment_id)
+        if existente is None:
+            return None
+        return _actualizar_estado(
+            _taller_bloqueado(db, taller_id) or taller, existente, estado, meses
+        )
     if estado == EstadoPagoSuscripcion.aprobado:
         aplicar_pago_aprobado(taller, hasta)
     return pago

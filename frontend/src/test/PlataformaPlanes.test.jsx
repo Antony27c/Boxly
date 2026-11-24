@@ -96,7 +96,7 @@ describe('PlataformaPlanes', () => {
     expect(within(esencial).getByText('Activo')).toBeInTheDocument()
     // Las funciones del plan se muestran como chips legibles.
     expect(within(esencial).getByText('Gestión del taller')).toBeInTheDocument()
-    expect(within(esencial).getByText('Avisos por WhatsApp manual')).toBeInTheDocument()
+    expect(within(esencial).getByText('Mensajes de WhatsApp armados (envío manual)')).toBeInTheDocument()
 
     const profesional = tarjeta('Profesional')
     expect(within(profesional).getByText(/169\.000/)).toBeInTheDocument()
@@ -165,7 +165,7 @@ describe('PlataformaPlanes', () => {
 
     const dialogo = await screen.findByRole('dialog')
     expect(within(dialogo).getByLabelText('Gestión del taller')).toBeChecked()
-    expect(within(dialogo).getByLabelText('Avisos por WhatsApp manual')).toBeChecked()
+    expect(within(dialogo).getByLabelText('Mensajes de WhatsApp armados (envío manual)')).toBeChecked()
     expect(within(dialogo).getByLabelText('Avisos automáticos por WhatsApp')).not.toBeChecked()
     expect(within(dialogo).getByLabelText('Facturación electrónica ARCA')).not.toBeChecked()
   })

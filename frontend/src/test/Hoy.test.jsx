@@ -211,6 +211,56 @@ describe('Hoy — recepción y administración', () => {
     expect(filaTurno).toHaveClass('min-h-[56px]')
   })
 
+  it('stock bajo y sin mecánico: fichas con link, "Ver todo" filtrado y como mucho 5 filas', async () => {
+    const muchas = Array.from({ length: 7 }, (_, indice) => ({
+      ...ORDEN_SIN_MECANICO,
+      id: 100 + indice,
+      vehiculo_patente: `AB${100 + indice}CD`,
+    }))
+    ordenes.listar.mockResolvedValue(muchas)
+    montar()
+
+    const bloqueStock = (await screen.findByRole('heading', { name: /Stock bajo/ })).closest('section')
+    const filaStock = within(bloqueStock).getByText('Filtro de aceite').closest('a')
+    expect(filaStock).toHaveAttribute('href', '/inventario')
+    expect(filaStock).toHaveTextContent('stock 1 · mínimo 2')
+
+    const bloqueSin = screen.getByRole('heading', { name: /Sin mecánico asignado/ }).closest('section')
+    expect(within(bloqueSin).getByText('7')).toBeInTheDocument()
+    expect(within(bloqueSin).getAllByRole('listitem')).toHaveLength(5)
+    expect(within(bloqueSin).getByRole('link', { name: 'Ver todo' })).toHaveAttribute(
+      'href',
+      '/ordenes?filtro=sin_asignar',
+    )
+    // Recepción no ve el bloque de cobros por aprobar.
+    expect(screen.queryByRole('heading', { name: /Cobros por aprobar/ })).not.toBeInTheDocument()
+  })
+
+  it('marca con "Pago duplicado" la orden con un pago online de más', async () => {
+    ordenes.listar.mockResolvedValue([
+      { ...ORDEN_LISTA, pagos: [{ id: 1, estado: 'duplicado', monto: '50000.00' }] },
+      { ...ORDEN_SIN_MECANICO, tiene_pago_duplicado: true },
+      { ...ORDEN_LISTA, id: 13, vehiculo_patente: 'EE555FF', pagos: [{ id: 2, estado: 'aprobado' }] },
+    ])
+    montar()
+
+    const bloqueListos = (await screen.findByRole('heading', { name: /Listos para entregar/ })).closest('section')
+    const duplicada = within(bloqueListos).getByText('AA111BB').closest('li')
+    expect(within(duplicada).getByText('Pago duplicado')).toBeInTheDocument()
+    const normal = within(bloqueListos).getByText('EE555FF').closest('li')
+    expect(within(normal).queryByText('Pago duplicado')).not.toBeInTheDocument()
+
+    const bloqueSin = screen.getByRole('heading', { name: /Sin mecánico asignado/ }).closest('section')
+    expect(within(bloqueSin).getByText('Pago duplicado')).toBeInTheDocument()
+  })
+
+  it('si falla una carga muestra el error y el resto del día', async () => {
+    turnos.listar.mockRejectedValue(new Error('No se pudieron cargar los turnos.'))
+    montar()
+    expect(await screen.findByText('No se pudieron cargar los turnos.')).toBeInTheDocument()
+    expect(screen.getByText('Listos para entregar')).toBeInTheDocument()
+  })
+
   it('explica los vacíos cuando no hay nada para hoy', async () => {
     ordenes.listar.mockResolvedValue([])
     turnos.listar.mockResolvedValue([])
@@ -282,6 +332,15 @@ describe('Hoy — mecánico', () => {
     await waitFor(() =>
       expect(screen.getByTestId('ubicacion')).toHaveTextContent('/ordenes/20?accion=1'),
     )
+  })
+
+  it('si falla la carga muestra el error y Reintentar vuelve a pedir', async () => {
+    ordenes.listar.mockRejectedValueOnce(new Error('Sin conexión.')).mockResolvedValue([])
+    montar()
+    expect(await screen.findByText('Sin conexión.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByText('No tenés órdenes asignadas')).toBeInTheDocument()
+    expect(ordenes.listar).toHaveBeenCalledTimes(2)
   })
 
   it('sin órdenes asignadas muestra un vacío que lo explica', async () => {

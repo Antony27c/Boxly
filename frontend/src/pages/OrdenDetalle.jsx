@@ -21,7 +21,15 @@ import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
 import { formatearFechaHora, formatearFechaLarga } from '@/lib/fechas'
 import { ROLES_ADMIN, ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { accionVisible, estadoCobro, ordenesService, proximosEstados, textoPagada } from '@/services/ordenes'
+import {
+  accionVisible,
+  estadoCobro,
+  ordenesService,
+  pagosDuplicados,
+  proximosEstados,
+  textoPagada,
+  textoPagoDuplicado,
+} from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 
 const TONOS = {
@@ -129,6 +137,9 @@ export default function OrdenDetalle() {
   const accion = accionVisible(orden, usuario?.rol)
   // El mecánico no ve el cobro: no puede emitirlo ni proponerlo (S3).
   const mostrarCobro = estadoCobro(orden) !== null && !esMecanico
+  // Cobros online duplicados (Q1): la orden ya estaba paga y hay que devolver
+  // la plata a mano por Mercado Pago. Solo lo gestiona el mostrador.
+  const duplicados = esMostrador ? pagosDuplicados(orden) : []
   const pestanas = [
     { id: 'trabajo', texto: 'Trabajo' },
     { id: 'fotos', texto: 'Fotos' },
@@ -249,6 +260,16 @@ export default function OrdenDetalle() {
           </FichaSeccion>
         )}
       </Ficha>
+
+      {duplicados.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {duplicados.map((pago, indice) => (
+            <Alert key={pago.id ?? pago.payment_id ?? indice} tipo="warning">
+              {textoPagoDuplicado(pago)}
+            </Alert>
+          ))}
+        </div>
+      )}
 
       <div
         role="tablist"

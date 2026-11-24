@@ -47,6 +47,7 @@ from app.models import (
     Usuario,
     Vehiculo,
 )
+from app.models.notificacion import NotificacionInterna
 from app.models.taller import TALLER_PRINCIPAL_ID
 from app.models.usuario import RolUsuario
 
@@ -115,6 +116,7 @@ CASOS_PARAMS = [
     ("PUT", "/api/v1/repuestos/{repuesto_id}", {}, None),
     ("DELETE", "/api/v1/repuestos/{repuesto_id}", None, None),
     ("POST", "/api/v1/repuestos/{repuesto_id}/ingresos", {"cantidad": 3}, None),
+    ("POST", "/api/v1/repuestos/avisos/{aviso_id}/leer", None, None),
     # turnos
     ("GET", "/api/v1/turnos/{turno_id}", None, None),
     ("PUT", "/api/v1/turnos/{turno_id}", {}, None),
@@ -196,6 +198,7 @@ CASOS_LISTAS = [
     ("GET", "/api/v1/ordenes"),
     ("GET", "/api/v1/ordenes/estados"),
     ("GET", "/api/v1/repuestos"),
+    ("GET", "/api/v1/repuestos/avisos"),
     ("GET", "/api/v1/repuestos/stock-bajo"),
     ("GET", "/api/v1/soporte/accesos"),
     ("GET", "/api/v1/soporte/actividad"),
@@ -421,9 +424,16 @@ def _sembrar_taller(db, taller_id: int, tag: str):
         medio="manual", estado="aprobado", referencia=f"Ref-{t}",
         registrado_por_id=admin.id,
     )
+    # Aviso interno de stock (W3): el mensaje lleva el centinela "{t}-centinela"
+    # para que una fuga en GET /repuestos/avisos sea detectable.
+    aviso_interno = NotificacionInterna(
+        taller_id=taller_id, tipo=NotificacionInterna.TIPO_STOCK_BAJO,
+        repuesto_id=repuesto.id,
+        mensaje=f"Stock bajo: Repuesto{t} ({t}-centinela) quedó en 3; mínimo 5",
+    )
     db.add_all([
         detalle, historial, imagen, pago, notificacion, turno, horario,
-        pago_suscripcion,
+        pago_suscripcion, aviso_interno,
     ])
     db.commit()
     return {
@@ -431,7 +441,7 @@ def _sembrar_taller(db, taller_id: int, tag: str):
         "cuenta": cuenta, "cliente": cliente, "vehiculo": vehiculo,
         "repuesto": repuesto, "orden": orden, "detalle": detalle,
         "imagen": imagen, "pago": pago, "turno": turno, "horario": horario,
-        "pago_suscripcion": pago_suscripcion,
+        "pago_suscripcion": pago_suscripcion, "aviso_interno": aviso_interno,
     }
 
 
@@ -520,6 +530,7 @@ def datos():
             "mecanico_id": datos_b["mecanico"].id,
             "horario_id": datos_b["horario"].id,
             "acceso_id": acceso_b.id,
+            "aviso_id": datos_b["aviso_interno"].id,
         }
         headers = {
             "admin": datos_a["admin"],

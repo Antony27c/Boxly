@@ -63,4 +63,11 @@ export const repuestosService = {
 
   ingresarStock: (repuesto, cantidad, token) =>
     api.post(`${RECURSO}/${repuesto.id}/ingresos`, { cantidad: Number(cantidad) }, token),
+
+  /* Avisos internos de stock mínimo (administrador y recepción), más nuevos
+     primero. Por defecto solo los que nadie marcó como leídos. */
+  avisos: (token, { soloNoLeidos = true } = {}) =>
+    api.get(`${RECURSO}/avisos${soloNoLeidos ? '?solo_no_leidas=true' : ''}`, token),
+
+  marcarLeido: (id, token) => api.post(`${RECURSO}/avisos/${id}/leer`, {}, token),
 }

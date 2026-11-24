@@ -13,6 +13,7 @@ class PagoResponse(BaseModel):
     monto: Decimal
     estado: str
     medio: str = "mercadopago"
+    referencia: Optional[str] = None
     preference_id: Optional[str] = None
     payment_id: Optional[str] = None
     creado_en: datetime
