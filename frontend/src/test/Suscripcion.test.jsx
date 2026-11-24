@@ -186,6 +186,59 @@ describe('Suscripcion', () => {
     ).toBeInTheDocument()
   })
 
+  it('una demo vigente dice que es demo, de qué plan y hasta cuándo, y qué pasa al vencer', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', {
+        plan: PLANES[1],
+        tipo_acceso: 'demo',
+        vence_en: '2026-12-07',
+        fin_acceso: '2026-12-10',
+      }),
+    )
+    montar()
+
+    expect(await screen.findByText('Demo de Pro hasta el 07/12')).toBeInTheDocument()
+    expect(screen.getByText('Demo')).toBeInTheDocument()
+    expect(screen.queryByText(/Al día hasta/)).not.toBeInTheDocument()
+    const aviso = screen.getByRole('alert')
+    expect(aviso).toHaveTextContent('La demo termina el 07/12')
+    expect(aviso).toHaveTextContent('3 días de solo lectura, hasta el 10/12, para elegir un plan')
+    expect(aviso).toHaveTextContent('la cuenta se suspende')
+  })
+
+  it('un piloto vigente dice "Piloto hasta …" y no muestra el aviso de la demo', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', { tipo_acceso: 'piloto', vence_en: '2027-01-31' }),
+    )
+    montar()
+
+    expect(await screen.findByText('Piloto hasta el 31/01')).toBeInTheDocument()
+    expect(screen.getByText('Piloto')).toBeInTheDocument()
+    expect(screen.queryByText(/La demo termina/)).not.toBeInTheDocument()
+  })
+
+  it('con el personal por encima del cupo lo marca en alerta', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', { personal_activo: 4, max_personal: 3 }),
+    )
+    montar()
+
+    expect(await screen.findByText('4 de 3 del personal en uso')).toHaveClass('text-danger')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'El personal activo supera el cupo de tu plan por 1',
+    )
+  })
+
+  it('con el personal dentro del cupo no muestra aviso', async () => {
+    servicio.obtener.mockResolvedValue(
+      suscripcionCon('al_dia', { personal_activo: 3, max_personal: 3 }),
+    )
+    montar()
+
+    expect(await screen.findByText('3 de 3 del personal en uso')).not.toHaveClass('text-danger')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('suspendida muestra el chip corto y la frase del estado', async () => {
     servicio.obtener.mockResolvedValue(suscripcionCon('suspendida', { dias_para_vencer: -35 }))
     montar()

@@ -9,9 +9,9 @@ Decisiones del dueño del 2026-11-23. **Este documento reemplaza** las partes de
 | Planes | **Esencial**, **Pro** y **Profesional**, de menor a mayor. Códigos: `esencial`, `pro`, `profesional`. No se usan Básico, Taller+, Plus ni Premium. |
 | Contenido | Los planes **no** tienen las mismas funciones. Esencial cubre la gestión diaria; los superiores suman automatización. |
 | Esencial | Clientes, vehículos, turnos, órdenes con fotos e historial, inventario con alerta de stock mínimo, registro de cobros, métricas básicas, portal del cliente, avisos por email y WhatsApp **manual** (mensaje armado que el taller manda desde su teléfono). |
-| Pro | Todo Esencial, más avisos **automáticos** por WhatsApp (turnos y estados) y **facturas electrónicas ARCA** emitidas desde Boxly. Ambos con cupo mensual. |
-| Profesional | Todo Pro, más cupos mayores, **recordatorios automáticos de service** y **personalización de marca**. |
-| ARCA | Incluido con cupo en Pro y Profesional. En Esencial, como **adicional** mensual con cupo. Es para emitir la factura de una reparación con una acción y una confirmación del usuario. No es para cargar facturas de proveedores ni para emitir facturas sin intervención de nadie. |
+| Pro | Todo Esencial, más avisos **automáticos** por WhatsApp y Telegram (turnos y estados) y **facturas electrónicas ARCA** incluidas, con un cupo mensual de facturas. Telegram lo sumó el dueño el 2026-11-23. |
+| Profesional | Todo Pro, más un **cupo mayor de facturas ARCA**, **recordatorios automáticos de service** y **personalización de marca**. Entre Pro y Profesional, en ARCA lo único que cambia es la cantidad de facturas por mes (dueño, 2026-11-23). |
+| ARCA | Incluido en Pro y Profesional, con distinto cupo mensual de facturas. En Esencial, es un **pack aparte que se paga por separado** (adicional), solo si el taller lo necesita. Es para emitir la factura de una reparación con una acción y una confirmación del usuario. No es para cargar facturas de proveedores ni para emitir facturas sin intervención de nadie. |
 | Adicionales | Confirmado solo para ARCA. No se asume que otros módulos futuros sean adicionales. |
 | Prueba | **No hay prueba abierta.** Desde la landing se pide una demo y Boxly elige a quién aprobar. |
 | Demo | **Plan Pro durante 14 días**, otorgada por el superadmin a una solicitud aprobada. |
@@ -52,9 +52,14 @@ Decisiones del dueño del 2026-11-23. **Este documento reemplaza** las partes de
 | `gestion` (todo lo diario) | sí | sí | sí |
 | `whatsapp_manual` | sí | sí | sí |
 | `whatsapp_automatico` | no | sí | sí |
+| `telegram_automatico` | no | sí | sí |
 | `arca` | adicional | sí | sí |
 | `recordatorios_service` | no | no | sí |
 | `marca_propia` | no | no | sí |
+
+**Cupo de facturas ARCA por plan:** es un campo `cupo_facturas_arca` en `planes`, entero o null, que edita el superadmin. Mientras sea null, la landing no muestra ningún número (los cupos siguen pendientes).
+
+**Cómo muestra la landing una función que todavía no existe:** sin tilde de "incluido", con otro ícono y texto atenuado, y la marca "Próximamente". Así no parece que ya funciona.
 
 El helper `taller_tiene(db, taller, funcion) -> bool` mira el plan y los adicionales del taller. Las funciones que todavía no existen tienen su código, pero nada las usa hasta que se construyan.
 

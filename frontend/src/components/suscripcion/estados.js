@@ -112,3 +112,13 @@ export function textoAviso(suscripcion) {
   if (suscripcion?.estado === 'solo_lectura') return 'La suscripción está en solo lectura por falta de pago'
   return `La suscripción venció; regularizala hasta el ${diaMes(finGracia(suscripcion))} para evitar cortes`
 }
+
+/* ---- Personal contra el cupo del plan ----
+   Puede quedar por encima después de bajar de plan (o si el superadmin achica
+   un plan): el backend no da de baja a nadie, solo bloquea las altas. */
+
+// Cuántas personas sobran respecto del cupo (0 si no se pasa o no hay límite).
+export function personalExcedido(activo, maximo) {
+  if (maximo == null || activo == null) return 0
+  return Math.max(0, Number(activo) - Number(maximo))
+}

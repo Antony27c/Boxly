@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext'
 import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
 import { DESCRIPCION_ESTADOS, ordenesService, proximosEstados } from '@/services/ordenes'
 import '@/styles/ordenes.css'
+import useTotalLineas from './useTotalLineas'
 
 // Comentarios listos para tocar según la etapa a la que se pasa la orden.
 const SUGERENCIAS = {
@@ -78,9 +79,12 @@ export default function CambioEstado({ orden, puedeCobrar = false, destinoInicia
     return opciones.find((estado) => estado !== 'Cancelado') ?? opciones[0] ?? ''
   })
   const [descripcion, setDescripcion] = useState('')
-  const [monto, setMonto] = useState(() =>
-    Number(orden.costo_estimado) > 0 ? formatearMontoAR(Number(orden.costo_estimado)) : '',
-  )
+  // El monto se precarga con el total de las líneas cotizadas o, si no hay,
+  // con el presupuesto estimado; null = todavía no se tocó el campo.
+  const totalLineas = useTotalLineas(orden.id, Boolean(puedeCobrar) && !orden.cobro_estado && !orden.pagada)
+  const [montoTipeado, setMonto] = useState(null)
+  const precargado = Number(totalLineas) || Number(orden.costo_estimado) || 0
+  const monto = montoTipeado ?? (precargado > 0 ? formatearMontoAR(precargado) : '')
   const [errorMonto, setErrorMonto] = useState('')
   const [fotos, setFotos] = useState([])
   const [error, setError] = useState('')

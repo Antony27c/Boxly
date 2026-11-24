@@ -128,6 +128,7 @@ CASOS_PARAMS = [
     ("DELETE", "/api/v1/ordenes/{orden_id}", None, None),
     ("POST", "/api/v1/ordenes/{orden_id}/cobro", {}, None),
     ("POST", "/api/v1/ordenes/{orden_id}/cobro/aprobar", {}, None),
+    ("POST", "/api/v1/ordenes/{orden_id}/cobro/anular", None, None),
     ("POST", "/api/v1/ordenes/{orden_id}/pago-local", {"medio": "efectivo", "monto": "100"}, None),
     ("GET", "/api/v1/ordenes/{orden_id}/historial", None, None),
     ("GET", "/api/v1/ordenes/{orden_id}/notificaciones", None, None),

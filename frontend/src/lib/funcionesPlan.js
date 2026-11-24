@@ -19,7 +19,13 @@ export const PLANES_RESPALDO = [
     nombre: 'Pro',
     precio_mensual: null,
     max_personal: 10,
-    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'arca'],
+    funciones: [
+      'gestion',
+      'whatsapp_manual',
+      'whatsapp_automatico',
+      'telegram_automatico',
+      'arca',
+    ],
   },
   {
     codigo: 'profesional',
@@ -30,6 +36,7 @@ export const PLANES_RESPALDO = [
       'gestion',
       'whatsapp_manual',
       'whatsapp_automatico',
+      'telegram_automatico',
       'arca',
       'recordatorios_service',
       'marca_propia',
@@ -43,6 +50,7 @@ export const PLANES_RESPALDO = [
    Sin fechas: cuando una función se construye, se saca de acá. */
 export const PROXIMAMENTE = new Set([
   'whatsapp_automatico',
+  'telegram_automatico',
   'arca',
   'recordatorios_service',
   'marca_propia',

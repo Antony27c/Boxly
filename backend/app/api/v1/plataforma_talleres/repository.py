@@ -132,9 +132,13 @@ def conteos_por_taller(db: Session) -> dict[int, dict]:
         if taller_id is not None:
             entrada(taller_id)["ordenes_mes"] = total
 
+    # Las lecturas del superadmin en modo soporte no cuentan como uso del
+    # taller (P2): solo la actividad del propio taller.
     for taller_id, ultimo in db.execute(
         _sin_filtro(
-            select(Auditoria.taller_id, func.max(Auditoria.creado_en)).group_by(Auditoria.taller_id)
+            select(Auditoria.taller_id, func.max(Auditoria.creado_en))
+            .where(Auditoria.soporte.is_(False))
+            .group_by(Auditoria.taller_id)
         )
     ):
         if taller_id is not None and ultimo is not None:

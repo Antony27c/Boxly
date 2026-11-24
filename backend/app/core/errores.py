@@ -26,6 +26,8 @@ PLAN_PERSONAL_EXCEDIDO = "plan_personal_excedido"
 TALLER_SUSPENDIDO = "taller_suspendido"
 SOPORTE_SIN_ACCESO = "soporte_sin_acceso"
 SOPORTE_SOLO_LECTURA = "soporte_solo_lectura"
+ORDEN_PAGADA = "orden_pagada"
+COBRO_EMITIDO = "cobro_emitido"
 
 
 class ErrorConCodigo(HTTPException):

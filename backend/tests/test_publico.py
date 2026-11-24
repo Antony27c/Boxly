@@ -71,7 +71,9 @@ def test_planes_publicos_sin_token_solo_activos_y_ordenados(api, datos):
     assert r.status_code == 200
     planes = r.json()
     assert [p["codigo"] for p in planes] == ["mini", "esencial", "pro", "profesional"]
-    assert set(planes[0]) == {"codigo", "nombre", "precio_mensual", "max_personal", "funciones"}
+    assert set(planes[0]) == {
+        "codigo", "nombre", "precio_mensual", "max_personal", "funciones", "cupo_facturas_arca",
+    }
     assert planes[-1]["max_personal"] is None
 
 

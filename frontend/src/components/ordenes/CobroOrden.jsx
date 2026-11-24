@@ -19,12 +19,20 @@ import {
 } from '@/services/ordenes'
 import { pesos } from '@/utils/formato'
 import '@/styles/ticket.css'
+import AnularCobro from './AnularCobro'
+import useTotalLineas from './useTotalLineas'
 
-// Se precarga en formato argentino ("185.000,50"), igual que se tipea. El
-// monto_propuesto de una orden vieja (cobro 'pendiente') se le sigue mostrando
-// a administración y recepción para que lo aprueben.
-function montoInicial(orden) {
-  const valor = Number(orden.costo_final) || Number(orden.monto_propuesto) || Number(orden.costo_estimado) || 0
+// Se precarga en formato argentino ("185.000,50"), igual que se tipea: el
+// cobro emitido; si no, el monto_propuesto de una orden vieja (cobro
+// 'pendiente', que administración o recepción todavía aprueban); si no, el
+// total de las líneas cotizadas, y por último el presupuesto estimado.
+function montoInicial(orden, totalLineas = 0) {
+  const valor =
+    Number(orden.costo_final) ||
+    Number(orden.monto_propuesto) ||
+    Number(totalLineas) ||
+    Number(orden.costo_estimado) ||
+    0
   return valor > 0 ? formatearMontoAR(valor) : ''
 }
 
@@ -111,7 +119,15 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
   const { token } = useAuth()
   const { taller } = useTaller()
   const situacion = estadoCobro(orden)
-  const [monto, setMonto] = useState(() => montoInicial(orden))
+  // Sin costo_final se piden las líneas para precargar su total.
+  const totalLineas = useTotalLineas(
+    orden.id,
+    esMostrador && !(Number(orden.costo_final) > 0) && situacion !== 'pagada',
+  )
+  // null = todavía no se tocó: se muestra el monto precargado (que puede
+  // llegar después, cuando cargan las líneas) sin pisar lo que se tipee.
+  const [montoTipeado, setMonto] = useState(null)
+  const monto = montoTipeado ?? montoInicial(orden, totalLineas)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [pagoLocal, setPagoLocal] = useState(false)
@@ -288,6 +304,7 @@ export default function CobroOrden({ orden, esMostrador, onListo, onCancelar }) 
               <Button type="button" variante="fantasma" onClick={onCancelar} disabled={guardando}>
                 Cancelar
               </Button>
+              {situacion === 'aprobado' && <AnularCobro orden={orden} onListo={onListo} disabled={guardando} />}
               {puedeRegistrarPago && (
                 <Button type="button" variante="secundario" onClick={() => setPagoLocal(true)} disabled={guardando}>
                   Registrar pago en el local

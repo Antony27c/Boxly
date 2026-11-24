@@ -13,6 +13,7 @@ from app.api.v1.repuestos.service import registrar_movimiento_stock
 from app.core import imagenes
 from app.core.config import UPLOADS_DIR
 from app.core.email import enviar_notificacion_cambio_estado, enviar_notificacion_cobro
+from app.core.errores import COBRO_EMITIDO, ORDEN_PAGADA, ErrorConCodigo
 from app.db.session import SessionLocal, fijar_taller
 from app.models.detalle_orden import DetalleOrden
 from app.models.imagen_orden import ImagenOrden
@@ -136,6 +137,47 @@ class OrdenService:
         orden = orden_repository.guardar_cambios(db, orden)
         self._avisar_cobro(orden, background_tasks)
         return orden
+
+    def anular_cobro(self, db: Session, orden_id: int, usuario: Usuario) -> Orden:
+        """Anula el cobro emitido para poder volver a tocar las líneas (F4b).
+
+        Limpia el monto y el estado del cobro, y deja los pagos online
+        pendientes como rechazados: si el cliente ya tenía el link de Mercado
+        Pago, el webhook que llegue aprobado queda 'duplicado' para devolución
+        manual en vez de pagar una orden sin cobro vigente.
+        """
+        # Mismo lock que registrar_pago_local: serializa con el webhook de MP,
+        # que también bloquea la orden antes de aprobar un pago.
+        if db.scalar(select(Orden.id).where(Orden.id == orden_id).with_for_update()) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+        orden = self.obtener_detalle_orden(db, orden_id)
+        if orden.pagada:
+            raise ErrorConCodigo(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La orden ya está pagada",
+                codigo=ORDEN_PAGADA,
+            )
+        if orden.cobro_estado != "aprobado" or orden.costo_final is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La orden no tiene un cobro emitido para anular",
+            )
+        orden.costo_final = None
+        orden.cobro_estado = None
+        orden.cobro_aprobado_por_id = None
+        orden.cobro_aprobado_en = None
+        for pago in orden.pagos:
+            if pago.estado == "pendiente":
+                pago.estado = "rechazado"
+        orden_repository.guardar_historial(
+            db,
+            orden_id=orden.id,
+            usuario_id=usuario.id,
+            estado_anterior=orden.estado,
+            estado_nuevo=orden.estado,
+            comentario=f"Cobro anulado por {usuario.apellido}, {usuario.nombre}",
+        )
+        return orden_repository.guardar_cambios(db, orden)
 
     def registrar_pago_local(self, db: Session, orden_id: int, datos: PagoLocalRequest) -> Orden:
         """Pago presencial (efectivo, tarjeta, transferencia u otro) de un cobro emitido.
@@ -486,10 +528,27 @@ class OrdenService:
         return orden
 
     def _validar_orden_editable(self, orden: Orden) -> None:
+        # Una orden pagada no cambia sus líneas: el total ya se cobró (F4).
+        # Va primero para que el código estable llegue aunque la orden
+        # también esté entregada o cancelada.
+        if orden.pagada:
+            raise ErrorConCodigo(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La orden ya está pagada; no se pueden cambiar sus líneas",
+                codigo=ORDEN_PAGADA,
+            )
         if orden.estado in ("entregado", "cancelado"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No se puede modificar lineas de una orden cerrada",
+            )
+        # F4b: con el cobro emitido las líneas quedan congeladas hasta anularlo;
+        # si no, el cliente pagaría un monto que ya no coincide con las líneas.
+        if orden.cobro_estado == "aprobado":
+            raise ErrorConCodigo(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El cobro ya está emitido; anulalo para cambiar las líneas",
+                codigo=COBRO_EMITIDO,
             )
 
     def _devolver_stock(self, db: Session, orden: Orden) -> bool:

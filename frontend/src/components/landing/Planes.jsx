@@ -48,43 +48,112 @@ function irAContacto(evento, codigo) {
 
 function ChipProximamente() {
   return (
-    <span className="ml-1 inline-flex shrink-0 items-center rounded-full border border-graphite-500 bg-graphite-700 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-muted">
+    <span
+      aria-hidden="true"
+      className="inline-flex shrink-0 items-center rounded-full border border-graphite-500 bg-graphite-700 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-muted"
+    >
       Próximamente
     </span>
   )
 }
 
-function Item({ children, proximamente }) {
+// Círculo punteado: lo que todavía no existe no lleva el tilde de lo incluido.
+function IconoProximamente() {
   return (
-    <li className="flex items-start gap-2">
-      <Icono nombre="check" className="mt-0.5 h-4 w-4 shrink-0 text-amber-texto" />
-      <span>
-        {children}
-        {proximamente && <ChipProximamente />}
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="mt-0.5 h-4 w-4 shrink-0 text-muted"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeDasharray="2.5 2"
+    >
+      <circle cx="8" cy="8" r="6" />
+    </svg>
+  )
+}
+
+/* Disponible: tilde dorado. Próximamente: círculo punteado, texto atenuado, la
+   etiqueta visible y "(próximamente)" para lectores de pantalla. */
+function Item({ children, proximamente }) {
+  if (!proximamente) {
+    return (
+      <li className="flex items-start gap-2 text-ink/90">
+        <Icono nombre="check" className="mt-0.5 h-4 w-4 shrink-0 text-amber-texto" />
+        <span className="min-w-0">{children}</span>
+      </li>
+    )
+  }
+  return (
+    <li className="flex items-start gap-2" data-proximamente="">
+      <IconoProximamente />
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-muted">
+        <span className="min-w-0">
+          {children}
+          <span className="sr-only"> (próximamente)</span>
+        </span>
+        <ChipProximamente />
       </span>
     </li>
   )
 }
 
-/* Cada plan suma sobre el anterior: el primero cuenta la gestión diaria y los
-   siguientes dicen "Todo <anterior>, más:" con lo que agregan. */
-function contenidoPlan(plan, anterior) {
+function textoCupo(cupo) {
+  const numero = Number(cupo)
+  if (cupo == null || cupo === '' || !Number.isInteger(numero) || numero < 0) return null
+  return `hasta ${numero.toLocaleString('es-AR')} facturas por mes`
+}
+
+/* Lo que muestra cada tarjeta. El primer plan cuenta la gestión diaria; los
+   siguientes dicen "Todo <anterior>, más:" con lo que de verdad suman: más
+   personal, avisos automáticos, ARCA incluida o con más facturas, etc.
+   Los cupos salen de la API (cupo_facturas_arca); si vienen null, sin número. */
+function itemsPlan(plan, anterior) {
   const propias = funcionesDePlan(plan)
+  const items = []
+  const agregar = (texto, codigos = []) =>
+    items.push({ texto, proximamente: codigos.some((codigo) => esProximamente(codigo)) })
+
   if (!anterior) {
-    return { titulo: 'Gestión diaria del taller:', funciones: propias, detalleGestion: true }
+    agregar(textoLimite(plan.max_personal))
+    for (const codigo of propias) {
+      if (codigo === 'gestion') DETALLE_GESTION.forEach((texto) => agregar(texto))
+      else agregar(etiquetaFuncion(codigo), [codigo])
+    }
+    if (!propias.includes('arca')) {
+      agregar('Facturación ARCA como pack aparte: se paga por separado, solo si lo necesitás', [
+        'arca',
+      ])
+    }
+    return { titulo: 'Gestión diaria del taller:', items }
   }
+
   const previas = new Set(funcionesDePlan(anterior))
-  return {
-    titulo: `Todo ${anterior.nombre}, más:`,
-    funciones: propias.filter((codigo) => !previas.has(codigo)),
-    detalleGestion: false,
+  const nuevas = propias.filter((codigo) => !previas.has(codigo))
+  if (plan.max_personal !== anterior.max_personal) agregar(textoLimite(plan.max_personal))
+
+  const avisos = ['whatsapp_automatico', 'telegram_automatico'].filter((c) => nuevas.includes(c))
+  if (avisos.length === 2) agregar('Avisos automáticos por WhatsApp y Telegram', avisos)
+  else avisos.forEach((codigo) => agregar(etiquetaFuncion(codigo), [codigo]))
+
+  const cupo = textoCupo(plan.cupo_facturas_arca)
+  if (nuevas.includes('arca')) {
+    agregar(`Facturación electrónica ARCA incluida${cupo ? `, ${cupo}` : ''}`, ['arca'])
+  } else if (propias.includes('arca') && previas.has('arca')) {
+    agregar(`Facturación ARCA con más facturas por mes${cupo ? `: ${cupo}` : ''}`, ['arca'])
   }
+
+  for (const codigo of nuevas) {
+    if (avisos.includes(codigo) || codigo === 'arca') continue
+    agregar(etiquetaFuncion(codigo), [codigo])
+  }
+  return { titulo: `Todo ${anterior.nombre}, más:`, items }
 }
 
 function TarjetaPlan({ plan, anterior, destacado, sinPrecio, cargando }) {
   const precio = sinPrecio ? null : precioDe(plan)
-  const contenido = contenidoPlan(plan, anterior)
-  const sinArca = !funcionesDePlan(plan).includes('arca')
+  const contenido = itemsPlan(plan, anterior)
   return (
     <li
       className={`landing-tarjeta landing-revelar relative flex flex-col ${
@@ -97,7 +166,6 @@ function TarjetaPlan({ plan, anterior, destacado, sinPrecio, cargando }) {
         </p>
       )}
       <h3 className="text-lg font-semibold text-ink">{plan.nombre}</h3>
-      <p className="mt-1 text-sm text-muted">{textoLimite(plan.max_personal)}</p>
 
       <div className="mt-5 min-h-[3.5rem]">
         {cargando ? (
@@ -114,20 +182,11 @@ function TarjetaPlan({ plan, anterior, destacado, sinPrecio, cargando }) {
 
       <ul className="mt-5 flex-1 space-y-2 border-t border-graphite-700 pt-5 text-sm text-muted">
         <li className="font-medium text-ink">{contenido.titulo}</li>
-        {contenido.funciones.flatMap((codigo) =>
-          codigo === 'gestion' && contenido.detalleGestion
-            ? DETALLE_GESTION.map((texto) => <Item key={texto}>{texto}</Item>)
-            : [
-                <Item key={codigo} proximamente={esProximamente(codigo)}>
-                  {etiquetaFuncion(codigo)}
-                </Item>,
-              ],
-        )}
-        {sinArca && (
-          <Item proximamente={esProximamente('arca')}>
-            Facturación ARCA como adicional
+        {contenido.items.map((item) => (
+          <Item key={item.texto} proximamente={item.proximamente}>
+            {item.texto}
           </Item>
-        )}
+        ))}
       </ul>
 
       <a

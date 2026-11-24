@@ -23,17 +23,21 @@ const PLANES = [
     nombre: 'Pro',
     precio_mensual: '79000.00',
     max_personal: 10,
-    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'arca'],
+    // Cupo de ejemplo para el test: los reales los define el dueño (docs/Oferta.md).
+    cupo_facturas_arca: 30,
+    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'telegram_automatico', 'arca'],
   },
   {
     codigo: 'profesional',
     nombre: 'Profesional',
     precio_mensual: '169000.00',
     max_personal: null,
+    cupo_facturas_arca: null,
     funciones: [
       'gestion',
       'whatsapp_manual',
       'whatsapp_automatico',
+      'telegram_automatico',
       'arca',
       'recordatorios_service',
       'marca_propia',
@@ -45,9 +49,26 @@ function tarjeta(nombre) {
   return screen.getByRole('heading', { level: 3, name: nombre }).closest('li')
 }
 
-// Texto de un ítem de la lista, con su chip si lo tiene.
+// Ítem de la lista que contiene el texto (con su chip y su aviso sr-only si los tiene).
 function item(contenedor, texto) {
-  return within(contenedor).getByText(texto).closest('li')
+  const items = within(contenedor)
+    .getAllByRole('listitem')
+    .filter((li) => (typeof texto === 'string' ? li.textContent.includes(texto) : texto.test(li.textContent)))
+  expect(items).toHaveLength(1)
+  return items[0]
+}
+
+// Un ítem disponible lleva el tilde; uno que viene, el círculo punteado, el chip y
+// "(próximamente)" para lectores de pantalla.
+function esProximamente(li) {
+  const marcado = li.hasAttribute('data-proximamente')
+  if (marcado) {
+    expect(li).toHaveTextContent('Próximamente')
+    expect(li.querySelector('.sr-only')).toHaveTextContent('(próximamente)')
+  } else {
+    expect(li).not.toHaveTextContent(/próximamente/i)
+  }
+  return marcado
 }
 
 describe('Planes de la landing', () => {
@@ -81,36 +102,89 @@ describe('Planes de la landing', () => {
 
     const esencial = tarjeta('Esencial')
     expect(within(esencial).getByText('Gestión diaria del taller:')).toBeInTheDocument()
-    expect(within(esencial).getByText('Órdenes con fotos e historial de órdenes del vehículo')).toBeInTheDocument()
-    expect(item(esencial, 'Mensajes de WhatsApp armados (envío manual)')).not.toHaveTextContent('Próximamente')
-    expect(item(esencial, /Facturación ARCA como adicional/)).toHaveTextContent('Próximamente')
+    expect(esProximamente(item(esencial, 'Hasta 3 personas del equipo'))).toBe(false)
+    expect(esProximamente(item(esencial, 'Órdenes con fotos e historial'))).toBe(false)
+    expect(esProximamente(item(esencial, 'Mensajes de WhatsApp armados (envío manual)'))).toBe(false)
+    expect(
+      esProximamente(
+        item(esencial, 'Facturación ARCA como pack aparte: se paga por separado, solo si lo necesitás'),
+      ),
+    ).toBe(true)
 
     const pro = tarjeta('Pro')
     expect(within(pro).getByText('Todo Esencial, más:')).toBeInTheDocument()
-    expect(item(pro, 'Avisos automáticos por WhatsApp')).toHaveTextContent('Próximamente')
-    expect(item(pro, 'Facturación electrónica ARCA')).toHaveTextContent('Próximamente')
+    expect(esProximamente(item(pro, 'Hasta 10 personas del equipo'))).toBe(false)
+    expect(esProximamente(item(pro, 'Avisos automáticos por WhatsApp y Telegram'))).toBe(true)
+    expect(
+      esProximamente(item(pro, 'Facturación electrónica ARCA incluida, hasta 30 facturas por mes')),
+    ).toBe(true)
     // Lo de Esencial no se repite.
-    expect(within(pro).queryByText('Mensajes de WhatsApp armados (envío manual)')).not.toBeInTheDocument()
-    expect(within(pro).queryByText(/como adicional/)).not.toBeInTheDocument()
+    expect(pro).not.toHaveTextContent('Mensajes de WhatsApp armados')
+    expect(pro).not.toHaveTextContent('pack aparte')
 
     const profesional = tarjeta('Profesional')
     expect(within(profesional).getByText('Todo Pro, más:')).toBeInTheDocument()
-    expect(item(profesional, 'Recordatorios automáticos de service')).toHaveTextContent(
-      'Próximamente',
-    )
-    expect(item(profesional, 'Personalización de marca')).toHaveTextContent('Próximamente')
-    expect(within(profesional).queryByText('Facturación electrónica ARCA')).not.toBeInTheDocument()
+    expect(esProximamente(item(profesional, 'Equipo sin límite'))).toBe(false)
+    // Sin cupo en la API: sin número.
+    const arca = item(profesional, 'Facturación ARCA con más facturas por mes')
+    expect(esProximamente(arca)).toBe(true)
+    expect(arca).not.toHaveTextContent(/\d/)
+    expect(esProximamente(item(profesional, 'Recordatorios automáticos de service'))).toBe(true)
+    expect(esProximamente(item(profesional, 'Personalización de marca'))).toBe(true)
+    expect(profesional).not.toHaveTextContent('Telegram')
   })
 
-  it('si la API todavía no manda funciones usa las de la oferta', async () => {
+  it('lo que viene no lleva el tilde de lo incluido', async () => {
+    servicio.obtenerPlanesPublicos.mockResolvedValue(PLANES)
+    render(<Planes />)
+    await screen.findByText(/35\.000/)
+
+    for (const li of document.querySelectorAll('#planes li[data-proximamente]')) {
+      expect(li.querySelector('svg circle')).not.toBeNull()
+      expect(li.querySelector('.text-amber-texto')).toBeNull()
+    }
+    const disponible = item(tarjeta('Esencial'), 'Clientes, vehículos y turnos')
+    expect(disponible.querySelector('.text-amber-texto')).not.toBeNull()
+  })
+
+  it('con el cupo de Profesional muestra el número', async () => {
     servicio.obtenerPlanesPublicos.mockResolvedValue(
-      PLANES.map((plan) => ({ ...plan, funciones: undefined })),
+      PLANES.map((plan) =>
+        plan.codigo === 'profesional' ? { ...plan, cupo_facturas_arca: 1500 } : plan,
+      ),
     )
     render(<Planes />)
     await screen.findByText(/35\.000/)
 
-    expect(within(tarjeta('Pro')).getByText('Facturación electrónica ARCA')).toBeInTheDocument()
-    expect(within(tarjeta('Profesional')).getByText('Personalización de marca')).toBeInTheDocument()
+    item(tarjeta('Profesional'), 'Facturación ARCA con más facturas por mes: hasta 1.500 facturas por mes')
+  })
+
+  it('si la API todavía no manda funciones ni cupos usa las de la oferta, sin números', async () => {
+    servicio.obtenerPlanesPublicos.mockResolvedValue(
+      PLANES.map((plan) => ({ ...plan, funciones: undefined, cupo_facturas_arca: undefined })),
+    )
+    render(<Planes />)
+    await screen.findByText(/35\.000/)
+
+    const pro = tarjeta('Pro')
+    expect(esProximamente(item(pro, 'Avisos automáticos por WhatsApp y Telegram'))).toBe(true)
+    expect(item(pro, 'Facturación electrónica ARCA incluida')).not.toHaveTextContent(/facturas por mes/)
+    expect(esProximamente(item(tarjeta('Profesional'), 'Personalización de marca'))).toBe(true)
+  })
+
+  it('si la API manda funciones sin Telegram, Pro nombra solo WhatsApp', async () => {
+    servicio.obtenerPlanesPublicos.mockResolvedValue(
+      PLANES.map((plan) => ({
+        ...plan,
+        funciones: plan.funciones.filter((codigo) => codigo !== 'telegram_automatico'),
+      })),
+    )
+    render(<Planes />)
+    await screen.findByText(/35\.000/)
+
+    const pro = tarjeta('Pro')
+    expect(esProximamente(item(pro, 'Avisos automáticos por WhatsApp'))).toBe(true)
+    expect(pro).not.toHaveTextContent('Telegram')
   })
 
   it('si falla la API muestra los planes sin precio y "Consultanos"', async () => {

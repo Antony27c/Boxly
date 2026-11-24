@@ -229,7 +229,7 @@ export const PREGUNTAS = [
     roles: ['mostrador', 'mecanico'],
     pregunta: '¿Para qué sirven los filtros del tablero de órdenes?',
     respuesta: [
-      'Los botones de arriba filtran las tarjetas: "Mías" (solo para el mecánico, sus órdenes), "Sin asignar", "Listas para entregar" (las que ya se pueden retirar) y "Cobro pendiente" (las que esperan aprobación de cobro).',
+      'Los botones de arriba filtran las tarjetas: "Mías" (solo para el mecánico, sus órdenes), "Sin asignar", "Listas para entregar" (las que ya se pueden retirar) y, solo para administración y recepción, "Cobro pendiente" (las que esperan aprobación de cobro; el mecánico no ve ese botón porque no maneja cobros).',
       '"Ver cerradas" muestra las órdenes Entregadas y Canceladas. El buscador filtra por patente, cliente, trabajo o mecánico, y en celular cada etapa es una pestaña.',
     ],
     enlace: { a: '/ordenes', texto: 'Órdenes' },

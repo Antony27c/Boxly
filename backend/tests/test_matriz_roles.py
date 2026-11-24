@@ -125,6 +125,10 @@ CASOS = [
      _esp(200, 200, 403, 403, 401)),
     ("POST", "/api/v1/ordenes/{orden_id}/notificaciones", None,
      _esp(201, 403, 403, 403, 401)),
+    # La orden del fixture no tiene cobro emitido: administración y recepción
+    # llegan al service y reciben 409; el resto lo frena el rol.
+    ("POST", "/api/v1/ordenes/{orden_id}/cobro/anular", None,
+     _esp(409, 409, 403, 403, 401)),
     # --- users ---
     ("GET", "/api/v1/users", None,
      _esp(200, 403, 403, 403, 401)),

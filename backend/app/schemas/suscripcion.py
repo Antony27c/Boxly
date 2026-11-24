@@ -27,6 +27,9 @@ class PlanResponse(SinDineroMixin, BaseModel):
     # NULL = sin límite de personal.
     max_personal: Optional[int] = None
     funciones: list[str] = []
+    # Facturas ARCA por mes incluidas; null = cupo pendiente. No es dinero: lo
+    # ve también el mecánico.
+    cupo_facturas_arca: Optional[int] = None
     activo: bool
 
 
@@ -101,11 +104,13 @@ class CambioPlanRequest(BaseModel):
 
 class PlanUpdate(BaseModel):
     """Edición parcial de un plan (superadmin). ``max_personal: null`` explícito
-    lo deja sin límite; si no viene, conserva el valor actual."""
+    lo deja sin límite y ``cupo_facturas_arca: null``, pendiente; si un campo no
+    viene, conserva el valor actual."""
 
     nombre: Optional[str] = Field(default=None, min_length=1, max_length=60)
     precio_mensual: Optional[Decimal] = Field(default=None, gt=0)
     max_personal: Optional[int] = Field(default=None, ge=0)
+    cupo_facturas_arca: Optional[int] = Field(default=None, ge=0)
     activo: Optional[bool] = None
     # Códigos de app/core/funciones.py; se guardan sin repetidos.
     funciones: Optional[list[str]] = None

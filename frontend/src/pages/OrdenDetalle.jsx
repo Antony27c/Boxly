@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { BotonesAccion, ModalAsignarMecanico, WhatsAppOrden } from '@/components/ordenes/AccionesOrdenDetalle'
 import CambioEstado from '@/components/ordenes/CambioEstado'
 import CobroOrden from '@/components/ordenes/CobroOrden'
+import AnularCobro from '@/components/ordenes/AnularCobro'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
 import HistorialOrden from '@/components/ordenes/HistorialOrden'
 import ImagenesOrden from '@/components/ordenes/ImagenesOrden'
@@ -244,8 +245,21 @@ export default function OrdenDetalle() {
             {/* El mecánico no ve montos (MC1). */}
             {!esMecanico && (
               <div>
-                <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
-                <dd className="mt-0.5 font-semibold">{orden.total ? pesos(orden.total) : 'A presupuestar'}</dd>
+                {/* Ya pagada, el encabezado dice cómo se pagó (igual que la pestaña Cobro). */}
+                {estadoCobro(orden) === 'pagada' ? (
+                  <>
+                    <dt className="text-muted">Cobro</dt>
+                    <dd className="mt-0.5 font-semibold text-ok">
+                      {textoPagada(orden.pago_medio)}
+                      {Number(orden.costo_final) > 0 ? ` · ${pesos(orden.costo_final)}` : ''}
+                    </dd>
+                  </>
+                ) : (
+                  <>
+                    <dt className="text-muted">{Number(orden.costo_final) > 0 ? 'A cobrar' : 'Presupuesto'}</dt>
+                    <dd className="mt-0.5 font-semibold">{orden.total ? pesos(orden.total) : 'A presupuestar'}</dd>
+                  </>
+                )}
               </div>
             )}
           </dl>
@@ -354,7 +368,20 @@ export default function OrdenDetalle() {
               {orden.pago_fecha && ` · ${formatearFechaHora(orden.pago_fecha)}`}
             </p>
           ) : (
-            <BannerCobro orden={orden} esMostrador={esMostrador} onAbrir={() => setConCobro(orden)} />
+            <>
+              <BannerCobro orden={orden} esMostrador={esMostrador} onAbrir={() => setConCobro(orden)} />
+              {esMostrador && estadoCobro(orden) === 'aprobado' && (
+                <div className="mt-3 flex justify-end">
+                  <AnularCobro
+                    orden={orden}
+                    onListo={(mensaje) => {
+                      avisar(mensaje)
+                      recargarTodo()
+                    }}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

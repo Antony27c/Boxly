@@ -1,5 +1,11 @@
 import { Chip } from '@/components/ui/Ficha'
-import { estadoSuscripcion, finAcceso, finGracia } from '@/components/suscripcion/estados'
+import Alert from '@/components/ui/Alert'
+import {
+  estadoSuscripcion,
+  finAcceso,
+  finGracia,
+  personalExcedido,
+} from '@/components/suscripcion/estados'
 import { pesos } from '@/utils/formato'
 import { TIPOS_ACCESO } from '../funciones'
 import { fechaSuscripcion, textoDias } from './formatos'
@@ -21,6 +27,7 @@ export default function EstadoSuscripcion({ suscripcion }) {
   const estado = estadoSuscripcion(suscripcion.estado)
   const tipoAcceso = TIPOS_ACCESO[suscripcion.tipo_acceso] ?? null
   const limite = suscripcion.max_personal ?? suscripcion.plan?.max_personal ?? null
+  const sobran = personalExcedido(suscripcion.personal_activo, limite)
 
   // Solo cuando la suscripción no está al día tiene sentido mostrar hasta
   // cuándo llega la gracia y el acceso (los manda el backend en
@@ -53,13 +60,24 @@ export default function EstadoSuscripcion({ suscripcion }) {
           {suscripcion.cobro_automatico ? 'Sí' : 'No'}
         </Dato>
         <Dato etiqueta="Personal">
-          {suscripcion.personal_activo ?? '—'}
-          {limite == null ? ' (sin límite)' : ` de ${limite}`}
+          <span className={sobran > 0 ? 'text-danger' : undefined}>
+            {suscripcion.personal_activo ?? '—'}
+            {limite == null ? ' (sin límite)' : ` de ${limite}`}
+          </span>
         </Dato>
         {suscripcion.proximo_monto != null && (
           <Dato etiqueta="Próximo cobro">{pesos(suscripcion.proximo_monto)}</Dato>
         )}
       </dl>
+
+      {sobran > 0 && (
+        <div className="mt-3">
+          <Alert tipo="warning">
+            El personal activo supera el cupo del plan por {sobran}. El taller no puede sumar
+            personal hasta desactivar a alguien o pasar a un plan más grande.
+          </Alert>
+        </div>
+      )}
 
       {estado.detalle && <p className="mt-3 text-sm text-muted">{estado.detalle}</p>}
 

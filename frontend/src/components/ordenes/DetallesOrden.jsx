@@ -10,7 +10,16 @@ import { useAuth } from '@/context/AuthContext'
 import useRecurso from '@/hooks/useRecurso'
 import { formatearMontoAR, MENSAJE_MONTO_INVALIDO, parsearMontoAR } from '@/lib/montos'
 import { ROLES_MECANICO, ROLES_MOSTRADOR, tieneAcceso } from '@/routes/navegacion'
-import { lineaACotizar, ordenesService, sePuedeEditarDetalle } from '@/services/ordenes'
+import { tieneCodigo } from '@/lib/api'
+import {
+  AVISO_COBRO_EMITIDO,
+  CODIGO_COBRO_EMITIDO,
+  cobroEmitido,
+  estadoCobro,
+  lineaACotizar,
+  ordenesService,
+  sePuedeEditarDetalle,
+} from '@/services/ordenes'
 import { repuestosService } from '@/services/repuestos'
 import { pesos } from '@/utils/formato'
 
@@ -24,6 +33,8 @@ const VACIO = {
 
 // onCambio: avisa a la página que cambiaron las líneas (el total, las líneas a
 // cotizar y con eso si se puede cobrar), para que vuelva a leer la orden.
+const ORDEN_PAGADA = 'La orden ya está pagada'
+
 export default function DetallesOrden({ orden, onCambio }) {
   const { token, usuario } = useAuth()
   const editable = sePuedeEditarDetalle(orden)
@@ -31,7 +42,18 @@ export default function DetallesOrden({ orden, onCambio }) {
   // elige el repuesto y la cantidad, y administración y recepción cotizan.
   const esMecanico = tieneAcceso(ROLES_MECANICO, usuario?.rol)
   const verPrecios = !esMecanico
-  const puedeCotizar = editable && tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
+  // Con la orden pagada las líneas quedan fijas: se ven los botones, pero
+  // deshabilitados y con la explicación (el backend también lo rechaza).
+  const pagada = Boolean(orden.pagada) || estadoCobro(orden) === 'pagada'
+  // Lo mismo con el cobro emitido: hay que anularlo antes. Si la orden que se
+  // tiene está vieja y el servidor responde 409 cobro_emitido, se bloquea igual.
+  const [emitidoEnServidor, setEmitidoEnServidor] = useState(false)
+  const bloqueo = pagada
+    ? { titulo: ORDEN_PAGADA, aviso: `${ORDEN_PAGADA}: no se pueden agregar ni quitar líneas.` }
+    : cobroEmitido(orden) || emitidoEnServidor
+      ? { titulo: 'El cobro ya está emitido', aviso: AVISO_COBRO_EMITIDO }
+      : null
+  const puedeCotizar = editable && !bloqueo && tieneAcceso(ROLES_MOSTRADOR, usuario?.rol)
 
   const cargarDetalles = useCallback((t) => ordenesService.detalles(orden.id, t), [orden.id])
   const cargarRepuestos = useCallback(
@@ -117,6 +139,7 @@ export default function DetallesOrden({ orden, onCambio }) {
 
   async function agregar(evento) {
     evento.preventDefault()
+    if (bloqueo) return
     const encontrados = validar()
     setErrores(encontrados)
     if (Object.keys(encontrados).length > 0) return
@@ -139,13 +162,14 @@ export default function DetallesOrden({ orden, onCambio }) {
       await recargar()
       onCambio?.()
     } catch (problema) {
-      setErrorApi(problema.message)
+      manejarError(problema)
     } finally {
       setGuardando(false)
     }
   }
 
   async function quitar(detalle) {
+    if (bloqueo) return
     setQuitando(detalle.id)
     setErrorApi('')
     try {
@@ -153,10 +177,22 @@ export default function DetallesOrden({ orden, onCambio }) {
       await recargar()
       onCambio?.()
     } catch (problema) {
-      setErrorApi(problema.message)
+      manejarError(problema)
     } finally {
       setQuitando(null)
     }
+  }
+
+  // 409 cobro_emitido: en vez del texto del servidor se muestra el aviso de
+  // líneas bloqueadas y se le pide a la página que relea la orden.
+  function manejarError(problema) {
+    if (tieneCodigo(problema, CODIGO_COBRO_EMITIDO)) {
+      setEmitidoEnServidor(true)
+      setErrorApi('')
+      onCambio?.()
+      return
+    }
+    setErrorApi(problema.message)
   }
 
   function abrirCotizar(detalle) {
@@ -242,7 +278,8 @@ export default function DetallesOrden({ orden, onCambio }) {
                       <Button
                         variante="fantasma"
                         cargando={quitando === item.id}
-                        disabled={guardando}
+                        disabled={guardando || Boolean(bloqueo)}
+                        title={bloqueo?.titulo}
                         onClick={() => quitar(item)}
                       >
                         Quitar
@@ -295,6 +332,7 @@ export default function DetallesOrden({ orden, onCambio }) {
 
       {editable && (
         <form onSubmit={agregar} noValidate className="space-y-4 border-t border-graphite-700 pt-4">
+          {bloqueo && <Alert tipo="info">{bloqueo.aviso}</Alert>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select
               label="Tipo de línea"
@@ -356,7 +394,7 @@ export default function DetallesOrden({ orden, onCambio }) {
             )}
           </div>
           <div className="flex justify-end">
-            <Button type="submit" cargando={guardando}>
+            <Button type="submit" cargando={guardando} disabled={Boolean(bloqueo)} title={bloqueo?.titulo}>
               {guardando ? 'Agregando…' : 'Agregar línea'}
             </Button>
           </div>

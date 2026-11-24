@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DetallesOrden from '@/components/ordenes/DetallesOrden'
+import { ApiError } from '@/lib/api'
 import { pesos } from '@/utils/formato'
 
 // pesos() separa con espacio duro; Testing Library compara el texto ya normalizado.
@@ -186,6 +187,63 @@ describe('Líneas a cotizar en el detalle de la orden', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Agregar línea' }))
 
     await waitFor(() => expect(onCambio).toHaveBeenCalledTimes(1))
+  })
+
+  it('con el cobro emitido las líneas quedan bloqueadas hasta anularlo', async () => {
+    comoRecepcion()
+    render(<DetallesOrden orden={{ ...ORDEN, estado: 'Listo', cobro_estado: 'aprobado', costo_final: 20000 }} />)
+
+    expect(await screen.findByText('El cobro ya está emitido: anulalo para cambiar las líneas.')).toBeInTheDocument()
+    for (const boton of screen.getAllByRole('button', { name: 'Quitar' })) {
+      expect(boton).toBeDisabled()
+    }
+    expect(screen.getByRole('button', { name: 'Agregar línea' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Cotizar' })).not.toBeInTheDocument()
+  })
+
+  it('el mecánico también las ve bloqueadas aunque no le llegue el monto', async () => {
+    render(<DetallesOrden orden={{ ...ORDEN, estado: 'Listo', cobro_estado: 'aprobado' }} />)
+    expect(await screen.findByText('El cobro ya está emitido: anulalo para cambiar las líneas.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Agregar línea' })).toBeDisabled()
+  })
+
+  it('un 409 cobro_emitido se reconoce por el código, no por el texto', async () => {
+    comoRecepcion()
+    const onCambio = vi.fn()
+    ordenes.detalles.mockResolvedValue([LINEA_CON_PRECIO])
+    ordenes.quitarDetalle.mockRejectedValue(new ApiError('Texto cualquiera del servidor', 409, 'cobro_emitido'))
+    render(<DetallesOrden orden={ORDEN} onCambio={onCambio} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Quitar' }))
+    expect(await screen.findByText('El cobro ya está emitido: anulalo para cambiar las líneas.')).toBeInTheDocument()
+    expect(screen.queryByText('Texto cualquiera del servidor')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quitar' })).toBeDisabled()
+    expect(onCambio).toHaveBeenCalled()
+  })
+
+  it('otro 409 sin ese código muestra el texto del servidor y no bloquea', async () => {
+    comoRecepcion()
+    ordenes.detalles.mockResolvedValue([LINEA_CON_PRECIO])
+    ordenes.quitarDetalle.mockRejectedValue(new ApiError('El cobro ya está emitido (texto viejo)', 409))
+    render(<DetallesOrden orden={ORDEN} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Quitar' }))
+    expect(await screen.findByText('El cobro ya está emitido (texto viejo)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quitar' })).toBeEnabled()
+  })
+
+  it('con la orden pagada Quitar y Agregar línea quedan deshabilitados y se explica', async () => {
+    comoRecepcion()
+    render(<DetallesOrden orden={{ ...ORDEN, estado: 'Listo', pagada: true, cobro_estado: 'aprobado', costo_final: 20000 }} />)
+
+    expect(await screen.findByText(/La orden ya está pagada/)).toBeInTheDocument()
+    for (const boton of screen.getAllByRole('button', { name: 'Quitar' })) {
+      expect(boton).toBeDisabled()
+      expect(boton).toHaveAttribute('title', 'La orden ya está pagada')
+    }
+    expect(screen.getByRole('button', { name: 'Agregar línea' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Cotizar' })).not.toBeInTheDocument()
+    expect(ordenes.quitarDetalle).not.toHaveBeenCalled()
   })
 
   it('el administrador también puede cotizar', async () => {

@@ -15,6 +15,7 @@ from app.core.suscripcion import hoy
 FUNCION_GESTION = "gestion"  # toda la gestión diaria del taller
 FUNCION_WHATSAPP_MANUAL = "whatsapp_manual"  # aviso armado que el taller manda
 FUNCION_WHATSAPP_AUTOMATICO = "whatsapp_automatico"  # avisos automáticos por WhatsApp
+FUNCION_TELEGRAM_AUTOMATICO = "telegram_automatico"  # avisos automáticos por Telegram
 FUNCION_ARCA = "arca"  # facturas electrónicas ARCA
 FUNCION_RECORDATORIOS_SERVICE = "recordatorios_service"  # recordatorios de service
 FUNCION_MARCA_PROPIA = "marca_propia"  # personalización de marca
@@ -23,6 +24,7 @@ FUNCIONES = (
     FUNCION_GESTION,
     FUNCION_WHATSAPP_MANUAL,
     FUNCION_WHATSAPP_AUTOMATICO,
+    FUNCION_TELEGRAM_AUTOMATICO,
     FUNCION_ARCA,
     FUNCION_RECORDATORIOS_SERVICE,
     FUNCION_MARCA_PROPIA,

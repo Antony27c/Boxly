@@ -130,6 +130,30 @@ describe('Usuarios — límite de personal del plan', () => {
     )
   })
 
+  it('por encima del cupo (después de bajar de plan) muestra el aviso en alerta', async () => {
+    limite.obtener.mockResolvedValue({ ...SUSCRIPCION_BASE, personal_activo: 4 })
+    montar()
+
+    expect(await screen.findByText('Personal: 4 de 3 en tu plan Esencial')).toHaveClass('text-danger')
+    const aviso = screen.getByRole('alert')
+    expect(aviso).toHaveTextContent(
+      'Tenés 4 personas activas en el personal y tu plan Esencial permite hasta 3.',
+    )
+    expect(within(aviso).getByRole('link', { name: 'Ver planes' })).toHaveAttribute(
+      'href',
+      '/suscripcion',
+    )
+    expect(screen.getByRole('button', { name: 'Nuevo usuario' })).toBeDisabled()
+  })
+
+  it('en el límite justo no muestra el aviso de exceso', async () => {
+    limite.obtener.mockResolvedValue({ ...SUSCRIPCION_BASE, personal_activo: 3 })
+    montar()
+
+    await screen.findByText('Personal: 3 de 3 en tu plan Esencial')
+    expect(screen.queryByText(/personas activas en el personal/)).not.toBeInTheDocument()
+  })
+
   it('no deja reactivar personal con el plan lleno', async () => {
     limite.obtener.mockResolvedValue({ ...SUSCRIPCION_BASE, personal_activo: 3 })
     usuarios.listarPaginado.mockResolvedValue({ items: [USUARIO_INACTIVO], total: 1 })

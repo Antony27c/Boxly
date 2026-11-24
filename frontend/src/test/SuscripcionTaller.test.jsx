@@ -148,6 +148,9 @@ describe('SuscripcionTaller', () => {
     expect(screen.getByText('Demo')).toBeInTheDocument()
     expect(screen.getByText('Al día')).toBeInTheDocument()
     expect(screen.getByText(/15\/12\/2026/)).toBeInTheDocument()
+    // Dentro del cupo: sin aviso de personal.
+    expect(screen.getByText('4 de 10')).not.toHaveClass('text-danger')
+    expect(screen.queryByText(/supera el cupo/)).not.toBeInTheDocument()
     expect(screen.getByText(/Vence en 22 días/)).toBeInTheDocument()
     expect(screen.getByText('Sí')).toBeInTheDocument() // cobro automático
     expect(screen.getByText('4 de 10')).toBeInTheDocument() // personal vs límite
@@ -530,9 +533,40 @@ describe('TarjetaTaller: chips de plan y suscripción', () => {
     expect(screen.queryByText('Suspendida por falta de pago')).not.toBeInTheDocument()
   })
 
+  it('con el personal por encima del cupo lo marca en alerta', async () => {
+    suscripciones.obtenerSuscripcion.mockResolvedValue({
+      ...SUSCRIPCION,
+      plan: PLANES[0],
+      personal_activo: 4,
+      max_personal: 3,
+    })
+    montar()
+    await esperarSuscripcion()
+
+    expect(screen.getByText('4 de 3')).toHaveClass('text-danger')
+    expect(screen.getByRole('alert')).toHaveTextContent('El personal activo supera el cupo del plan por 1')
+  })
+
   it('muestra el chip Demo o Piloto según el tipo de acceso', () => {
     tarjetaDe({ ...BASE, tipo_acceso: 'demo', plan_codigo: 'pro' })
     expect(screen.getByText('Demo')).toBeInTheDocument()
+  })
+
+  it('con el personal por encima del cupo muestra "4 de 3" y un chip de alerta', () => {
+    tarjetaDe({ ...BASE, personal: 4, max_personal: 3, plan_codigo: 'esencial' })
+
+    expect(screen.getByText('4 de 3')).toHaveClass('text-danger')
+    expect(screen.getByText('Personal por encima del plan')).toBeInTheDocument()
+  })
+
+  it('dentro del cupo o sin cupo informado no muestra el aviso de personal', () => {
+    const { unmount } = tarjetaDe({ ...BASE, personal: 3, max_personal: 3 })
+    expect(screen.getByText('3 de 3')).not.toHaveClass('text-danger')
+    expect(screen.queryByText('Personal por encima del plan')).not.toBeInTheDocument()
+    unmount()
+
+    tarjetaDe({ ...BASE, personal: 4 })
+    expect(screen.queryByText('Personal por encima del plan')).not.toBeInTheDocument()
   })
 
   it('pago no muestra chip de acceso', () => {

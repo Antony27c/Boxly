@@ -5,6 +5,7 @@ export const FUNCIONES = {
   gestion: 'Gestión del taller',
   whatsapp_manual: 'Mensajes de WhatsApp armados (envío manual)',
   whatsapp_automatico: 'Avisos automáticos por WhatsApp',
+  telegram_automatico: 'Avisos automáticos por Telegram',
   arca: 'Facturación electrónica ARCA',
   recordatorios_service: 'Recordatorios automáticos de service',
   marca_propia: 'Personalización de marca',

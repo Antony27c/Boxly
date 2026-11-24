@@ -149,6 +149,17 @@ describe('TableroOrdenes', () => {
     ).toBeInTheDocument()
   })
 
+  it('el chip Cobro pendiente es solo del mostrador: el mecánico no lo ve ni por URL', () => {
+    const ordenes = [orden({ id: 5, estado: 'Listo', vehiculo_id: 1, descripcion: 'Con cobro', cobro_estado: 'pendiente' })]
+    const { unmount } = montar({ usuario: { id: 1, rol: 'recepcion' }, ordenes })
+    expect(screen.getByRole('button', { name: 'Cobro pendiente' })).toBeInTheDocument()
+    unmount()
+
+    montar({ usuario: { id: 3, rol: 'mecanico' }, ordenes, filtroInicial: 'cobro_pendiente' })
+    expect(screen.queryByRole('button', { name: 'Cobro pendiente' })).not.toBeInTheDocument()
+    expect(screen.getByText('Con cobro')).toBeInTheDocument()
+  })
+
   it('el chip Mías solo aparece para el mecánico y filtra por mecanico_id', () => {
     montar({
       usuario: { id: 3, rol: 'mecanico' },

@@ -11,7 +11,7 @@ from app.api.v1.suscripcion.service import estado_del_taller
 from app.api.v1.users import repository as users_repository
 from app.core.security import hash_password
 from app.db.session import fijar_taller
-from app.models import AccesoSoporte, ConfiguracionTaller, Taller, Usuario
+from app.models import AccesoSoporte, ConfiguracionTaller, Plan, Taller, Usuario
 from app.models.usuario import RolUsuario
 from app.schemas.paginacion import ParametrosPagina
 from app.schemas.plataforma import (
@@ -75,6 +75,7 @@ def _acceso_response(db: Session, acceso: AccesoSoporte, ahora: datetime) -> Acc
 
 def _resumen(db: Session, taller: Taller, conteos: dict[int, dict]) -> TallerResumen:
     c = conteos.get(taller.id, {})
+    plan = db.get(Plan, taller.plan_codigo)
     return TallerResumen(
         id=taller.id,
         nombre=taller.nombre,
@@ -91,6 +92,7 @@ def _resumen(db: Session, taller: Taller, conteos: dict[int, dict]) -> TallerRes
         suscripcion_estado=estado_del_taller(taller),
         suscripcion_vence_en=taller.suscripcion_vence_en,
         tipo_acceso=taller.tipo_acceso,
+        max_personal=plan.max_personal if plan is not None else None,
     )
 
 

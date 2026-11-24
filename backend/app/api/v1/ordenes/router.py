@@ -73,6 +73,11 @@ def aprobar_cobro(
     return orden_service.aprobar_cobro(db, orden_id, datos.monto, usuario.id, background_tasks)
 
 
+@router.post("/{orden_id}/cobro/anular", response_model=OrdenResponse)
+def anular_cobro(orden_id: int, db: DbSession, usuario: RecepcionUser):
+    return orden_service.anular_cobro(db, orden_id, usuario)
+
+
 @router.post("/{orden_id}/pago-local", response_model=OrdenResponse)
 def registrar_pago_local(orden_id: int, datos: PagoLocalRequest, db: DbSession, _: RecepcionUser):
     return orden_service.registrar_pago_local(db, orden_id, datos)

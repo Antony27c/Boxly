@@ -19,6 +19,9 @@ class PlanPublico(BaseModel):
     # Códigos de función del plan (app/core/funciones.py, docs/Oferta.md): la
     # landing arma "qué trae cada plan" con esta lista.
     funciones: list[str]
+    # Facturas ARCA por mes incluidas; null = pendiente y la landing no muestra
+    # ningún número.
+    cupo_facturas_arca: Optional[int] = None
 
 
 class ContactoCreate(BaseModel):

@@ -45,8 +45,9 @@ const PLANES = [
     nombre: 'Pro',
     precio_mensual: 79000,
     max_personal: 10,
+    cupo_facturas_arca: 30,
     activo: true,
-    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'arca'],
+    funciones: ['gestion', 'whatsapp_manual', 'whatsapp_automatico', 'telegram_automatico', 'arca'],
   },
   {
     codigo: 'profesional',
@@ -103,6 +104,9 @@ describe('PlataformaPlanes', () => {
     expect(within(profesional).getByText('Sin límite')).toBeInTheDocument()
     expect(within(profesional).getByText('Inactivo')).toBeInTheDocument()
     expect(within(profesional).getByText('Personalización de marca')).toBeInTheDocument()
+    expect(within(profesional).getByText('Sin definir')).toBeInTheDocument()
+    expect(within(tarjeta('Pro')).getByText('30')).toBeInTheDocument()
+    expect(within(tarjeta('Pro')).getByText('Avisos automáticos por Telegram')).toBeInTheDocument()
 
     // El aviso de que el precio nuevo rige desde el próximo período.
     expect(
@@ -123,6 +127,10 @@ describe('PlataformaPlanes', () => {
     fireEvent.change(within(dialogo).getByLabelText('Personal máximo'), {
       target: { value: '' },
     })
+    expect(within(dialogo).getByLabelText('Cupo de facturas ARCA por mes')).toHaveValue(30)
+    fireEvent.change(within(dialogo).getByLabelText('Cupo de facturas ARCA por mes'), {
+      target: { value: '' },
+    })
 
     // Pro venía con gestion, whatsapp_manual, whatsapp_automatico y arca:
     // se destilda ARCA y se tildan recordatorios y marca propia (en ese
@@ -140,12 +148,15 @@ describe('PlataformaPlanes', () => {
           nombre: 'Pro',
           precio_mensual: 89000,
           max_personal: null,
+          // Vacío = todavía sin definir.
+          cupo_facturas_arca: null,
           activo: true,
           // Orden canónico del contrato, no el orden en que se tildó.
           funciones: [
             'gestion',
             'whatsapp_manual',
             'whatsapp_automatico',
+            'telegram_automatico',
             'recordatorios_service',
             'marca_propia',
           ],
@@ -167,6 +178,9 @@ describe('PlataformaPlanes', () => {
     expect(within(dialogo).getByLabelText('Gestión del taller')).toBeChecked()
     expect(within(dialogo).getByLabelText('Mensajes de WhatsApp armados (envío manual)')).toBeChecked()
     expect(within(dialogo).getByLabelText('Avisos automáticos por WhatsApp')).not.toBeChecked()
+    expect(within(dialogo).getByLabelText('Avisos automáticos por Telegram')).not.toBeChecked()
+    // Sin cupo cargado, el campo arranca vacío.
+    expect(within(dialogo).getByLabelText('Cupo de facturas ARCA por mes')).toHaveValue(null)
     expect(within(dialogo).getByLabelText('Facturación electrónica ARCA')).not.toBeChecked()
   })
 
@@ -183,9 +197,13 @@ describe('PlataformaPlanes', () => {
     fireEvent.change(within(dialogo).getByLabelText('Personal máximo'), {
       target: { value: '2.5' },
     })
+    fireEvent.change(within(dialogo).getByLabelText('Cupo de facturas ARCA por mes'), {
+      target: { value: '12.5' },
+    })
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Guardar plan' }))
 
     expect(await within(dialogo).findByText(/Escribí el monto con coma/)).toBeInTheDocument()
+    expect(within(dialogo).getByText(/El cupo tiene que ser un número entero/)).toBeInTheDocument()
     expect(await within(dialogo).findByText(/entero de 1 o más/)).toBeInTheDocument()
     expect(suscripciones.actualizarPlan).not.toHaveBeenCalled()
   })

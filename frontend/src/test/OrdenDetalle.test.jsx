@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import OrdenDetalle from '@/pages/OrdenDetalle'
@@ -12,6 +12,7 @@ const ordenes = vi.hoisted(() => ({
   mecanicos: vi.fn(),
   cambiarEstado: vi.fn(),
   emitirCobro: vi.fn(),
+  anularCobro: vi.fn(),
   aprobarCobro: vi.fn(),
   actualizar: vi.fn(),
   subirImagen: vi.fn(),
@@ -224,6 +225,39 @@ describe('OrdenDetalle', () => {
     montar()
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/pago online de \$ 50\.000/)
+  })
+
+  it('con la orden pagada el encabezado dice "Pagada" con el medio, no "A cobrar"', async () => {
+    sesion.rol = 'recepcion'
+    ordenes.obtener.mockResolvedValue({
+      ...ORDEN,
+      estado: 'Listo',
+      cobro_estado: 'aprobado',
+      costo_final: 15000,
+      total: 15000,
+      pagada: true,
+      pago_medio: 'efectivo',
+    })
+    montar()
+
+    expect((await screen.findAllByText(/Pagada en el taller \(efectivo\)/)).length).toBeGreaterThan(0)
+    expect(screen.queryByText('A cobrar')).not.toBeInTheDocument()
+  })
+
+  it('recepción anula el cobro emitido desde la pestaña Cobro', async () => {
+    sesion.rol = 'recepcion'
+    const emitida = { ...ORDEN, estado: 'Listo', cobro_estado: 'aprobado', costo_final: 15000, total: 15000 }
+    ordenes.obtener.mockResolvedValue(emitida)
+    ordenes.anularCobro.mockResolvedValue({ ...emitida, cobro_estado: null, costo_final: null })
+    montar('/ordenes/7?tab=cobro')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Anular cobro' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Anular el cobro' })
+    expect(dialogo).toHaveTextContent(/el link de pago que tenga el cliente deja de servir/)
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Anular cobro' }))
+
+    await waitFor(() => expect(ordenes.anularCobro).toHaveBeenCalledWith(7, 'tok'))
+    await waitFor(() => expect(ordenes.obtener).toHaveBeenCalledTimes(2))
   })
 
   it('el mecánico no ve el aviso de pago duplicado', async () => {

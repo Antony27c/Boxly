@@ -115,6 +115,15 @@ def datos():
                 estado="duplicado", medio="mercadopago", payment_id="777",
             ),
         ])
+        # Orden abierta (sin cobro ni pagos) para las pruebas de escritura:
+        # con F4/F4b una orden pagada o con cobro emitido no cambia líneas.
+        abierta = Orden(
+            cliente_id=cliente.id, vehiculo_id=vehiculo.id,
+            creado_por_id=admin.id, mecanico_id=mecanico.id,
+            codigo="OT-SINDIN-2", estado="listo",
+            descripcion_ingreso="Revision de suspension",
+        )
+        db.add(abierta)
         db.commit()
         return {
             "admin": _h(admin),
@@ -122,6 +131,7 @@ def datos():
             "mecanico": _h(mecanico),
             "vehiculo": vehiculo.id,
             "orden": orden.id,
+            "abierta": abierta.id,
             "detalle": detalle.id,
         }
 
@@ -162,9 +172,10 @@ def test_mecanico_no_recibe_dinero_en_ninguna_ruta(api, datos):
 
 
 def test_mecanico_tampoco_ve_dinero_en_escritura(api, datos):
-    # La orden sigue abierta: el mecánico agrega una línea y cambia la etapa.
+    # La orden abierta sigue editable: el mecánico agrega una línea y cambia
+    # la etapa (la pagada ya no admite cambios de líneas, ver F4).
     r = api.post(
-        f"/api/v1/ordenes/{datos['orden']}/detalles",
+        f"/api/v1/ordenes/{datos['abierta']}/detalles",
         headers=datos["mecanico"],
         json={"descripcion": "Mano de obra final", "cantidad": 1},
     )
@@ -172,7 +183,7 @@ def test_mecanico_tampoco_ve_dinero_en_escritura(api, datos):
     assert _dinero_visible(r.json()) == []
 
     r = api.patch(
-        f"/api/v1/ordenes/{datos['orden']}",
+        f"/api/v1/ordenes/{datos['abierta']}",
         headers=datos["mecanico"],
         json={"estado": "entregado", "comentario_cambio": "Cliente retiró"},
     )
@@ -214,21 +225,22 @@ def test_admin_y_recepcion_siguen_viendo_dinero(api, datos):
 
 
 def test_historial_enmascara_montos_para_el_mecanico(api, datos):
-    # Recepción cotiza una línea sin precio: el comentario del historial
-    # guarda el monto ("a $X") para administración y recepción.
+    # Recepción cotiza una línea sin precio en la orden abierta: el comentario
+    # del historial guarda el monto ("a $X") para administración y recepción.
     linea = api.post(
-        f"/api/v1/ordenes/{datos['orden']}/detalles",
+        f"/api/v1/ordenes/{datos['abierta']}/detalles",
         headers=datos["recepcion"],
         json={"descripcion": "Mano de obra", "cantidad": 1,
               "precio_unitario": "4500"},
     ).json()
     api.patch(
-        f"/api/v1/ordenes/{datos['orden']}/detalles/{linea['id']}",
+        f"/api/v1/ordenes/{datos['abierta']}/detalles/{linea['id']}",
         headers=datos["recepcion"], json={"precio_unitario": "4500"},
     )
 
     r = api.get(
-        f"/api/v1/ordenes/{datos['orden']}/historial", headers=datos["mecanico"]
+        f"/api/v1/ordenes/{datos['abierta']}/historial",
+        headers=datos["mecanico"],
     )
     assert r.status_code == 200, r.text
     comentarios = [h["comentario"] or "" for h in r.json()]
@@ -239,7 +251,7 @@ def test_historial_enmascara_montos_para_el_mecanico(api, datos):
 
     # Recepción sigue viendo el monto en el mismo historial.
     r = api.get(
-        f"/api/v1/ordenes/{datos['orden']}/historial", headers=datos["recepcion"]
+        f"/api/v1/ordenes/{datos['abierta']}/historial", headers=datos["recepcion"]
     )
     assert any("4500" in (h["comentario"] or "") for h in r.json())
 

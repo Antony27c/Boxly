@@ -57,6 +57,9 @@ class TallerResumen(BaseModel):
     suscripcion_estado: str = "al_dia"
     suscripcion_vence_en: Optional[date] = None
     tipo_acceso: TipoAcceso = "pago"
+    # Cupo de personal del plan (None = sin límite): la tarjeta muestra
+    # "<personal> de <max>" en alerta cuando se supera.
+    max_personal: Optional[int] = None
 
 
 class OtorganteSoporte(BaseModel):

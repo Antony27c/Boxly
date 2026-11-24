@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { estadoSuscripcion } from '@/components/suscripcion/estados'
+import { estadoSuscripcion, personalExcedido } from '@/components/suscripcion/estados'
 import { Chip, Chips, Ficha, FichaCabecera, FichaSeccion } from '@/components/ui/Ficha'
 import { hoyAR } from '@/lib/fechas'
 import { TIPOS_ACCESO } from './funciones'
@@ -63,6 +63,11 @@ export default function TarjetaTaller({ taller }) {
       ? estadoSuscripcion(taller.suscripcion_estado)
       : null
   const acceso = chipAcceso(taller)
+  // Cupo del plan: `max_personal` en el resumen (null = sin límite). Si el
+  // listado no lo manda, no hay con qué comparar y no se muestra nada.
+  const personal = personalDe(taller)
+  const cupo = taller.max_personal ?? null
+  const sobran = personalExcedido(personal, cupo)
 
   return (
     <Ficha
@@ -88,6 +93,11 @@ export default function TarjetaTaller({ taller }) {
               {suscripcion.texto}
             </Chip>
           )}
+          {sobran > 0 && (
+            <Chip tono="peligro" icono="alerta">
+              Personal por encima del plan
+            </Chip>
+          )}
           {soporte && (
             <Chip tono="ok" icono="llave">
               Soporte hasta {soporte}
@@ -103,7 +113,12 @@ export default function TarjetaTaller({ taller }) {
 
       <FichaSeccion>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-          <Dato etiqueta="Personal">{numero(personalDe(taller))}</Dato>
+          <Dato etiqueta="Personal">
+            <span className={sobran > 0 ? 'text-danger' : undefined}>
+              {numero(personal)}
+              {cupo != null && ` de ${numero(cupo)}`}
+            </span>
+          </Dato>
           <Dato etiqueta="Clientes">{numero(taller.clientes)}</Dato>
           <Dato etiqueta="Órdenes del mes">{numero(taller.ordenes_mes)}</Dato>
           <Dato etiqueta="Último uso">{haceCuanto(taller.ultimo_uso)}</Dato>

@@ -47,6 +47,14 @@ function TarjetaPlan({ plan, onEditar }) {
               {plan.max_personal == null ? 'Sin límite' : numeroLegible(plan.max_personal)}
             </dd>
           </div>
+          <div className="col-span-2 min-w-0">
+            <dt className="text-xs text-muted">Cupo de facturas ARCA por mes</dt>
+            <dd className="mt-0.5 font-semibold tabular-nums text-ink">
+              {plan.cupo_facturas_arca == null
+                ? 'Sin definir'
+                : numeroLegible(plan.cupo_facturas_arca)}
+            </dd>
+          </div>
         </dl>
         {(plan.funciones ?? []).length > 0 && (
           <div className="mt-3">
@@ -77,6 +85,9 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
   const [maxPersonal, setMaxPersonal] = useState(
     plan.max_personal != null ? String(plan.max_personal) : '',
   )
+  const [cupoArca, setCupoArca] = useState(
+    plan.cupo_facturas_arca != null ? String(plan.cupo_facturas_arca) : '',
+  )
   const [activo, setActivo] = useState(Boolean(plan.activo))
   const [funciones, setFunciones] = useState(() => [...(plan.funciones ?? [])])
   const [errores, setErrores] = useState({})
@@ -98,6 +109,11 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
       if (!Number.isInteger(limite) || limite < 1)
         encontrados.maxPersonal = 'El límite tiene que ser un entero de 1 o más.'
     }
+    if (cupoArca.trim() !== '') {
+      const cupo = Number(cupoArca)
+      if (!Number.isInteger(cupo) || cupo < 0)
+        encontrados.cupoArca = 'El cupo tiene que ser un número entero, sin decimales.'
+    }
     setErrores(encontrados)
     return Object.keys(encontrados).length === 0
   }
@@ -110,6 +126,8 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
       precio_mensual: parsearMontoAR(precio),
       // Vacío = sin límite (null), igual que en el contrato.
       max_personal: maxPersonal.trim() === '' ? null : Number(maxPersonal),
+      // Vacío = cupo todavía sin definir (null): la landing no muestra número.
+      cupo_facturas_arca: cupoArca.trim() === '' ? null : Number(cupoArca),
       activo,
       // Lista completa en el orden del contrato, no en el orden de clicks.
       funciones: Object.keys(FUNCIONES).filter((codigo) => funciones.includes(codigo)),
@@ -151,6 +169,18 @@ function FormularioPlan({ plan, guardando, error, onGuardar, onCancelar }) {
           error={errores.maxPersonal}
           disabled={guardando}
           ayuda="Vacío = sin límite."
+        />
+        <Field
+          label="Cupo de facturas ARCA por mes"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          step="1"
+          value={cupoArca}
+          onChange={(e) => setCupoArca(e.target.value)}
+          error={errores.cupoArca}
+          disabled={guardando}
+          ayuda="Vacío = todavía sin definir; la landing no muestra número."
         />
       </div>
 

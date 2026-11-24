@@ -67,6 +67,18 @@ export function proximosEstados(estado) {
 
 export const MOTIVO_A_COTIZAR = 'Cotizá los trabajos pendientes antes de cobrar.'
 
+/* Con el cobro emitido las líneas no se tocan: el backend responde 409 con
+   este código (se reconoce por el código, nunca por el texto) y hay que
+   anular el cobro antes de cambiarlas. */
+export const CODIGO_COBRO_EMITIDO = 'cobro_emitido'
+export const AVISO_COBRO_EMITIDO = 'El cobro ya está emitido: anulalo para cambiar las líneas.'
+
+/* ¿La orden tiene un cobro emitido y sin pagar? Mira solo cobro_estado, que
+   llega aunque falte el monto (el mecánico no recibe costo_final, MC1). */
+export function cobroEmitido(orden) {
+  return orden?.cobro_estado === 'aprobado' && !orden.pagada
+}
+
 // Medios del pago registrado en el local (POST /ordenes/{id}/pago-local).
 export const MEDIOS_PAGO_LOCAL = [
   { valor: 'efectivo', texto: 'Efectivo' },
@@ -333,6 +345,10 @@ export const ordenesService = {
       )
       .then(desdeApi)
   },
+
+  // Anula el cobro emitido (administración o recepción): el link de pago del
+  // cliente deja de servir y las líneas se pueden volver a cambiar.
+  anularCobro: (id, token) => api.post(`${RECURSO}/${id}/cobro/anular`, {}, token).then(desdeApi),
 
   aprobarCobro: (id, monto, token) =>
     api

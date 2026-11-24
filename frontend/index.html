@@ -60,12 +60,9 @@
         if (oscuro) document.documentElement.classList.add('dark')
       } catch (e) {}
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Las fuentes (Archivo) las sirve la propia app vía @fontsource/archivo
+         (src/main.jsx): nada de pedidos a servidores de fuentes de terceros,
+         así no se expone la IP de los usuarios. -->
   </head>
   <body>
     <div id="root"></div>

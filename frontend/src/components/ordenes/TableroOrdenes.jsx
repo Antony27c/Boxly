@@ -27,7 +27,8 @@ const CHIPS = [
   { valor: 'mias', texto: 'Mías', soloMecanico: true },
   { valor: 'sin_asignar', texto: 'Sin asignar' },
   { valor: 'listas', texto: 'Listas para entregar' },
-  { valor: 'cobro_pendiente', texto: 'Cobro pendiente' },
+  // El mecánico no maneja cobros (MC1): este chip es solo del mostrador.
+  { valor: 'cobro_pendiente', texto: 'Cobro pendiente', soloMostrador: true },
 ]
 
 function pasaChip(orden, filtro, usuario) {
@@ -129,7 +130,8 @@ export default function TableroOrdenes({
 
   const esMecanico = ROLES_MECANICO.includes(usuario?.rol)
   // "Mías" solo existe para el mecánico; si llega por URL a otro rol se ignora.
-  const filtro = filtroUrl === 'mias' && !esMecanico ? '' : filtroUrl
+  const chipAjeno = (filtroUrl === 'mias' && !esMecanico) || (filtroUrl === 'cobro_pendiente' && esMecanico)
+  const filtro = chipAjeno ? '' : filtroUrl
 
   const filtradas = useMemo(() => {
     const termino = busqueda.trim().toLowerCase()
@@ -243,7 +245,9 @@ export default function TableroOrdenes({
           role="group"
           aria-label="Filtros rápidos"
         >
-          {CHIPS.filter((chip) => !chip.soloMecanico || esMecanico).map((chip) => (
+          {CHIPS.filter(
+            (chip) => (!chip.soloMecanico || esMecanico) && (!chip.soloMostrador || !esMecanico),
+          ).map((chip) => (
             <button
               key={chip.valor}
               type="button"

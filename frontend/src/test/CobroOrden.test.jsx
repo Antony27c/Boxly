@@ -141,6 +141,80 @@ describe('Cobro como ticket de caja', () => {
   })
 })
 
+describe('Monto a cobrar precargado', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('sin costo_final se precarga con el total de las líneas cotizadas', async () => {
+    const detalles = vi.spyOn(ordenesService, 'detalles').mockResolvedValue([
+      { id: 1, cantidad: 2, precio_unitario: 5000, subtotal: 10000 },
+      { id: 2, cantidad: 1, precio_unitario: 5000, subtotal: 5000 },
+      { id: 3, cantidad: 1, precio_unitario: null, subtotal: null, a_cotizar: true },
+    ])
+    mostrar({ costo_estimado: null, costo_final: null })
+
+    await waitFor(() => expect(screen.getByLabelText('Monto a cobrar')).toHaveValue('15.000'))
+    expect(detalles).toHaveBeenCalledWith(42, 'tok')
+  })
+
+  it('lo que se tipea no se pisa cuando llegan las líneas', async () => {
+    let resolver
+    vi.spyOn(ordenesService, 'detalles').mockReturnValue(new Promise((r) => (resolver = r)))
+    mostrar({ costo_estimado: null, costo_final: null })
+
+    const campo = screen.getByLabelText('Monto a cobrar')
+    fireEvent.change(campo, { target: { value: '20.000' } })
+    resolver([{ id: 1, cantidad: 1, precio_unitario: 15000, subtotal: 15000 }])
+    await waitFor(() => expect(campo).toHaveValue('20.000'))
+  })
+
+  it('con costo_final no pide las líneas y muestra ese monto', () => {
+    const detalles = vi.spyOn(ordenesService, 'detalles')
+    mostrar({ cobro_estado: 'emitido', costo_final: 18000 })
+    expect(detalles).not.toHaveBeenCalled()
+  })
+})
+
+describe('Anular el cobro emitido', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('pide confirmación con el monto y llama al endpoint de anular', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 42 })
+    const onListo = vi.fn()
+    mostrar({ cobro_estado: 'aprobado', costo_final: 15000 }, true, onListo)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anular cobro' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Anular el cobro' })
+    expect(dialogo).toHaveTextContent(
+      `Se anula el cobro de ${monto(15000)}; el link de pago que tenga el cliente deja de servir.`,
+    )
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Anular cobro' }))
+
+    await waitFor(() => expect(onListo).toHaveBeenCalledWith(expect.stringMatching(/^Cobro anulado/)))
+    expect(post).toHaveBeenCalledWith('/api/v1/ordenes/42/cobro/anular', {}, 'tok')
+  })
+
+  it('si falla, el error queda en la confirmación', async () => {
+    vi.spyOn(ordenesService, 'anularCobro').mockRejectedValue(new Error('No se pudo anular.'))
+    mostrar({ cobro_estado: 'aprobado', costo_final: 15000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Anular cobro' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Anular el cobro' })
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Anular cobro' }))
+    expect(await within(dialogo).findByText('No se pudo anular.')).toBeInTheDocument()
+  })
+
+  it('sin cobro emitido o con la orden pagada no aparece', () => {
+    const { unmount } = mostrar({ cobro_estado: null })
+    expect(screen.queryByRole('button', { name: 'Anular cobro' })).not.toBeInTheDocument()
+    unmount()
+    mostrar({ cobro_estado: 'aprobado', costo_final: 15000, pagada: true })
+    expect(screen.queryByRole('button', { name: 'Anular cobro' })).not.toBeInTheDocument()
+  })
+})
+
 describe('Cobro y el mecánico', () => {
   it('sin rol de mostrador no muestra montos ni deja proponer un cobro', () => {
     const { container } = mostrar(

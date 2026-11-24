@@ -10,8 +10,14 @@ import {
   estadoSuscripcion,
   fraseEstado,
   medioPago,
+  personalExcedido,
 } from '@/components/suscripcion/estados'
-import { fraseDemoVencida } from '@/components/suscripcion/finDemo'
+import {
+  avisoAntesDeFinDemo,
+  esDemo,
+  fraseAccesoSinCargo,
+  fraseDemoVencida,
+} from '@/components/suscripcion/finDemo'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import useRecurso from '@/hooks/useRecurso'
@@ -35,6 +41,13 @@ function estadoVisual(suscripcion) {
   if (fraseDemo) {
     const suspendida = suscripcion.estado === 'suspendida'
     return { tono: 'peligro', chip: suspendida ? 'Suspendida' : 'Demo terminada', frase: fraseDemo }
+  }
+  // Demo o piloto vigente: que se vea que es un acceso sin cargo, no un plan pago.
+  const fraseAcceso = fraseAccesoSinCargo(suscripcion)
+  if (fraseAcceso) {
+    return esDemo(suscripcion)
+      ? { tono: 'ambar', chip: 'Demo', frase: fraseAcceso }
+      : { tono: 'neutro', chip: 'Piloto', frase: fraseAcceso }
   }
   const estado = estadoSuscripcion(suscripcion?.estado)
   return { tono: estado.tono, chip: estado.corto, frase: fraseEstado(suscripcion) }
@@ -172,6 +185,8 @@ export default function Suscripcion() {
   if (!suscripcion) return null
 
   const visual = estadoVisual(suscripcion)
+  const avisoDemo = avisoAntesDeFinDemo(suscripcion)
+  const sobran = personalExcedido(suscripcion.personal_activo, suscripcion.max_personal)
   const planActual = suscripcion.plan?.codigo
   const listaPagos = pagos ?? []
 
@@ -200,7 +215,7 @@ export default function Suscripcion() {
           </div>
           <div>
             <dt className="text-muted">Personal</dt>
-            <dd className="font-medium text-ink">
+            <dd className={`font-medium ${sobran > 0 ? 'text-danger' : 'text-ink'}`}>
               {textoPersonal(
                 suscripcion.plan,
                 suscripcion.personal_activo,
@@ -221,6 +236,20 @@ export default function Suscripcion() {
             </dd>
           </div>
         </dl>
+        {avisoDemo && (
+          <div className="mt-4">
+            <Alert tipo="warning">{avisoDemo}</Alert>
+          </div>
+        )}
+        {sobran > 0 && (
+          <div className="mt-4">
+            <Alert tipo="warning">
+              El personal activo supera el cupo de tu plan por {sobran}. Desactivá a quien ya no
+              trabaje en el taller desde Usuarios o pasá a un plan más grande; mientras tanto no
+              podés sumar personal.
+            </Alert>
+          </div>
+        )}
         <div className="mt-4 border-t border-graphite-700 pt-4">
           <h3 className="text-sm font-medium text-ink">Incluye tu plan</h3>
           <ListaFunciones funciones={funcionesDelTaller(suscripcion)} className="mt-2" />

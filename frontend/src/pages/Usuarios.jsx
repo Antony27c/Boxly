@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext'
 import usePaginacion from '@/hooks/usePaginacion'
 import useRecurso from '@/hooks/useRecurso'
 import { cuentasService } from '@/services/cuentas'
+import { personalExcedido } from '@/components/suscripcion/estados'
 import { esErrorDeLimite, suscripcionService } from '@/services/suscripcion'
 import { ROLES_TALLER, usuariosService } from '@/services/usuarios'
 
@@ -115,6 +116,8 @@ export default function Usuarios() {
         }
       : null
   const limiteAlcanzado = tope?.maximo != null && tope.activo >= tope.maximo
+  // Por encima del cupo (por ejemplo, después de bajar de plan): aviso en alerta.
+  const sobran = tope ? personalExcedido(tope.activo, tope.maximo) : 0
   const textoLimite = tope
     ? tope.maximo == null
       ? `Personal: ${tope.activo} · plan sin límite`
@@ -297,10 +300,32 @@ export default function Usuarios() {
 
       {tope && (
         <p className="mt-3 text-sm">
-          <span className={limiteAlcanzado ? 'font-semibold text-amber-texto' : 'text-muted'}>
+          <span
+            className={
+              sobran > 0
+                ? 'font-semibold text-danger'
+                : limiteAlcanzado
+                  ? 'font-semibold text-amber-texto'
+                  : 'text-muted'
+            }
+          >
             {textoLimite}
           </span>
         </p>
+      )}
+
+      {sobran > 0 && (
+        <div className="mt-4">
+          <Alert tipo="warning">
+            Tenés {tope.activo} personas activas en el personal y tu plan
+            {tope.plan ? ` ${tope.plan}` : ''} permite hasta {tope.maximo}. Desactivá a quien ya
+            no trabaje en el taller o pasá a un plan más grande; mientras tanto no podés sumar
+            personal.{' '}
+            <Link to="/suscripcion" className="font-semibold underline">
+              Ver planes
+            </Link>
+          </Alert>
+        </div>
       )}
 
       <div className="mt-6 grid gap-4 sm:max-w-2xl sm:grid-cols-2">

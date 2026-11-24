@@ -233,16 +233,21 @@ def _consultar_mp(token: str, payment_id: str) -> dict:
         ) from None
 
 
-def _marcar_duplicado(db: Session, pago: Pago, orden: Orden, mp_id: str, origen: str) -> None:
-    """El cobro online llegó aprobado pero la orden ya estaba paga (p. ej. el
-    cliente pagó en el local): no se aprueba — queda 'duplicado' para que el
-    taller devuelva la plata a mano, con una fila en su auditoría."""
+def _marcar_duplicado(
+    db: Session, pago: Pago, orden: Orden, mp_id: str, origen: str,
+    *, motivo: str = "la orden ya estaba paga",
+) -> None:
+    """El cobro online llegó aprobado pero la orden no puede acreditarlo
+    (ya estaba paga, o el cobro se anuló después — F4b): no se aprueba —
+    queda 'duplicado' para que el taller devuelva la plata a mano, con una
+    fila en su auditoría."""
     logger.error(
-        "Pago %s de la orden %s: Mercado Pago aprobó el cobro %s pero la orden "
-        "ya estaba paga; queda 'duplicado' para devolución manual",
+        "Pago %s de la orden %s: Mercado Pago aprobó el cobro %s pero %s; "
+        "queda 'duplicado' para devolución manual",
         pago.id,
         orden.id,
         mp_id,
+        motivo,
     )
     pago.estado = "duplicado"
     pago.payment_id = mp_id or pago.payment_id
@@ -261,9 +266,8 @@ def _marcar_duplicado(db: Session, pago: Pago, orden: Orden, mp_id: str, origen:
             entidad_id=pago.id,
             estado_http=200,
             detalle=(
-                f"Pago online {mp_id} aprobado en Mercado Pago pero la orden "
-                f"{orden.codigo} ya estaba paga: marcado 'duplicado' para "
-                "devolución manual"
+                f"Pago online {mp_id} aprobado en Mercado Pago pero {motivo} "
+                f"({orden.codigo}): marcado 'duplicado' para devolución manual"
             )[:500],
         )
     )
@@ -296,11 +300,24 @@ def _actualizar_desde_mp(
         orden = db.scalar(
             select(Orden).where(Orden.id == pago.orden_id).with_for_update()
         )
-        if orden is not None and any(
-            p.estado == "aprobado" for p in orden.pagos if p.id != pago.id
-        ):
-            _marcar_duplicado(db, pago, orden, mp_id, origen)
-            return
+        if orden is not None:
+            if orden.costo_final is None:
+                # F4b: el cobro se anuló después de generado este pago online
+                # (los pendientes quedan rechazados al anular, pero MP puede
+                # haber cobrado igual). La plata quedó en MP y la orden ya no
+                # tiene monto vigente: 'duplicado' para devolución manual.
+                # Solo costo_final decide: un pago online se puede crear con
+                # costo_final aunque cobro_estado no diga 'aprobado'.
+                _marcar_duplicado(
+                    db, pago, orden, mp_id, origen,
+                    motivo="el cobro de la orden fue anulado",
+                )
+                return
+            if any(
+                p.estado == "aprobado" for p in orden.pagos if p.id != pago.id
+            ):
+                _marcar_duplicado(db, pago, orden, mp_id, origen)
+                return
     _aplicar_estado(pago, estado, mp_id)
 
 

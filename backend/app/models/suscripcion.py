@@ -26,6 +26,7 @@ from app.core.funciones import (
     FUNCION_GESTION,
     FUNCION_MARCA_PROPIA,
     FUNCION_RECORDATORIOS_SERVICE,
+    FUNCION_TELEGRAM_AUTOMATICO,
     FUNCION_WHATSAPP_AUTOMATICO,
     FUNCION_WHATSAPP_MANUAL,
 )
@@ -71,6 +72,9 @@ class Plan(Base):
     max_personal: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Códigos de función habilitados (app/core/funciones.py, docs/Oferta.md).
     funciones: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # Facturas ARCA por mes que incluye el plan. NULL = cupo pendiente de definir
+    # (docs/Oferta.md): la landing no muestra ningún número.
+    cupo_facturas_arca: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -81,6 +85,7 @@ FUNCIONES_PRO = (
     FUNCION_GESTION,
     FUNCION_WHATSAPP_MANUAL,
     FUNCION_WHATSAPP_AUTOMATICO,
+    FUNCION_TELEGRAM_AUTOMATICO,
     FUNCION_ARCA,
 )
 FUNCIONES_PROFESIONAL = (

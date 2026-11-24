@@ -20,7 +20,7 @@ import json
 import logging
 import urllib.parse
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.ip import ip_de_scope
@@ -108,6 +108,17 @@ def _taller_del_usuario(db, usuario_id: int | None) -> int | None:
     if usuario_id is None:
         return None
     return db.scalar(select(Usuario.taller_id).where(Usuario.id == usuario_id))
+
+
+def _taller_por_email(db, email: str | None) -> int | None:
+    """taller_id del usuario con ese email (para el login exitoso, que no
+    lleva token). El email es único global; se compara en minúsculas porque
+    la auditoría guarda el intentado tal cual vino en el body."""
+    if not email:
+        return None
+    return db.scalar(
+        select(Usuario.taller_id).where(func.lower(Usuario.email) == email.lower())
+    )
 
 
 def _email_del_login(scope: Scope, cuerpo: bytes) -> str | None:
@@ -211,6 +222,10 @@ class AuditoriaMiddleware:
                     _header_soporte(scope) if soporte
                     else _taller_del_usuario(db, usuario_id)
                 )
+                if taller_id is None and ruta == _LOGIN and estado_http == 200:
+                    # Login exitoso sin token: el taller sale del usuario del
+                    # email auditado (los ingresos cuentan como uso del taller).
+                    taller_id = _taller_por_email(db, usuario_email)
                 fila = Auditoria(
                     usuario_id=usuario_id,
                     taller_id=taller_id,
